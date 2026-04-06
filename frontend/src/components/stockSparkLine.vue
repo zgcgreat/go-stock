@@ -130,7 +130,9 @@ onMounted(() => {
 
 watchEffect(() => {
   console.log(stockName,'lastPrice变化为:', lastPrice,lastPrice > openPrice)
-  setChartData(chart.value);
+  if (chart.value) {
+    setChartData(chart.value);
+  }
 })
 
 
