@@ -436,6 +436,26 @@ func SearchCronTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": tasks})
 }
 
+// GetCronTaskList 获取定时任务列表
+func GetCronTaskList(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	name := c.DefaultQuery("name", "")
+	taskType := c.DefaultQuery("taskType", "")
+	status := c.DefaultQuery("status", "")
+
+	query := &models.CronTaskQuery{
+		Page:     page,
+		PageSize: pageSize,
+		Name:     name,
+		TaskType: taskType,
+		Status:   status,
+	}
+
+	result := agent.NewCronTaskApi().List(query)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
 // ShareText 分享文本
 func ShareText(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "分享成功"})

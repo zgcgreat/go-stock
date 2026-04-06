@@ -170,6 +170,7 @@ func (ws *WebServer) initRouter() {
 			// 定时任务
 			protected.GET("/cron-task/types", handlers.GetCronTaskTypes)
 			protected.POST("/cron-task", handlers.CreateCronTask)
+			protected.GET("/cron-task", handlers.GetCronTaskList)
 			protected.GET("/cron-task/search", handlers.SearchCronTasks)
 
 			// 分享

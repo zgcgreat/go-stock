@@ -1065,7 +1065,16 @@ export function GetCronTaskByID(arg1) {
 
 export function GetCronTaskList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetCronTaskList(arg1);
-  return Promise.resolve([]);
+  const params = {
+    page: arg1?.page || 1,
+    pageSize: arg1?.pageSize || 10,
+  };
+  if (arg1?.name) params.name = arg1.name;
+  if (arg1?.taskType) params.taskType = arg1.taskType;
+  if (arg1?.status !== undefined) params.status = arg1.status;
+  return apiService.client.get('/cron-task', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { data: [], total: 0 })
+    .catch(() => ({ data: [], total: 0 }));
 }
 
 export function GetCronTaskTypes() {
