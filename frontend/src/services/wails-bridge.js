@@ -903,7 +903,7 @@ export function EnableCronTask(arg1, arg2) {
 
 export function ExecuteCronTaskNow(arg1) {
   if (isWailsMode()) return window.go.main.App.ExecuteCronTaskNow(arg1);
-  return apiService.client.post(`/cron-task/${arg1}/execute`, null, { headers: getAuthHeaders() })
+  return apiService.client.post(`/cron-task/${arg1}/execute`, {}, { headers: getAuthHeaders() })
     .then(res => res.data?.message || '执行成功')
     .catch(err => err.message || '执行失败');
 }
@@ -1268,7 +1268,7 @@ export function SaveStockChangesToHistory(arg1) {
   if (changeTypes.length > 0) {
     params.changeTypes = changeTypes.join(',');
   }
-  return apiService.client.post('/stock-changes/save', null, { params, headers: getAuthHeaders() })
+  return apiService.client.post('/stock-changes/save', {}, { params, headers: getAuthHeaders() })
     .then(res => res.data?.message || '保存成功')
     .catch(err => err.message || '保存失败');
 }
