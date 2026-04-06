@@ -1191,8 +1191,8 @@ export function GetTelegraphList(arg1) {
 export function GetTradingRecordList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetTradingRecordList(arg1);
   return apiService.client.get('/trades', { params: arg1 })
-    .then(res => res.data?.data || null)
-    .catch(() => null);
+    .then(res => res.data || { data: {} })
+    .catch(() => ({ data: {} }));
 }
 
 export function GetTradingRecordStatistics() {
