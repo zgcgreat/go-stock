@@ -975,9 +975,46 @@ export function GetAllMarkets() {
   return Promise.resolve([]);
 }
 
+export function GetStockChanges(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.GetStockChanges(arg1, arg2, arg3);
+  // Web 模式：调用后端 API
+  const changeTypes = Array.isArray(arg1) ? arg1 : [];
+  const pageIndex = arg2 || 0;
+  const pageSize = arg3 || 50;
+  
+  const params = {
+    pageIndex,
+    pageSize,
+  };
+  if (changeTypes.length > 0) {
+    params.changeTypes = changeTypes.join(',');
+  }
+  
+  return apiService.client.get('/stock-changes', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { data: [], totalCount: 0 })
+    .catch(() => ({ data: [], totalCount: 0 }));
+}
+
 export function GetAllStockChangesWithPaging(arg1) {
   if (isWailsMode()) return window.go.main.App.GetAllStockChangesWithPaging(arg1);
-  return Promise.resolve({ list: [], total: 0 });
+  // Web 模式：调用后端 API
+  const pageSize = arg1 || 500;
+  return apiService.client.get('/stock-changes/all', { params: { pageSize }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { data: [], totalCount: 0 })
+    .catch(() => ({ data: [], totalCount: 0 }));
+}
+
+export function GetStockChangeHistory(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetStockChangeHistory(arg1);
+  // Web 模式：调用后端 API
+  return apiService.client.get('/stock-changes/history', { params: arg1, headers: getAuthHeaders() })
+    .then(res => {
+      const d = res.data?.data;
+      if (d && d.list) return d;
+      if (Array.isArray(d)) return { list: d, total: d.length };
+      return { list: [], total: 0 };
+    })
+    .catch(() => ({ list: [], total: 0 }));
 }
 
 export function GetAllStockInfoById(arg1) {
@@ -1075,16 +1112,6 @@ export function GetSponsorInfo() {
   return apiService.client.get('/sponsor/info', { headers: getAuthHeaders() })
     .then(res => res.data?.data || { sponsor: false })
     .catch(() => ({ sponsor: false }));
-}
-
-export function GetStockChangeHistory(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetStockChangeHistory(arg1);
-  return Promise.resolve([]);
-}
-
-export function GetStockChanges(arg1, arg2, arg3) {
-  if (isWailsMode()) return window.go.main.App.GetStockChanges(arg1, arg2, arg3);
-  return Promise.resolve([]);
 }
 
 export function GetStockEastMoneyKLine(arg1, arg2, arg3, arg4) {

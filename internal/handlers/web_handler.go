@@ -4,16 +4,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-resty/resty/v2"
 
 	"go-stock/backend/data"
-	"go-stock/backend/db"
-	"go-stock/backend/logger"
 	"go-stock/backend/models"
-	"go-stock/backend/services"
 )
 
 // GetTelegraphList 获取新闻电报列表
@@ -384,6 +379,125 @@ func AnalyzeSentiment(c *gin.Context) {
 			"score":       result.Score,
 			"category":    result.Category,
 			"description": result.Description,
+		},
+	})
+}
+
+// GetStockChanges 获取股票异动数据（实时）
+func GetStockChanges(c *gin.Context) {
+	changeTypesStr := c.Query("changeTypes")
+	var changeTypes []int
+	if changeTypesStr != "" {
+		for _, s := range strings.Split(changeTypesStr, ",") {
+			if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+				changeTypes = append(changeTypes, v)
+			}
+		}
+	}
+
+	pageIndex, _ := strconv.Atoi(c.DefaultQuery("pageIndex", "0"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "50"))
+
+	result := data.NewStockChangesApi().GetStockChanges(changeTypes, pageIndex, pageSize)
+	if result == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":       0,
+			"message":    "success",
+			"data":       []any{},
+			"totalCount": 0,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":       0,
+		"message":    "success",
+		"data":       result.Data,
+		"totalCount": result.TotalCount,
+	})
+}
+
+// GetAllStockChangesWithPaging 获取全部异动数据（带分页）
+func GetAllStockChangesWithPagingHandler(c *gin.Context) {
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "500"))
+
+	result := data.NewStockChangesApi().GetAllStockChangesWithPaging(pageSize)
+	if result == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":       0,
+			"message":    "success",
+			"data":       []any{},
+			"totalCount": 0,
+		})
+		return
+	}
+
+	// 保存到历史
+	historyService := data.NewStockChangeHistoryService()
+	_, _ = historyService.SaveStockChangesWithDedup(result.Data)
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":       0,
+		"message":    "success",
+		"data":       result.Data,
+		"totalCount": result.TotalCount,
+	})
+}
+
+// GetStockChangeHistoryHandler 获取异动历史数据
+func GetStockChangeHistoryHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "50"))
+	stockCode := c.Query("stockCode")
+	stockName := c.Query("stockName")
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+
+	changeTypesStr := c.Query("changeTypes")
+	var changeTypes []int
+	if changeTypesStr != "" {
+		for _, s := range strings.Split(changeTypesStr, ",") {
+			if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+				changeTypes = append(changeTypes, v)
+			}
+		}
+	}
+
+	query := models.StockChangeHistoryQuery{
+		Page:        page,
+		PageSize:    pageSize,
+		StockCode:   stockCode,
+		StockName:   stockName,
+		StartDate:   startDate,
+		EndDate:     endDate,
+		ChangeTypes: changeTypes,
+	}
+
+	result, err := data.NewStockChangeHistoryService().GetHistoryList(query)
+	if err != nil || result == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "success",
+			"data": gin.H{
+				"list":       []any{},
+				"total":      0,
+				"page":       page,
+				"pageSize":   pageSize,
+				"totalPages": 0,
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"list":       result.List,
+			"total":      result.Total,
+			"page":       result.Page,
+			"pageSize":   result.PageSize,
+			"totalPages": result.TotalPages,
 		},
 	})
 }
