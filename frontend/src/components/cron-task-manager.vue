@@ -1065,8 +1065,8 @@ const loadTaskTypes = async () => {
   try {
     const types = await GetCronTaskTypes()
     taskTypeOptions.value = types.map(t => ({
-      label: t.B,
-      value: t.A
+      label: t.label || t.B || t.name,
+      value: t.name || t.A
     }))
   } catch (error) {
     console.error('加载任务类型失败:', error)
