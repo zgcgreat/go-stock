@@ -456,6 +456,23 @@ func GetCronTaskList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
 
+// GetCronTaskByID 获取定时任务详情
+func GetCronTaskByID(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的任务ID"})
+		return
+	}
+
+	task, err := agent.NewCronTaskApi().GetByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务不存在"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": task})
+}
+
 // ExecuteCronTaskNow 立即执行定时任务
 func ExecuteCronTaskNow(c *gin.Context) {
 	idStr := c.Param("id")

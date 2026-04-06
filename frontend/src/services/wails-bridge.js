@@ -1066,7 +1066,9 @@ export function GetAllStocks(arg1, arg2, arg3, arg4) {
 
 export function GetCronTaskByID(arg1) {
   if (isWailsMode()) return window.go.main.App.GetCronTaskByID(arg1);
-  return Promise.resolve(null);
+  return apiService.client.get(`/cron-task/${arg1}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || null)
+    .catch(() => null);
 }
 
 export function GetCronTaskList(arg1) {

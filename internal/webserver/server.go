@@ -171,6 +171,7 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/cron-task/types", handlers.GetCronTaskTypes)
 			protected.POST("/cron-task", handlers.CreateCronTask)
 			protected.GET("/cron-task", handlers.GetCronTaskList)
+			protected.GET("/cron-task/:id", handlers.GetCronTaskByID)
 			protected.GET("/cron-task/search", handlers.SearchCronTasks)
 			protected.POST("/cron-task/:id/execute", handlers.ExecuteCronTaskNow)
 			protected.PUT("/cron-task/:id", handlers.UpdateCronTask)
