@@ -863,7 +863,9 @@ export function DeleteAIResponseResult(arg1) {
 
 export function DeleteCronTask(arg1) {
   if (isWailsMode()) return window.go.main.App.DeleteCronTask(arg1);
-  return Promise.resolve(true);
+  return apiService.client.delete(`/cron-task/${arg1}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => err.message || '删除失败');
 }
 
 export function DeletePromptTemplate(arg1) {
@@ -894,7 +896,9 @@ export function EMDictCode(arg1) {
 
 export function EnableCronTask(arg1, arg2) {
   if (isWailsMode()) return window.go.main.App.EnableCronTask(arg1, arg2);
-  return Promise.resolve(true);
+  return apiService.client.post(`/cron-task/${arg1}/enable`, { enable: arg2 }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || (arg2 ? '已启用' : '已暂停'))
+    .catch(err => err.message || '操作失败');
 }
 
 export function ExecuteCronTaskNow(arg1) {
@@ -1412,7 +1416,9 @@ export function UpdateConfig(arg1) {
 
 export function UpdateCronTask(arg1) {
   if (isWailsMode()) return window.go.main.App.UpdateCronTask(arg1);
-  return Promise.resolve(true);
+  return apiService.client.put(`/cron-task/${arg1.ID}`, arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '更新成功')
+    .catch(err => err.message || '更新失败');
 }
 
 export function UpdatePromptTemplate(arg1) {

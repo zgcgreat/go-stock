@@ -481,6 +481,64 @@ func ExecuteCronTaskNow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务已开始执行"})
 }
 
+// UpdateCronTask 更新定时任务
+func UpdateCronTask(c *gin.Context) {
+	var task models.CronTask
+	if err := c.ShouldBindJSON(&task); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	err := agent.NewCronTaskApi().Update(&task)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "更新失败：" + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "更新成功"})
+}
+
+// DeleteCronTask 删除定时任务
+func DeleteCronTask(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的任务ID"})
+		return
+	}
+
+	err = agent.NewCronTaskApi().Delete(uint(id))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除失败：" + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除成功"})
+}
+
+// EnableCronTask 启用/暂停定时任务
+func EnableCronTask(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的任务ID"})
+		return
+	}
+
+	var req struct {
+		Enable bool `json:"enable"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误"})
+		return
+	}
+
+	err = agent.NewCronTaskApi().Enable(uint(id), req.Enable)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "操作失败：" + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": req.Enable ? "已启用" : "已暂停"})
+}
+
 // ShareText 分享文本
 func ShareText(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "分享成功"})
