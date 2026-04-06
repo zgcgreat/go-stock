@@ -172,6 +172,7 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/cron-task", handlers.CreateCronTask)
 			protected.GET("/cron-task", handlers.GetCronTaskList)
 			protected.GET("/cron-task/search", handlers.SearchCronTasks)
+			protected.POST("/cron-task/:id/execute", handlers.ExecuteCronTaskNow)
 
 			// 分享
 			protected.POST("/share/text", handlers.ShareText)

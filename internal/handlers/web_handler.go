@@ -456,6 +456,31 @@ func GetCronTaskList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
 
+// ExecuteCronTaskNow 立即执行定时任务
+func ExecuteCronTaskNow(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的任务ID"})
+		return
+	}
+
+	task, err := agent.NewCronTaskApi().GetByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务不存在：" + err.Error()})
+		return
+	}
+
+	go func() {
+		err := agent.NewCronTaskApi().ExecuteTask(nil, task)
+		if err != nil {
+			logger.SugaredLogger.Errorf("执行任务失败：%v %s", err, task.Name)
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务已开始执行"})
+}
+
 // ShareText 分享文本
 func ShareText(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "分享成功"})

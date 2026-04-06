@@ -899,7 +899,9 @@ export function EnableCronTask(arg1, arg2) {
 
 export function ExecuteCronTaskNow(arg1) {
   if (isWailsMode()) return window.go.main.App.ExecuteCronTaskNow(arg1);
-  return Promise.resolve(true);
+  return apiService.client.post(`/cron-task/${arg1}/execute`, null, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '执行成功')
+    .catch(err => err.message || '执行失败');
 }
 
 export function ExportConfig() {
