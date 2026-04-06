@@ -94,7 +94,7 @@ func UnfollowStock(c *gin.Context) {
 		return
 	}
 
-	if err := db.Dao.Unscoped().Delete(&existingFollow).Error; err != nil {
+	if err := db.Dao.Unscoped().Where("stock_code = ?", stockCode).Delete(&data.FollowedStock{}).Error; err != nil {
 		fmt.Printf("UnfollowStock delete error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to unfollow stock",
