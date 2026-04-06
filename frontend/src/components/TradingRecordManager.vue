@@ -431,10 +431,11 @@ function openEditModal(row) {
 function handleAdd() {
   const run = () => {
     formData.Amount = formData.Price * formData.Volume
-    AddTradingRecord({
+    const submitData = {
       ...formData,
-      TradingTime: new Date(formData.TradingTime)
-    })
+      TradingTime: new Date(formData.TradingTime).toISOString()
+    }
+    AddTradingRecord(submitData)
       .then(() => {
         message.success('添加交易日志成功')
         showAddModal.value = false
