@@ -84,7 +84,7 @@ func UnfollowStock(c *gin.Context) {
 	}
 
 	var existingFollow data.FollowedStock
-	result := db.Dao.Where("stock_code = ?", stockCode).First(&existingFollow)
+	result := db.Dao.Unscoped().Where("stock_code = ?", stockCode).First(&existingFollow)
 	if result.Error != nil {
 		fmt.Printf("UnfollowStock: stockCode=%s, error=%v\n", stockCode, result.Error)
 		c.JSON(http.StatusNotFound, gin.H{
@@ -98,14 +98,14 @@ func UnfollowStock(c *gin.Context) {
 		fmt.Printf("UnfollowStock delete error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to unfollow stock",
-			"message": "取消关注股票失败",
+			"message": "取消关注股票失败: " + err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
-		"message": "Stock unfollowed successfully",
+		"message": "取消关注成功",
 	})
 }
 

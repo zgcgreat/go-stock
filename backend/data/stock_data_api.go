@@ -139,26 +139,25 @@ type TushareResponse struct {
 	act_name	str	实控人名称
 	act_ent_type	str	实控人企业性质*/
 
-
 type FollowedStock struct {
-	StockCode          string
-	Name               string
-	Volume             int64
-	CostPrice          float64
-	Price              float64
-	PriceChange        float64
-	ChangePercent      float64
-	AlarmChangePercent float64
-	AlarmPrice         float64
-	Time               time.Time
-	Sort               int64
-	Cron               *string
-	IsDel              soft_delete.DeletedAt `gorm:"softDelete:flag"`
+	StockCode          string                `gorm:"column:stock_code;index"`
+	Name               string                `gorm:"column:name"`
+	Volume             int64                 `gorm:"column:volume"`
+	CostPrice          float64               `gorm:"column:cost_price"`
+	Price              float64               `gorm:"column:price"`
+	PriceChange        float64               `gorm:"column:price_change"`
+	ChangePercent      float64               `gorm:"column:change_percent"`
+	AlarmChangePercent float64               `gorm:"column:alarm_change_percent"`
+	AlarmPrice         float64               `gorm:"column:alarm_price"`
+	Time               time.Time             `gorm:"column:time"`
+	Sort               int64                 `gorm:"column:sort"`
+	Cron               *string               `gorm:"column:cron"`
+	IsDel              soft_delete.DeletedAt `gorm:"column:is_del;softDelete:flag"`
 	Groups             []GroupStock          `gorm:"foreignKey:StockCode;references:StockCode"`
-	AiConfigId         int
-	EntryPrice         float64
-	TakeProfitPrice    float64
-	StopLossPrice      float64
+	AiConfigId         int                   `gorm:"column:ai_config_id"`
+	EntryPrice         float64               `gorm:"column:entry_price"`
+	TakeProfitPrice    float64               `gorm:"column:take_profit_price"`
+	StopLossPrice      float64               `gorm:"column:stop_loss_price"`
 }
 
 func (receiver FollowedStock) TableName() string {
@@ -239,7 +238,6 @@ type StockBasicResponse struct {
 	HasMore bool     `json:"has_more"`
 	Count   int      `json:"count"`
 }
-
 
 func NewStockDataApi() *StockDataApi {
 	return &StockDataApi{
