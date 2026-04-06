@@ -882,12 +882,7 @@ const columns = [
     width: 180,
     ellipsis: { tooltip: true },
     render(row) {
-      return h('div', { style: 'display: flex; align-items: center; gap: 8px;' }, [
-        h(NTag, { type: 'info', size: 'small', bordered: false }, {
-          default: () => getTaskTypeLabel(row.taskType)
-        }),
-        h('span', {}, { default: () => row.name })
-      ])
+      return h('span', {}, { default: () => row.name })
     }
   },
   // {
