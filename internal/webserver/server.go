@@ -204,6 +204,20 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
 			protected.GET("/stock-changes/history", handlers.GetStockChangeHistoryHandler)
 			protected.POST("/stock-changes/save", handlers.SaveStockChangesToHistoryHandler)
+
+			// 用户管理（仅管理员）
+			admin := protected.Group("/admin")
+			admin.Use(middleware.AdminRequired()) // 应用管理员权限中间件
+			{
+				admin.GET("/users", handlers.AdminUserList)
+				admin.PUT("/users/status", handlers.UpdateUserActiveStatus)
+				admin.POST("/users", handlers.CreateUser)
+				admin.DELETE("/users/:id", handlers.DeleteUserHandler)
+				admin.PUT("/users/password", handlers.ResetUserPasswordHandler)
+			}
+
+			// 临时工具：修复 admin 用户角色（生产环境应删除）
+			protected.POST("/tools/fix-admin-role", handlers.FixAdminRole)
 		}
 	}
 
@@ -285,5 +299,6 @@ func MigrateAllTables() {
 		&models.VersionInfo{},
 		&models.StockChangeHistory{},
 		&handlers.UserSetting{},
+		&models.User{},
 	)
 }

@@ -152,28 +152,10 @@ onBeforeMount(async () => {
 
   await Promise.all([loadConfig(), loadGroupList()])
 
-  // 设置普通菜单项的显示状态
   menuOptions.value.forEach((item) => {
     if (item.key === 'fund') item.show = enableFund.value
     if (item.key === 'agent') item.show = enableAgent.value
   })
-
-  // 检查用户权限以决定是否显示用户管理菜单
-  if (localStorage.getItem('token')) {
-    try {
-      const userProfile = await apiService.getUserProfile()
-      if (userProfile.data && userProfile.data.is_admin === true) {
-        // 找到用户管理菜单项并设为显示
-        const adminMenuItem = menuOptions.value.find(item => item.key === 'admin')
-        if (adminMenuItem) {
-          adminMenuItem.show = true
-        }
-      }
-    } catch (error) {
-      console.error('获取用户信息失败:', error)
-      // 出错时不显示用户管理菜单
-    }
-  }
 
   loading.value = false
   loadingMsg.value = "加载完成..."

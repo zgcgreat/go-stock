@@ -164,7 +164,7 @@ func GetUserProfile(c *gin.Context) {
 	}
 
 	var user models.User
-	result := db.Dao.Select("id, username, display_name, email, created_at, updated_at").Where("id = ?", userID).First(&user)
+	result := db.Dao.Select("id, username, display_name, email, is_admin, created_at, updated_at").Where("id = ?", userID).First(&user)
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "User not found",
@@ -179,6 +179,7 @@ func GetUserProfile(c *gin.Context) {
 			"username":     user.Username,
 			"display_name": user.DisplayName,
 			"email":        user.Email,
+			"is_admin":     user.IsAdmin,
 			"created_at":   user.CreatedAt,
 			"updated_at":   user.UpdatedAt,
 		},

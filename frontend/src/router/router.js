@@ -10,6 +10,7 @@ import research from "../components/researchIndex.vue";
 import cronTaskManager from "../components/cron-task-manager.vue"
 import LoginView from "../components/Login.vue"
 import RegisterView from "../components/Register.vue"
+import UserManager from "../components/UserManager.vue"
 
 const routes = [
     { path: '/login', component: LoginView, name: 'login', meta: { public: true } },
@@ -22,6 +23,7 @@ const routes = [
     { path: '/agent', component: agentChat, name: 'agent' },
     { path: '/research', component: research, name: 'research' },
     { path: '/cron-tasks', component: cronTaskManager, name: 'cronTasks' },
+    { path: '/admin/users', component: UserManager, name: 'userManagement' },
 ]
 
 const router = createRouter({

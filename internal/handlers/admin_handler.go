@@ -103,6 +103,7 @@ func AdminEnsureInitialAdmin() {
 	// 检查是否有用户存在
 	var userCount int64
 	db.Dao.Model(&models.User{}).Count(&userCount)
+	println("现有用户总数:", userCount)
 
 	// 如果没有用户，则创建一个默认管理员
 	if userCount == 0 {
@@ -112,42 +113,34 @@ func AdminEnsureInitialAdmin() {
 			// 记录错误日志，但不中断程序执行
 			println("创建初始管理员账户失败:", err.Error())
 		} else {
+			// 设置 IsAdmin 为 true
+			var adminUser models.User
+			if err := db.Dao.Where("username = ?", "admin").First(&adminUser).Error; err == nil {
+				db.Dao.Model(&adminUser).Update("is_admin", true)
+			}
 			println("初始管理员账户创建成功！用户名: admin, 密码: admin123")
+		}
+	} else {
+		// 即使有用户存在，也可以检查是否存在管理员用户
+		var adminUserCount int64
+		db.Dao.Model(&models.User{}).Where("is_admin = ?", true).Count(&adminUserCount)
+		println("现有管理员数量:", adminUserCount)
+
+		if adminUserCount == 0 {
+			println("警告：没有发现管理员用户，可能需要手动创建或修复管理员角色")
+		} else {
+			var adminUsers []models.User
+			db.Dao.Model(&models.User{}).Where("is_admin = ?", true).Find(&adminUsers)
+			for _, user := range adminUsers {
+				println("发现管理员用户:", user.Username, "ID:", user.ID)
+			}
 		}
 	}
 }
 
 // AdminUserList 获取用户列表
 func AdminUserList(c *gin.Context) {
-	// 从上下文中获取当前用户ID
-	currentUserID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "未找到用户信息",
-			"message": "认证失败",
-		})
-		return
-	}
-
-	// 检查当前用户是否为管理员（这里可以基于用户名或者某种标志检查）
-	var currentUser models.User
-	if err := db.Dao.Where("id = ?", currentUserID).First(&currentUser).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "用户不存在",
-			"message": "无法验证管理员权限",
-		})
-		return
-	}
-
-	// 这里我们简单假设用户名为 "admin" 的就是管理员，实际实现中可以使用更复杂的角色/权限系统
-	if currentUser.Username != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":   "权限不足",
-			"message": "仅管理员可查看用户列表",
-		})
-		return
-	}
-
+	// 权限检查已由中间件 AdminRequired 完成
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
 		page = 1
@@ -160,15 +153,21 @@ func AdminUserList(c *gin.Context) {
 
 	searchKeyword := c.Query("search")
 
+	// 添加调试日志
+	println("AdminUserList called with page:", page, "pageSize:", pageSize, "search:", searchKeyword)
+
 	manager := &AdminUserManager{}
 	users, total, err := manager.GetUserList(page, pageSize, searchKeyword)
 	if err != nil {
+		println("Error getting user list:", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "获取用户列表失败",
 			"message": "查询用户列表出现错误",
 		})
 		return
 	}
+
+	println("Successfully retrieved users:", len(users), "total:", total)
 
 	totalPages := total / int64(pageSize)
 	if total%int64(pageSize) > 0 {
@@ -190,33 +189,7 @@ func AdminUserList(c *gin.Context) {
 
 // UpdateUserActiveStatus 更新用户激活状态
 func UpdateUserActiveStatus(c *gin.Context) {
-	// 检查管理员权限的逻辑（同上）
-	currentUserID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "未找到用户信息",
-			"message": "认证失败",
-		})
-		return
-	}
-
-	var currentUser models.User
-	if err := db.Dao.Where("id = ?", currentUserID).First(&currentUser).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "用户不存在",
-			"message": "无法验证管理员权限",
-		})
-		return
-	}
-
-	if currentUser.Username != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":   "权限不足",
-			"message": "仅管理员可更新用户状态",
-		})
-		return
-	}
-
+	// 权限检查已由中间件 AdminRequired 完成
 	var req struct {
 		UserID uint `json:"userId" binding:"required"`
 		Active bool `json:"active"`
@@ -248,39 +221,14 @@ func UpdateUserActiveStatus(c *gin.Context) {
 
 // CreateUser 创建新用户
 func CreateUser(c *gin.Context) {
-	// 检查管理员权限的逻辑（同上）
-	currentUserID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "未找到用户信息",
-			"message": "认证失败",
-		})
-		return
-	}
-
-	var currentUser models.User
-	if err := db.Dao.Where("id = ?", currentUserID).First(&currentUser).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "用户不存在",
-			"message": "无法验证管理员权限",
-		})
-		return
-	}
-
-	if currentUser.Username != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":   "权限不足",
-			"message": "仅管理员可创建用户",
-		})
-		return
-	}
-
+	// 权限检查已由中间件 AdminRequired 完成
 	var req struct {
 		Username    string `json:"username" binding:"required,min=3,max=20"`
 		Email       string `json:"email" binding:"required,email"`
 		Password    string `json:"password" binding:"required,min=6"`
 		DisplayName string `json:"display_name,omitempty"`
 		IsActive    bool   `json:"is_active"`
+		IsAdmin     bool   `json:"is_admin"` // 允许设置管理员权限
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -306,6 +254,7 @@ func CreateUser(c *gin.Context) {
 		Password:    string(hashedPassword),
 		DisplayName: req.DisplayName,
 		IsActive:    req.IsActive,
+		IsAdmin:     req.IsAdmin,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -327,8 +276,88 @@ func CreateUser(c *gin.Context) {
 			"display_name":  newUser.DisplayName,
 			"email":         newUser.Email,
 			"is_active":     newUser.IsActive,
+			"is_admin":      newUser.IsAdmin,
 			"created_at":    newUser.CreatedAt,
 			"updated_at":    newUser.UpdatedAt,
 		},
+	})
+}
+
+// DeleteUserHandler 删除用户
+func DeleteUserHandler(c *gin.Context) {
+	// 权限检查已由中间件 AdminRequired 完成
+	currentUserID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "未找到用户信息",
+			"message": "认证失败",
+		})
+		return
+	}
+
+	userIDStr := c.Param("id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "请求参数错误",
+			"message": "无效的用户ID",
+		})
+		return
+	}
+
+	// 不能删除自己
+	if uint(userID) == currentUserID {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "操作不允许",
+			"message": "不能删除当前登录的管理员账户",
+		})
+		return
+	}
+
+	manager := &AdminUserManager{}
+	err = manager.DeleteUser(uint(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "删除用户失败",
+			"message": "删除用户出现错误",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "用户删除成功",
+	})
+}
+
+// ResetUserPasswordHandler 重置用户密码
+func ResetUserPasswordHandler(c *gin.Context) {
+	// 权限检查已由中间件 AdminRequired 完成
+	var req struct {
+		UserID      uint   `json:"userId" binding:"required"`
+		NewPassword string `json:"newPassword" binding:"required,min=6"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "请求数据错误",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	manager := &AdminUserManager{}
+	err := manager.ResetUserPassword(req.UserID, req.NewPassword)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "重置密码失败",
+			"message": "重置密码出现错误",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "密码重置成功",
 	})
 }
