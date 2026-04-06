@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -446,6 +447,42 @@ func GetAllStockChangesWithPagingHandler(c *gin.Context) {
 		"message":    "success",
 		"data":       result.Data,
 		"totalCount": result.TotalCount,
+	})
+}
+
+// SaveStockChangesToHistoryHandler 保存异动数据到历史
+func SaveStockChangesToHistoryHandler(c *gin.Context) {
+	changeTypesStr := c.Query("changeTypes")
+	var changeTypes []int
+	if changeTypesStr != "" {
+		for _, s := range strings.Split(changeTypesStr, ",") {
+			if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+				changeTypes = append(changeTypes, v)
+			}
+		}
+	}
+
+	result := data.NewStockChangesApi().GetStockChanges(changeTypes, 0, 500)
+	if result == nil || len(result.Data) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "没有获取到异动数据",
+		})
+		return
+	}
+
+	err := data.NewStockChangeHistoryService().SaveStockChanges(result.Data)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "保存失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": fmt.Sprintf("成功保存 %d 条异动数据", len(result.Data)),
 	})
 }
 

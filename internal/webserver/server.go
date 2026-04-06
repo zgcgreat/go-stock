@@ -193,6 +193,7 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/stock-changes", handlers.GetStockChanges)
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
 			protected.GET("/stock-changes/history", handlers.GetStockChangeHistoryHandler)
+			protected.POST("/stock-changes/save", handlers.SaveStockChangesToHistoryHandler)
 		}
 	}
 

@@ -1227,7 +1227,14 @@ export function SaveAiAssistantSession(arg1, arg2) {
 
 export function SaveStockChangesToHistory(arg1) {
   if (isWailsMode()) return window.go.main.App.SaveStockChangesToHistory(arg1);
-  return Promise.resolve(true);
+  const changeTypes = Array.isArray(arg1) ? arg1 : [];
+  const params = {};
+  if (changeTypes.length > 0) {
+    params.changeTypes = changeTypes.join(',');
+  }
+  return apiService.client.post('/stock-changes/save', null, { params, headers: getAuthHeaders() })
+    .then(res => res.data?.message || '保存成功')
+    .catch(err => err.message || '保存失败');
 }
 
 export function SearchCronTasks(arg1) {
