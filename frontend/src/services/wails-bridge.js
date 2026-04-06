@@ -1190,15 +1190,15 @@ export function GetTelegraphList(arg1) {
 
 export function GetTradingRecordList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetTradingRecordList(arg1);
-  return apiService.client.get('/trades', { params: arg1 })
+  // Web 模式：调用后端 API
+  return apiService.client.get('/trades', { params: arg1, headers: getAuthHeaders() })
     .then(res => {
-      console.log('GetTradingRecordList response:', res.data)
-      return res.data || { data: { list: [], total: 0 } }
+      const d = res.data?.data;
+      if (d && d.list) return d;
+      if (Array.isArray(d)) return { list: d, total: d.length };
+      return { list: [], total: 0 };
     })
-    .catch(err => {
-      console.error('GetTradingRecordList error:', err)
-      return { data: { list: [], total: 0 } }
-    });
+    .catch(() => ({ list: [], total: 0 }));
 }
 
 export function GetTradingRecordStatistics() {

@@ -20,7 +20,9 @@
       "Bash(go get:*)",
       "Bash(find E:\\\\LLM\\\\go-stock\\\\backend\\\\data:*)",
       "Bash(powershell:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8080)"
     ]
   }
 }

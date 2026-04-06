@@ -1,5 +1,5 @@
 <script setup>
-import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive} from 'vue'
+import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive, watch} from 'vue'
 import {GetAIResponseResultList} from "../services/wails-bridge.js";
 import {NButton, NEllipsis, NText} from "naive-ui";
 import ResearchReport from "./researchReport.vue";
@@ -16,10 +16,22 @@ import {useRoute} from 'vue-router'
 
 const nowTab = ref("AI分析报告")
 const route = useRoute()
+
+// 初始化时设置标签页
 onBeforeMount(() => {
   // 如果路由中有 name 参数则使用，否则默认为"AI分析报告"
   nowTab.value = route.query.name || "AI分析报告"
 })
+
+// 监听路由变化，自动切换标签页
+watch(
+  () => route.query.name,
+  (newName) => {
+    if (newName) {
+      nowTab.value = newName
+    }
+  }
+)
 
 onBeforeUnmount(() => {
   EventsOff("changeResearchTab")

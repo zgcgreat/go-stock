@@ -281,11 +281,16 @@ func (s *TradingService) GetTradingRecordList(query data.TradingRecordListQuery)
 		if r.Direction == "买入" {
 			if need {
 				closePrice := resolveClose(apiCode, r.TradingTime, r.Price, r.RecordedClosePrice)
+				profitAmount := (closePrice - r.Price) * float64(r.Volume)
+				profitPercent := 0.0
+				if r.Price > 0 {
+					profitPercent = (closePrice - r.Price) / r.Price * 100
+				}
 				profitByID[r.ID] = rowProfit{
 					id:            r.ID,
 					closePrice:    closePrice,
-					profitAmount:  (closePrice - r.Price) * float64(r.Volume),
-					profitPercent: (closePrice - r.Price) / r.Price * 100,
+					profitAmount:  profitAmount,
+					profitPercent: profitPercent,
 				}
 				if r.RecordedClosePrice <= 0 && closePrice > 0 {
 					backfillCh <- rowProfitReq{id: r.ID, closePrice: closePrice}
@@ -306,7 +311,10 @@ func (s *TradingService) GetTradingRecordList(query data.TradingRecordListQuery)
 				if ok {
 					closePrice := resolveClose(apiCode, r.TradingTime, r.Price, r.RecordedClosePrice)
 					profit := (closePrice - unitCost) * float64(r.Volume)
-					profitPct := (closePrice - unitCost) / unitCost * 100
+					profitPct := 0.0
+					if unitCost > 0 {
+						profitPct = (closePrice - unitCost) / unitCost * 100
+					}
 					profitByID[r.ID] = rowProfit{
 						id:            r.ID,
 						closePrice:    closePrice,
@@ -317,7 +325,10 @@ func (s *TradingService) GetTradingRecordList(query data.TradingRecordListQuery)
 					// 当成本无法计算时，按当前价格相对交易价格的盈亏处理
 					closePrice := resolveClose(apiCode, r.TradingTime, r.Price, r.RecordedClosePrice)
 					profit := (closePrice - r.Price) * float64(r.Volume)
-					profitPct := (closePrice - r.Price) / r.Price * 100
+					profitPct := 0.0
+					if r.Price > 0 {
+						profitPct = (closePrice - r.Price) / r.Price * 100
+					}
 					profitByID[r.ID] = rowProfit{
 						id:            r.ID,
 						closePrice:    closePrice,
