@@ -1273,8 +1273,10 @@ func GetAllDataTools() []tool.BaseTool {
 				if code == "" {
 					continue
 				}
-				configService := services.GetConfigService()\n\t\t\t\tconfig := configService.GetSettingConfig()\n\t\t\t\tapi := data.NewEastMoneyKLineApi(config)
-				res := data.EastMoneyKLineSection(api, code, kLineType, adjustFlag, limit)
+			configService := services.GetConfigService()
+				config := configService.GetSettingConfig()
+				api := data.NewEastMoneyKLineApi(config)
+			res := data.EastMoneyKLineSection(api, code, kLineType, adjustFlag, limit)
 				results = append(results, res)
 			}
 			return strings.Join(results, "\n"), nil
@@ -1331,8 +1333,10 @@ func GetAllDataTools() []tool.BaseTool {
 				if code == "" {
 					continue
 				}
-				configService := services.GetConfigService()\n\t\t\t\tconfig := configService.GetSettingConfig()\n\t\t\t\tapi := data.NewEastMoneyKLineApi(config)
-				res := data.EastMoneyKLineWithMASection(api, code, kLineType, limit, maPeriodsStr)
+			configService := services.GetConfigService()
+				config := configService.GetSettingConfig()
+				api := data.NewEastMoneyKLineApi(config)
+			res := data.EastMoneyKLineWithMASection(api, code, kLineType, limit, maPeriodsStr)
 				results = append(results, res)
 			}
 			return strings.Join(results, "\n"), nil

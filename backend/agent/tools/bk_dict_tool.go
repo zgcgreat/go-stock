@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
-	"github.com/coocood/freecache"
 
 	"go-stock/backend/services"
 )

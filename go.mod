@@ -10,7 +10,7 @@ require (
 	github.com/cloudwego/eino-ext/components/model/ark v0.1.64
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
 	github.com/coocood/freecache v1.2.5
-	github.com/duke-git/lancet/v2 v2.3.8
+	github.com/duke-git/lancet/v2 v2.3.9
 	github.com/energye/systray v1.0.3
 	github.com/gen2brain/beeep v0.11.2
 	github.com/gin-contrib/cors v1.7.7
@@ -24,7 +24,7 @@ require (
 	github.com/lib4u/fake-useragent v1.0.6
 	github.com/robertkrimen/otto v0.5.1
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/samber/lo v1.52.0
+	github.com/samber/lo v1.53.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
 	github.com/wailsapp/wails/v2 v2.11.0
@@ -35,13 +35,11 @@ require (
 	golang.org/x/sys v0.42.0
 	golang.org/x/text v0.35.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
 	gorm.io/plugin/soft_delete v1.2.1
 )
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
@@ -67,7 +65,6 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
-	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect

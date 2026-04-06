@@ -16,7 +16,11 @@
       "Bash(dir:*)",
       "Bash(ls:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(go get:*)",
+      "Bash(find E:\\\\LLM\\\\go-stock\\\\backend\\\\data:*)",
+      "Bash(powershell:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

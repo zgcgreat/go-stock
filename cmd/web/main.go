@@ -14,6 +14,7 @@ import (
 
 	"go-stock/backend/data"
 	"go-stock/backend/db"
+	"go-stock/internal/handlers"
 	"go-stock/internal/webserver"
 )
 
@@ -32,6 +33,9 @@ func main() {
 
 	// 数据库迁移
 	webserver.MigrateAllTables()
+
+	// 确保初始管理员账户存在
+	handlers.AdminEnsureInitialAdmin()
 
 	// 设置静态资源目录（磁盘路径，默认 frontend/dist）
 	if staticDir := os.Getenv("GO_STOCK_STATIC_DIR"); staticDir != "" {

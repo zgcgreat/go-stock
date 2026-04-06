@@ -5,7 +5,7 @@ import (
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 
-	"github.com/duke-git/lancet/v2/lo"
+	"github.com/samber/lo"
 )
 
 // ConfigService 配置服务

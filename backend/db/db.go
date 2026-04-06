@@ -8,8 +8,6 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-
-	"go-stock/internal/handlers"
 )
 
 var Dao *gorm.DB
@@ -57,6 +55,6 @@ func Init(sqlitePath string) {
 	Dao = openDb
 	AutoMigrate()
 
-	// 确保初始管理员账户存在
-	handlers.AdminEnsureInitialAdmin()
+	// Note: Initial admin account creation is now handled separately to avoid import cycles
+	// This logic has been moved to the application initialization layer (main or app.go)
 }

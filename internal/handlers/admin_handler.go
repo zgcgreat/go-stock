@@ -161,7 +161,7 @@ func AdminUserList(c *gin.Context) {
 	searchKeyword := c.Query("search")
 
 	manager := &AdminUserManager{}
-	users, total, err := manager.GetUserList(page, pageSize, searchKeyword, db.Dao)
+	users, total, err := manager.GetUserList(page, pageSize, searchKeyword)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "获取用户列表失败",
@@ -231,7 +231,7 @@ func UpdateUserActiveStatus(c *gin.Context) {
 	}
 
 	manager := &AdminUserManager{}
-	err := manager.UpdateUserStatus(req.UserID, req.Active, db.Dao)
+	err := manager.UpdateUserStatus(req.UserID, req.Active)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "更新用户状态失败",

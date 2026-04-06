@@ -37,3 +37,17 @@
 - **AI 分析 400 修复**：SummaryStockNews Web 模式下请求体字段映射错误（arg1/arg2 误当 stockCode/stockName），按 Wails 参数签名正确映射 question/aiConfigId/sysPromptId；同时将硬编码事件名改为动态 eventName
 - **NewChatStream 400 修复**：JS 函数参数签名与 Go 端不一致（userPromptId/aiConfigId 顺序错误导致 bool 传到 aiConfigId），修正为匹配 Go 端 (stock, stockCode, question, aiConfigId, sysPromptId, enableTools, think)，body 中 stockCode/stockName 字段映射也做了修正，加 Number() 类型转换
 - **AI 流式内容不显示修复**：NewChatStream 和 SummaryStockNews 的 SSE processLine 直接发纯文本 raw 字符串，但前端事件监听期望 { content, chatId, question } 对象格式。修复为 EventsEmit(eventName, { content: raw }) 包装对象后发送
+
+## 编译修复（2026-04-06 下午）
+`go build ./cmd/web/...` 编译成功，`go run ./cmd/web/main.go` 启动正常（http://0.0.0.0:8080）
+- stock_service.go：修复 getHistoryData（NewEastMoneyKLineApi 传 config，改用 GetDayKLine，正确字段映射）；清理未使用 import；补加 context import
+- trading_service.go：清理未使用 import（sync/strutil），修复 price 未使用变量
+- ai_assistant_service.go、settings_service.go、market_service.go：清理未使用 import
+- backend/agent/tools/data_tools_wrapper.go：修复两处 \\n\\t 字面量错误（展开为多行代码）
+- backend/agent/tools/bk_dict_tool.go：删除未使用 freecache import
+- internal/handlers/admin_handler.go：修复 GetUserList/UpdateUserStatus 调用多传 db.Dao 参数
+- internal/handlers/trade_handler.go：完全重写，用 data.TradingRecord + TradingService 替代不存在的 models.StockTradeRecord
+- internal/handlers/web_handler.go：GetTradingRecordStatistics 改用 TradingService；添加 services import
+- internal/webserver/server.go：AutoMigrate 删除不存在的 models.StockTradeRecord/StockPool/AIRecommendStocksHistory/AIRecommendStocksSummary
+- app.go：添加 go-stock/backend/services import
+- 注意：go build ./...（根包）仍报错（BuildKey/Version/PanicHandler 未定义），这是 Wails 桌面端问题，需 Wails toolchain，属正常现象

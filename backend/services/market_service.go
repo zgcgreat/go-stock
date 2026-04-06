@@ -1,14 +1,8 @@
 package services
 
 import (
-	"context"
-	"encoding/json"
 	"go-stock/backend/data"
-	"go-stock/backend/db"
-	"go-stock/backend/models"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
 	"github.com/coocood/freecache"
 )
 

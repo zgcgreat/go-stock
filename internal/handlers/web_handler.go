@@ -13,6 +13,7 @@ import (
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	"go-stock/backend/services"
 )
 
 // GetTelegraphList 获取新闻电报列表
@@ -197,46 +198,16 @@ func GetEMDictCode(c *gin.Context) {
 
 // GetTradingRecordStatistics 获取交易记录统计
 func GetTradingRecordStatistics(c *gin.Context) {
-	var records []models.StockTradeRecord
-	db.Dao.Model(&models.StockTradeRecord{}).Find(&records)
-
-	totalTrades := len(records)
-	totalProfit := 0.0
-	winCount := 0
-	lossCount := 0
-
-	for _, r := range records {
-		if r.Profit != nil {
-			profit := *r.Profit
-			if profit > 0 {
-				totalProfit += profit
-				winCount++
-			} else if profit < 0 {
-				lossCount++
-			}
-		}
+	svc := services.GetTradingService()
+	stats, err := svc.GetTradingRecordStatistics()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": "获取统计数据失败"})
+		return
 	}
-
-	winRate := 0.0
-	if totalTrades > 0 {
-		winRate = float64(winCount) / float64(totalTrades) * 100
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
-		"data": gin.H{
-			"totalTrades":  totalTrades,
-			"totalProfit":  totalProfit,
-			"winCount":     winCount,
-			"lossCount":    lossCount,
-			"winRate":      winRate,
-			"avgProfit":    0.0,
-			"avgLoss":      0.0,
-			"maxProfit":    0.0,
-			"maxLoss":      0.0,
-			"profitFactor": 0.0,
-		},
+		"data":    stats,
 	})
 }
 

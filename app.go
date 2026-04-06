@@ -14,6 +14,7 @@ import (
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	"go-stock/backend/services"
 	"os"
 	"path/filepath"
 	"strings"
@@ -131,11 +132,13 @@ func (a *App) CheckSponsorCode(sponsorCode string) map[string]any {
 		}
 
 		// 校验通过后，将赞助码持久化到 Settings 中
-		config := data.GetSettingConfig()
+		configService := services.GetConfigService()
+		config := configService.GetSettingConfig()
 		// 只在赞助码变更时写库，避免无谓更新
 		if config.SponsorCode != sponsorCode {
 			config.SponsorCode = sponsorCode
-			data.UpdateConfig(config)
+			settingsService := services.GetSettingsService()
+			settingsService.UpdateConfig(config)
 		}
 
 		return map[string]any{
@@ -449,7 +452,8 @@ func (a *App) domReady(ctx context.Context) {
 
 	// Add your action here
 	//定时更新数据
-	config := data.GetSettingConfig()
+	configService := services.GetConfigService()
+	config := configService.GetSettingConfig()
 	go func() {
 		go data.NewMarketNewsApi().TelegraphList(30)
 		go data.NewMarketNewsApi().GetSinaNews(30)
