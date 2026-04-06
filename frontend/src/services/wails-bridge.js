@@ -1071,7 +1071,7 @@ export function GetCronTaskList(arg1) {
   };
   if (arg1?.name) params.name = arg1.name;
   if (arg1?.taskType) params.taskType = arg1.taskType;
-  if (arg1?.status !== undefined) params.status = arg1.status;
+  if (arg1?.status && arg1.status !== '') params.status = arg1.status;
   return apiService.client.get('/cron-task', { params, headers: getAuthHeaders() })
     .then(res => res.data?.data || { data: [], total: 0 })
     .catch(() => ({ data: [], total: 0 }));
