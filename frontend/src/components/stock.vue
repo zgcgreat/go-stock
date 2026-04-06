@@ -34,8 +34,15 @@ import {
   SetTradingPrice,
   ShareAnalysis,
   UnFollow,
-  UpdateGroupSort
-} from '../../wailsjs/go/main/App'
+  UpdateGroupSort,
+  EventsOn,
+  EventsOff,
+  EventsEmit,
+  WindowFullscreen,
+  WindowUnfullscreen,
+  WindowReload,
+  Environment
+} from '../services/wails-bridge.js'
 import {
   NAvatar,
   NButton,
@@ -48,15 +55,6 @@ import {
   useMessage,
   useNotification
 } from 'naive-ui'
-import {
-  Environment,
-  EventsEmit,
-  EventsOff,
-  EventsOn,
-  WindowFullscreen,
-  WindowReload,
-  WindowUnfullscreen
-} from '../../wailsjs/runtime'
 import {Add, ChatboxOutline,} from '@vicons/ionicons5'
 import {MdEditor, MdPreview} from 'md-editor-v3';
 // preview.css相比style.css少了编辑器那部分样式
@@ -313,9 +311,10 @@ function handleTabDragEnd(event) {
 
 onBeforeMount(() => {
   GetGroupList().then(result => {
-    groupList.value = result
+    const groups = Array.isArray(result) ? result : []
+    groupList.value = groups
     // 检查是否存在相同的序号
-    const sorts = result.map(item => item.sort);
+    const sorts = groups.map(item => item.sort);
     const uniqueSorts = new Set(sorts);
     // 如果存在重复的序号，则重新初始化序号
     if (sorts.length !== uniqueSorts.size) {
@@ -331,8 +330,9 @@ onBeforeMount(() => {
     }
   })
   GetStockList("").then(result => {
-    stockList.value = result
-    options.value = result.map(item => {
+    const stocks = Array.isArray(result) ? result : []
+    stockList.value = stocks
+    options.value = stocks.map(item => {
       return {
         label: item.name + " - " + item.ts_code,
         value: item.ts_code
@@ -351,23 +351,28 @@ onBeforeMount(() => {
     }
   })
   GetPromptTemplates("", "").then(res => {
-    promptTemplates.value = res
+    const templates = Array.isArray(res) ? res : []
+    promptTemplates.value = templates
 
-    sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
-    userPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型用户Prompt')
+    sysPromptOptions.value = templates.filter(item => item.type === '模型系统Prompt')
+    userPromptOptions.value = templates.filter(item => item.type === '模型用户Prompt')
 
   })
 
   GetAiConfigs().then(res => {
-    aiConfigs.value = res
-    data.aiConfigId = res[0].ID
+    const configs = Array.isArray(res) ? res : []
+    aiConfigs.value = configs
+    if (configs.length > 0 && configs[0]) {
+      data.aiConfigId = configs[0].ID
+    }
   })
 
   EventsOn("loadingDone", (data) => {
     message.loading("刷新股票基础数据...")
     GetStockList("").then(result => {
-      stockList.value = result
-      options.value = result.map(item => {
+      const stocks = Array.isArray(result) ? result : []
+      stockList.value = stocks
+      options.value = stocks.map(item => {
         return {
           label: item.name + " - " + item.ts_code,
           value: item.ts_code
@@ -662,7 +667,8 @@ function fetchGroupList() {
   InitializeGroupSort().then(initResult => {
     if (initResult) {
       GetGroupList().then(result => {
-        groupList.value = result
+        const groups = Array.isArray(result) ? result : []
+        groupList.value = groups
         if (route.query.groupId) {
           message.success("切换分组:" + route.query.groupName)
           currentGroupId.value = Number(route.query.groupId)

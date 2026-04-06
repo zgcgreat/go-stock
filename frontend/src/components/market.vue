@@ -14,8 +14,9 @@ import {
   ShareAnalysis,
   SummaryStockNews,
   GetAiConfigs,
-} from "../../wailsjs/go/main/App";
-import {EventsOff, EventsOn} from "../../wailsjs/runtime";
+  EventsOff,
+  EventsOn,
+} from "../services/wails-bridge.js";
 import NewsList from "./newsList.vue";
 import KLineChart from "./KLineChart.vue";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
@@ -83,14 +84,24 @@ const thinkingMode = ref(false)
 const treemapRef = ref(null);
 let treemapchart =null;
 
+// 将指数数据中的字符串数值转为数字类型
+function normalizeIndexData(items) {
+  if (!Array.isArray(items)) return []
+  return items.map(item => ({
+    ...item,
+    zdf: parseFloat(item.zdf) || 0,
+    zxj: parseFloat(item.zxj) || 0,
+  }))
+}
+
 function getIndex() {
   GlobalStockIndexes().then((res) => {
     globalStockIndexes.value = res
-    common.value = res["common"]
-    america.value = res["america"]
-    europe.value = res["europe"]
-    asia.value = res["asia"]
-    other.value = res["other"]
+    common.value = normalizeIndexData(res["common"])
+    america.value = normalizeIndexData(res["america"])
+    europe.value = normalizeIndexData(res["europe"])
+    asia.value = normalizeIndexData(res["asia"])
+    other.value = normalizeIndexData(res["other"])
   })
 }
 
@@ -103,14 +114,16 @@ onBeforeMount(() => {
     httpProxyEnabled.value = result.httpProxyEnabled
   })
   GetPromptTemplates("", "").then(res => {
-    promptTemplates.value = res
+    promptTemplates.value = Array.isArray(res) ? res : []
     sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
     userPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型用户Prompt')
   })
 
   GetAiConfigs().then(res=>{
-    aiConfigs.value = res
-    aiConfigId.value = res[0].ID
+    aiConfigs.value = Array.isArray(res) ? res : []
+    if (res && res.length > 0) {
+      aiConfigId.value = res[0].ID
+    }
   })
   GetTelegraphList("财联社电报").then((res) => {
     telegraphList.value = res

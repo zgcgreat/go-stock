@@ -3,7 +3,7 @@
 import {CaretDown, CaretUp, RefreshCircleOutline} from "@vicons/ionicons5";
 import {NText,useMessage} from "naive-ui";
 import {onBeforeUnmount, onMounted, onUnmounted, ref} from "vue";
-import {GetMoneyRankSina} from "../../wailsjs/go/main/App";
+import {GetMoneyRankSina} from "../services/wails-bridge.js";
 import KLineChart from "./KLineChart.vue";
 
 const props = defineProps({

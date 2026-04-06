@@ -72,25 +72,34 @@ var baseDict string
 //go:embed data/dict/zh/s_1.txt
 var zhDict string
 
-func InitAnalyzeSentiment() {
-	defer func() {
-		if r := recover(); r != nil {
-			logger.SugaredLogger.Error(fmt.Sprintf("panic: %v", r))
-		}
-	}()
-	// 加载简体中文词典
-	//err := seg.LoadDict("zh_s")
-	//if err != nil {
-	//	logger.SugaredLogger.Error(err.Error())
-	//}
+func safeAddToken(name string, freq float64, pos string) {
+	defer func() { recover() }()
+	_ = seg.AddToken(name, freq, pos)
+}
 
+func safeReAddToken(name string, freq float64, pos ...string) {
+	defer func() { recover() }()
+	if len(pos) > 0 {
+		_ = seg.ReAddToken(name, freq, pos[0])
+	} else {
+		_ = seg.ReAddToken(name, freq)
+	}
+}
+
+func safeCalcToken() {
+	defer func() { recover() }()
+	seg.CalcToken()
+}
+
+func InitAnalyzeSentiment() {
+	// 加载简体中文词典
 	err := seg.LoadDictEmbed(baseDict)
 	if err != nil {
 		logger.SugaredLogger.Error(err.Error())
 	} else {
 		logger.SugaredLogger.Info("加载默认词典成功")
 	}
-	seg.CalcToken()
+	safeCalcToken()
 
 	stocks := &[]StockBasic{}
 	db.Dao.Model(&StockBasic{}).Find(stocks)
@@ -98,12 +107,9 @@ func InitAnalyzeSentiment() {
 		if strutil.Trim(stock.Name) == "" {
 			continue
 		}
-		err := seg.AddToken(stock.Name, basefreq+100, "n")
+		safeAddToken(stock.Name, basefreq+100, "n")
 		if strutil.Trim(stock.BKName) != "" {
-			err = seg.AddToken(stock.BKName, basefreq+100, "n")
-		}
-		if err != nil {
-			logger.SugaredLogger.Errorf("添加%s失败:%s", stock.Name, err.Error())
+			safeAddToken(stock.BKName, basefreq+100, "n")
 		}
 	}
 	logger.SugaredLogger.Info("加载股票名称词典成功")
@@ -114,38 +120,22 @@ func InitAnalyzeSentiment() {
 		if strutil.Trim(stock.Name) == "" {
 			continue
 		}
-		err := seg.AddToken(stock.Name, basefreq+100, "n")
+		safeAddToken(stock.Name, basefreq+100, "n")
 		if strutil.Trim(stock.BKName) != "" {
-			err = seg.AddToken(stock.BKName, basefreq+100, "n")
-		}
-		if err != nil {
-			logger.SugaredLogger.Errorf("添加%s失败:%s", stock.Name, err.Error())
+			safeAddToken(stock.BKName, basefreq+100, "n")
 		}
 	}
 	logger.SugaredLogger.Info("加载港股名称词典成功")
-	//stockus := &[]models.StockInfoUS{}
-	//db.Dao.Model(&models.StockInfoUS{}).Where("trim(name) != ?", "").Find(stockus)
-	//for _, stock := range *stockus {
-	//	err := seg.AddToken(stock.Name, 500)
-	//	if err != nil {
-	//		logger.SugaredLogger.Errorf("添加%s失败:%s", stock.Name, err.Error())
-	//	}
-	//}
 	tags := &[]models.Tags{}
 	db.Dao.Model(&models.Tags{}).Where("type = ?", "subject").Find(tags)
 	for _, tag := range *tags {
 		if tag.Name == "" {
 			continue
 		}
-		err := seg.AddToken(tag.Name, basefreq+100, "n")
-		if err != nil {
-			logger.SugaredLogger.Errorf("添加%s失败:%s", tag.Name, err.Error())
-		} else {
-			//logger.SugaredLogger.Infof("添加tags词典[%s]成功", tag.Name)
-		}
+		safeAddToken(tag.Name, basefreq+100, "n")
 	}
 	logger.SugaredLogger.Info("加载tags词典成功")
-	seg.CalcToken()
+	safeCalcToken()
 	//加载用户自定义词典 先判断用户词典是否存在
 	if fileutil.IsExist("data/dict/user.txt") {
 		lines, err := fileutil.ReadFileByLine("data/dict/user.txt")
@@ -165,23 +155,29 @@ func InitAnalyzeSentiment() {
 			switch len(k) {
 			case 1:
 				if ok {
-					err = seg.ReAddToken(k[0], basefreq)
+					safeReAddToken(k[0], basefreq)
 				} else {
-					err = seg.AddToken(k[0], basefreq)
+					safeAddToken(k[0], basefreq, "")
 				}
 			case 2:
-				freq, _ := convertor.ToFloat(k[1])
+				freq, convErr := convertor.ToFloat(k[1])
+				if convErr != nil || freq <= 0 {
+					freq = basefreq
+				}
 				if ok {
-					err = seg.ReAddToken(k[0], freq)
+					safeReAddToken(k[0], freq)
 				} else {
-					err = seg.AddToken(k[0], freq)
+					safeAddToken(k[0], freq, "")
 				}
 			case 3:
-				freq, _ := convertor.ToFloat(k[1])
+				freq, convErr := convertor.ToFloat(k[1])
+				if convErr != nil || freq <= 0 {
+					freq = basefreq
+				}
 				if ok {
-					err = seg.ReAddToken(k[0], freq, k[2])
+					safeReAddToken(k[0], freq, k[2])
 				} else {
-					err = seg.AddToken(k[0], freq, k[2])
+					safeAddToken(k[0], freq, k[2])
 				}
 			default:
 				logger.SugaredLogger.Errorf("用户词典格式错误:%s", line)

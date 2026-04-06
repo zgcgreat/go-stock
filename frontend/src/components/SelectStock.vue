@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import {h, onBeforeMount, onMounted, onUnmounted, ref} from 'vue'
-import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList} from "../../wailsjs/go/main/App";
+import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList,Environment,EventsEmit} from "../services/wails-bridge.js";
 import {useMessage, NText, NTag, NButton} from 'naive-ui'
-import {Environment} from "../../wailsjs/runtime"
 import {RefreshCircleSharp} from "@vicons/ionicons5";
-import {EventsEmit} from "../../wailsjs/runtime";
 
 const message = useMessage()
 const search = ref('')

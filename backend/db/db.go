@@ -8,6 +8,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"go-stock/internal/handlers"
 )
 
 var Dao *gorm.DB
@@ -54,4 +56,7 @@ func Init(sqlitePath string) {
 	dbCon.SetConnMaxLifetime(time.Hour)
 	Dao = openDb
 	AutoMigrate()
+
+	// 确保初始管理员账户存在
+	handlers.AdminEnsureInitialAdmin()
 }

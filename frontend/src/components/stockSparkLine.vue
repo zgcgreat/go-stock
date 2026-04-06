@@ -1,7 +1,7 @@
 <script setup>
 import {onMounted, onBeforeMount, ref, watchEffect} from "vue";
 import * as echarts from 'echarts';
-import {GetStockMinutePriceLineData} from "../../wailsjs/go/main/App"; // 如果您使用多个组件，请将此样式导入放在您的主文件中
+import {GetStockMinutePriceLineData} from "../services/wails-bridge.js"; // 如果您使用多个组件，请将此样式导入放在您的主文件中
 const {idSuffix,stockCode,stockName,lastPrice,openPrice,darkTheme} = defineProps({
   idSuffix: {
     type: String,

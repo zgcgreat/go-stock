@@ -1,6 +1,6 @@
 <script setup>
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive} from 'vue'
-import {GetAIResponseResultList, GetConfig, SaveAsMarkdown, ShareAnalysis,DeleteAIResponseResult} from "../../wailsjs/go/main/App";
+import {GetAIResponseResultList, GetConfig, SaveAsMarkdown, ShareAnalysis,DeleteAIResponseResult} from "../services/wails-bridge.js";
 import {NAvatar, NButton, NEllipsis, NText, useMessage} from "naive-ui";
 import {MdEditor, MdPreview} from 'md-editor-v3';
 

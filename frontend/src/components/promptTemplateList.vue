@@ -5,9 +5,9 @@ import {
   GetConfig,
   AddPromptTemplate,
   DeletePromptTemplate,
-  UpdatePromptTemplate
-} from "../../wailsjs/go/main/App";
-import { EventsEmit } from "../../wailsjs/runtime";
+  UpdatePromptTemplate,
+  EventsEmit
+} from "../services/wails-bridge.js";
 import {NButton, NInput, NTag, NText, useMessage, useNotification,useDialog, NModal, NCard, NForm, NFormItem, NSpace} from "naive-ui";
 
 const notify = useNotification()

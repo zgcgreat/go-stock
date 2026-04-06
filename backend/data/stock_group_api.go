@@ -11,8 +11,10 @@ import (
 // -----------------------------------------------------------------------------------
 type Group struct {
 	gorm.Model
-	Name string `json:"name" gorm:"index"`
-	Sort int    `json:"sort"`
+	UserID uint   `json:"userId" gorm:"index"`
+	Name   string `json:"name" gorm:"index"`
+	Sort   int    `json:"sort"`
+	Desc   string `json:"desc"`
 }
 
 func (Group) TableName() string {
@@ -21,9 +23,12 @@ func (Group) TableName() string {
 
 type GroupStock struct {
 	gorm.Model
+	UserID    uint   `json:"userId" gorm:"index"`
 	StockCode string `json:"stockCode" gorm:"index"`
-	GroupId   int    `json:"groupId" gorm:"index"`
-	GroupInfo Group  `json:"groupInfo" gorm:"foreignKey:GroupId;references:ID"`
+	StockName string `json:"stockName"`
+	GroupID   uint   `json:"groupId" gorm:"index"`
+	Sort      int    `json:"sort"`
+	GroupInfo Group  `json:"groupInfo" gorm:"foreignKey:GroupID;references:ID"`
 }
 
 func (GroupStock) TableName() string {
@@ -115,10 +120,10 @@ func (receiver StockGroupApi) GetGroupStockByGroupId(groupId int) []GroupStock {
 
 func (receiver StockGroupApi) AddStockGroup(groupId int, stockCode string) bool {
 	err := receiver.dao.Where("group_id = ? and stock_code = ?", groupId, stockCode).FirstOrCreate(&GroupStock{
-		GroupId:   groupId,
+		GroupID:   uint(groupId),
 		StockCode: stockCode,
 	}).Updates(&GroupStock{
-		GroupId:   groupId,
+		GroupID:   uint(groupId),
 		StockCode: stockCode,
 	}).Error
 	return err == nil

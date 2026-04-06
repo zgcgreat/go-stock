@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {onBeforeMount, onUnmounted, ref} from 'vue'
-import {HotStock} from "../../wailsjs/go/main/App";
+import {HotStock} from "../services/wails-bridge.js";
 import KLineChart from "./KLineChart.vue";
 import {ArrowBack, ArrowDown, ArrowUp} from "@vicons/ionicons5";
 

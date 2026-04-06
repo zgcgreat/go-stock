@@ -310,8 +310,7 @@ import {
   ShareSocialOutline,
   ImageOutline
 } from '@vicons/ionicons5'
-import { AbortSummaryStockNews, GetAiAssistantSession, GetAiConfigs, GetConfig, GetPromptTemplates, GetSponsorInfo, GetVersionInfo, SaveAiAssistantSession, ShareText, SummaryStockNews } from '../../wailsjs/go/main/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime'
+import { AbortSummaryStockNews, GetAiAssistantSession, GetAiConfigs, GetConfig, GetPromptTemplates, GetSponsorInfo, GetVersionInfo, SaveAiAssistantSession, ShareText, SummaryStockNews, EventsOn, EventsOff } from '../services/wails-bridge.js'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import html2canvas from 'html2canvas'
@@ -349,14 +348,14 @@ function modelLabelForConfig(configId) {
 // 系统提示词模板（System Prompt）
 const sysPromptTemplates = ref([])
 const sysPromptOptions = computed(() =>
-  sysPromptTemplates.value.map(t => ({ label: t.name ?? '', value: t.ID ?? t.id }))
+  (sysPromptTemplates.value || []).map(t => ({ label: t.name ?? '', value: t.ID ?? t.id }))
 )
 const sysPromptId = ref(null)
 
 // 用户提示词模板（User Prompt）
 const userPromptTemplates = ref([])
 const userPromptOptions = computed(() =>
-  userPromptTemplates.value.map(t => ({ label: t.name ?? '', value: t.ID ?? t.id }))
+  (userPromptTemplates.value || []).map(t => ({ label: t.name ?? '', value: t.ID ?? t.id }))
 )
 const userPromptId = ref(null)
 const thinkingMode = ref(false)

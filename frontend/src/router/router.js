@@ -1,4 +1,4 @@
-import {createMemoryHistory, createRouter, createWebHashHistory, createWebHistory} from 'vue-router'
+import {createRouter, createWebHashHistory} from 'vue-router'
 
 import stockView from '../components/stock.vue'
 import settingsView from '../components/settings.vue'
@@ -8,23 +8,37 @@ import marketView from "../components/market.vue";
 import agentChat from "../components/agent-chat.vue"
 import research from "../components/researchIndex.vue";
 import cronTaskManager from "../components/cron-task-manager.vue"
+import LoginView from "../components/Login.vue"
+import RegisterView from "../components/Register.vue"
 
 const routes = [
-    { path: '/', component: stockView,name: 'stock'},
-    { path: '/fund', component: fundView,name: 'fund' },
-    { path: '/settings', component: settingsView,name: 'settings' },
-    { path: '/about', component: aboutView,name: 'about' },
-    { path: '/market', component: marketView,name: 'market' },
-    { path: '/agent', component: agentChat,name: 'agent' },
-    { path: '/research', component: research,name: 'research' },
-    { path: '/cron-tasks', component: cronTaskManager,name: 'cronTasks' },
-
+    { path: '/login', component: LoginView, name: 'login', meta: { public: true } },
+    { path: '/register', component: RegisterView, name: 'register', meta: { public: true } },
+    { path: '/', component: stockView, name: 'stock' },
+    { path: '/fund', component: fundView, name: 'fund' },
+    { path: '/settings', component: settingsView, name: 'settings' },
+    { path: '/about', component: aboutView, name: 'about' },
+    { path: '/market', component: marketView, name: 'market' },
+    { path: '/agent', component: agentChat, name: 'agent' },
+    { path: '/research', component: research, name: 'research' },
+    { path: '/cron-tasks', component: cronTaskManager, name: 'cronTasks' },
 ]
 
 const router = createRouter({
-    //history: createWebHistory(),
     history: createWebHashHistory(),
     routes,
+})
+
+router.beforeEach((to, from, next) => {
+    const token = localStorage.getItem('token')
+    if (!to.meta.public && !token) {
+        sessionStorage.setItem('redirectAfterLogin', to.fullPath)
+        next({ name: 'login' })
+    } else if (to.meta.public && token && (to.name === 'login' || to.name === 'register')) {
+        next({ path: '/' })
+    } else {
+        next()
+    }
 })
 
 export default router

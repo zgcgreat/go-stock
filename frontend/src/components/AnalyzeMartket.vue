@@ -1,6 +1,6 @@
 <script setup>
 
-import {AnalyzeSentimentWithFreqWeight,GlobalStockIndexes} from "../../wailsjs/go/main/App";
+import {AnalyzeSentimentWithFreqWeight, GlobalStockIndexes} from "../services/wails-bridge.js";
 import * as echarts from "echarts";
 import {onMounted,onUnmounted, ref} from "vue";
 import _ from "lodash";
@@ -52,14 +52,25 @@ onUnmounted(()=>{
   clearInterval(handleIndexInterval)
 })
 
+// 将指数数据中的字符串数值转为数字类型
+function normalizeIndexData(items) {
+  if (!Array.isArray(items)) return []
+  return items.map(item => ({
+    ...item,
+    zdf: parseFloat(item.zdf) || 0,
+    zxj: parseFloat(item.zxj) || 0,
+  }))
+}
+
 function getIndex() {
   GlobalStockIndexes().then((res) => {
+    if (!res) return
     globalStockIndexes.value = res
-    common.value = res["common"]
-    america.value = res["america"]
-    europe.value = res["europe"]
-    asia.value = res["asia"]
-    other.value = res["other"]
+    common.value = normalizeIndexData(res["common"] || [])
+    america.value = normalizeIndexData(res["america"] || [])
+    europe.value = normalizeIndexData(res["europe"] || [])
+    asia.value = normalizeIndexData(res["asia"] || [])
+    other.value = normalizeIndexData(res["other"] || [])
     mainIndex.value=asia.value.filter(function (item) {
       return ['上海',"深圳","香港","台湾","北京","东京","首尔","纽约","纳斯达克"].includes(item.location)
     }).concat(america.value.filter(function (item) {
@@ -70,7 +81,7 @@ function getIndex() {
       return ['上海',"深圳","香港","台湾","北京"].includes(item.location)
     })
 
-  })
+  }).catch(() => {})
 }
 function  handleChart(){
   const formatUtil = echarts.format;

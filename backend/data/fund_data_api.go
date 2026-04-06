@@ -32,17 +32,19 @@ func NewFundApi() *FundApi {
 
 type FollowedFund struct {
 	gorm.Model
-	Code string `json:"code" gorm:"index"` // 基金代码
-	Name string `json:"name"`              // 基金简称
+	UserID   uint   `json:"userId" gorm:"index"`
+	Code     string `json:"code" gorm:"index"`
+	Name     string `json:"name"`
+	FundCode string `json:"fundCode"`
+	FundName string `json:"fundName"`
 
-	NetUnitValue     *float64 `json:"netUnitValue"`         // 单位净值
-	NetUnitValueDate string   `json:"netUnitValueDate"`     // 单位净值日期
-	NetEstimatedUnit *float64 `json:"netEstimatedUnit"`     // 估算单位净值
-	NetEstimatedTime string   `json:"netEstimatedUnitTime"` // 估算单位净值日期
-	NetAccumulated   *float64 `json:"netAccumulated"`       // 累计净值
+	NetUnitValue     *float64 `json:"netUnitValue"`
+	NetUnitValueDate string   `json:"netUnitValueDate"`
+	NetEstimatedUnit *float64 `json:"netEstimatedUnit"`
+	NetEstimatedTime string   `json:"netEstimatedUnitTime"`
+	NetAccumulated   *float64 `json:"netAccumulated"`
 
-	//计算值
-	NetEstimatedRate *float64 `json:"netEstimatedRate"` // 估算单位净值涨跌幅
+	NetEstimatedRate *float64 `json:"netEstimatedRate"`
 
 	FundBasic FundBasic `json:"fundBasic" gorm:"foreignKey:Code;references:Code"`
 }

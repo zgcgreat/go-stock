@@ -4,7 +4,7 @@ import {
   GetAllStockInfoList,
   GetAllStocks,
   GetConfig, GetSponsorInfo
-} from "../../wailsjs/go/main/App";
+} from "../services/wails-bridge.js";
 import {NButton, NInput, NTag, NText, useMessage, useNotification, NDataTable, NSpace, NPagination} from "naive-ui";
 import sparkLine from "./stockSparkLine.vue"
 import klineChart from "./KLineChart.vue"

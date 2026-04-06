@@ -10,10 +10,10 @@ import {
   UpdateConfig,
   CheckSponsorCode,
   FetchAiModels
-} from "../../wailsjs/go/main/App";
+} from "../services/wails-bridge.js";
 import {NTag, NTooltip, NIcon, useMessage} from "naive-ui";
-import {data, models} from "../../wailsjs/go/models";
-import {EventsEmit} from "../../wailsjs/runtime";
+// Models imported from wailsjs/go/models - may need manual handling
+import {EventsEmit} from "../services/wails-bridge.js";
 import {HelpCircleFilledIcon, HelpIcon} from "tdesign-icons-vue-next";
 
 const message = useMessage()
@@ -57,7 +57,7 @@ const formValue = ref({
 
 // 添加一个新的AI配置到列表
 function addAiConfig() {
-  formValue.value.openAI.aiConfigs.push(new data.AIConfig({
+  formValue.value.openAI.aiConfigs.push({
     name: '',
     baseUrl: 'https://api.deepseek.com',
     apiKey: '',
@@ -67,7 +67,7 @@ function addAiConfig() {
     timeOut: 6000,
     httpProxy:"",
     httpProxyEnabled:false,
-  }));
+  });
 }
 
 // 从列表中移除一个AI配置
@@ -218,7 +218,7 @@ onBeforeUnmount(() => {
 function saveConfig() {
   console.log('开始保存设置', formValue.value);
   // 构建配置时，包含aiConfigs列表
-  let config = new data.SettingConfig({
+  let config = {
     ID: formValue.value.ID,
     dingPushEnable: formValue.value.dingPush.enable,
     dingRobot: formValue.value.dingPush.dingRobot,
@@ -245,7 +245,7 @@ function saveConfig() {
     httpProxyEnabled:formValue.value.httpProxyEnabled,
     enableAgent: formValue.value.enableAgent,
     qgqpBId: formValue.value.qgqpBId
-  })
+  }
 
   if (config.sponsorCode) {
     CheckSponsorCode(config.sponsorCode).then(res => {

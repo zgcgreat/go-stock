@@ -1,5 +1,5 @@
 <script setup>
-import { GetStockEastMoneyKLine, GetStockEastMoneyKLinePage } from '../../wailsjs/go/main/App'
+import { GetStockEastMoneyKLine, GetStockEastMoneyKLinePage } from '../services/wails-bridge.js'
 import {
   CandlestickSeries,
   createChart,

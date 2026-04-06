@@ -3,8 +3,7 @@
 // preview.css相比style.css少了编辑器那部分样式
 import 'md-editor-v3/lib/preview.css';
 import {h, onBeforeUnmount, onMounted, ref} from 'vue';
-import {CheckUpdate, GetVersionInfo,GetSponsorInfo,OpenURL} from "../../wailsjs/go/main/App";
-import {EventsOff, EventsOn,Environment} from "../../wailsjs/runtime";
+import {CheckUpdate, GetVersionInfo,GetSponsorInfo,OpenURL,EventsOff, EventsOn,Environment} from "../services/wails-bridge.js";
 import {NAvatar, NButton, useNotification,NText} from "naive-ui";
 import { addMonths, format ,parse} from 'date-fns';
 import { zhCN } from 'date-fns/locale';

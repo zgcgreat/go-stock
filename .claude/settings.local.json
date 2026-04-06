@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod:*)",
+      "Bash(dir /s e:LLMgo-stock)",
+      "Bash(go build:*)",
+      "Bash(go run:*)",
+      "Bash(dir /s *.go)",
+      "Bash(findstr -i \"app\")",
+      "Bash(del minimal_app.go platform_specific.go stubs.go stubs.go helpers.go helpers_generic.go web_main.go web_server_main.go)",
+      "Bash(del \"minimal_app.go\" \"platform_specific.go\" \"stubs.go\" \"helpers.go\" \"helpers_generic.go\" \"web_main.go\" \"web_server_main.go\")",
+      "Bash(grep:*)",
+      "Bash(find . -name \"*.go\" -exec grep -l \"AIResponseResult\\\\|PromptTemplate\\\\|Telegraph\" {})",
+      "Bash(find backend:*)",
+      "Bash(find .:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

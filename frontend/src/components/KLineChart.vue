@@ -1,6 +1,6 @@
 <script setup>
 
-import {GetStockKLine} from "../../wailsjs/go/main/App";
+import {GetStockKLine} from "../services/wails-bridge.js";
 import * as echarts from "echarts";
 import {onMounted, ref} from "vue";
 import _ from "lodash";
@@ -41,13 +41,19 @@ function  handleKLine(code,stockName){
   const chart = echarts.init(kLineChartRef.value);
   chart.showLoading()
   GetStockKLine(code,stockName,365).then(result => {
-    //console.log("GetStockKLine",result)
+    // 防御性检查：空数据或非数组
+    if (!Array.isArray(result) || result.length < 2) {
+      chart.hideLoading();
+      chart.setOption({
+        title: { text: stockName + ' 暂无K线数据', left: 'center', top: 'center' }
+      });
+      return;
+    }
     const categoryData = [];
     const values = [];
     const volumns=[];
     for (let i = 0; i < result.length; i++) {
       let resultElement=result[i]
-      //console.log("resultElement:{}",resultElement)
       categoryData.push(resultElement.day)
       let flag=Number(resultElement.close)>Number(resultElement.open)?1:-1
       if(i>0){
@@ -61,8 +67,6 @@ function  handleKLine(code,stockName){
       ])
       volumns.push([i,Number(resultElement.volume)/10000,flag])
     }
-    ////console.log("categoryData",categoryData)
-    ////console.log("values",values)
     let option = {
       title: {
         text: stockName+" "+categoryData[values.length-1]+"  "+values[values.length-1][1]+" "+((values[values.length-1][1]-values[values.length-2][1])/values[values.length-2][1]*100).toFixed(2)+"%",

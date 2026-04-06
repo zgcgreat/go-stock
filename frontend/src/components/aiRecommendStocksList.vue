@@ -7,7 +7,7 @@ import {
   DeleteAiRecommendStocks,
   UpdateAiRecommendStocksAlert,
   ShareAnalysis
-} from "../../wailsjs/go/main/App";
+} from "../services/wails-bridge.js";
 import {NAvatar, NButton, NEllipsis, NSwitch, NTag, NText, useMessage, useNotification} from "naive-ui";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
 import sparkLine from "./stockSparkLine.vue"

@@ -283,9 +283,11 @@ type PromptTemplate struct {
 	ID        int `gorm:"primarykey"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	UserID    uint   `json:"userId"`
 	Name      string `json:"name"`
 	Content   string `json:"content"`
 	Type      string `json:"type"`
+	IsPublic  bool   `json:"isPublic"`
 }
 
 func (p PromptTemplate) TableName() string {

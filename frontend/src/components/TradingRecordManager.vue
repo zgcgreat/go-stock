@@ -9,8 +9,9 @@ import {
   CheckFrequentTrading,
   GetAllStockInfoList,
   GetStockRealTimePrice,
-  GetConfig
-} from '../../wailsjs/go/main/App'
+  GetConfig,
+  GetEffectiveSponsorVip
+} from '../services/wails-bridge.js'
 import {
   NButton,
   NDataTable,
@@ -34,7 +35,6 @@ import {
 } from 'naive-ui'
 import sparkLine from "./stockSparkLine.vue";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
-import { GetEffectiveSponsorVip } from '../../wailsjs/go/main/App'
 
 const message = useMessage()
 const notify = useNotification()

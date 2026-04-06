@@ -6,7 +6,7 @@ import {
   GetAllIndustries,
   GetAllConcepts,
   GetConfig
-} from "../../wailsjs/go/main/App";
+} from "../services/wails-bridge.js";
 import {
   NButton,
   NInput,

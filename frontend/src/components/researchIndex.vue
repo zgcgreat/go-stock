@@ -1,6 +1,6 @@
 <script setup>
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive} from 'vue'
-import {GetAIResponseResultList} from "../../wailsjs/go/main/App";
+import {GetAIResponseResultList} from "../services/wails-bridge.js";
 import {NButton, NEllipsis, NText} from "naive-ui";
 import ResearchReport from "./researchReport.vue";
 import AiRecommendStocksList from "./aiRecommendStocksList.vue";
@@ -10,7 +10,7 @@ import AllStockInfoList from "./allStockInfoList.vue";
 import CronTaskManager from "./cron-task-manager.vue";
 import TradingRecordManager from "./TradingRecordManager.vue";
 import StockChangesMonitor from "./stockChangesMonitor.vue";
-import {EventsOff, EventsOn} from "../../wailsjs/runtime";
+import {EventsOff, EventsOn} from "../services/wails-bridge.js";
 import {useRoute} from 'vue-router'
 
 

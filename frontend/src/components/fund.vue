@@ -8,8 +8,9 @@ import {
   GetFollowedFund,
   GetfundList,
   GetVersionInfo, OpenURL,
-  UnFollowFund
-} from "../../wailsjs/go/main/App";
+  UnFollowFund,
+  Environment
+} from "../services/wails-bridge.js";
 import vueDanmaku from 'vue3-danmaku'
 
 const danmus = ref([])

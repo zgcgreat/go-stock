@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {nextTick, onBeforeMount, onMounted, onUnmounted, ref} from 'vue'
-import {ClsCalendar} from "../../wailsjs/go/main/App";
+import {ClsCalendar} from "../services/wails-bridge.js";
 import { addMonths, format ,parse} from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
