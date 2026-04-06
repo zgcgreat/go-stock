@@ -450,6 +450,11 @@ function handleAdd() {
     CheckFrequentTrading(formData.StockCode)
       .then((res) => {
         console.log('检查频繁交易结果:', res)
+        // 如果返回false或没有canTrade字段，直接允许添加
+        if (res === false || !res || res.canTrade === undefined) {
+          run()
+          return
+        }
         const canTrade = res.canTrade
         const msg = res.msg
         if (!canTrade) {
