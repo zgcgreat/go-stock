@@ -3,11 +3,12 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"go-stock/backend/data"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	"github.com/coocood/freecache"
+
+	"go-stock/backend/services"
 )
 
 // @Author spark
@@ -24,7 +25,8 @@ func (t ToolQueryBKDict) Info(ctx context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t ToolQueryBKDict) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
-	resp := data.NewMarketNewsApi().EMDictCode("016", freecache.NewCache(100))
+	service := services.GetQueryBKDictService()
+	resp := service.QueryBKDict("016")
 	bytes, err := json.Marshal(resp)
 	return string(bytes), err
 }

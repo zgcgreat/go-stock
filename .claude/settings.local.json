@@ -15,7 +15,8 @@
       "Bash(find .:*)",
       "Bash(dir:*)",
       "Bash(ls:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

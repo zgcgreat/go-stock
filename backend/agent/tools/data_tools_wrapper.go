@@ -13,6 +13,7 @@ import (
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"go-stock/backend/util"
+	"go-stock/backend/services"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -1272,7 +1273,7 @@ func GetAllDataTools() []tool.BaseTool {
 				if code == "" {
 					continue
 				}
-				api := data.NewEastMoneyKLineApi(data.GetSettingConfig())
+				configService := services.GetConfigService()\n\t\t\t\tconfig := configService.GetSettingConfig()\n\t\t\t\tapi := data.NewEastMoneyKLineApi(config)
 				res := data.EastMoneyKLineSection(api, code, kLineType, adjustFlag, limit)
 				results = append(results, res)
 			}
@@ -1330,7 +1331,7 @@ func GetAllDataTools() []tool.BaseTool {
 				if code == "" {
 					continue
 				}
-				api := data.NewEastMoneyKLineApi(data.GetSettingConfig())
+				configService := services.GetConfigService()\n\t\t\t\tconfig := configService.GetSettingConfig()\n\t\t\t\tapi := data.NewEastMoneyKLineApi(config)
 				res := data.EastMoneyKLineWithMASection(api, code, kLineType, limit, maPeriodsStr)
 				results = append(results, res)
 			}
