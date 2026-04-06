@@ -991,7 +991,12 @@ export function GetStockChanges(arg1, arg2, arg3) {
   }
   
   return apiService.client.get('/stock-changes', { params, headers: getAuthHeaders() })
-    .then(res => res.data?.data || { data: [], totalCount: 0 })
+    .then(res => {
+      if (res.data) {
+        return { data: res.data.data || [], totalCount: res.data.totalCount || 0 }
+      }
+      return { data: [], totalCount: 0 }
+    })
     .catch(() => ({ data: [], totalCount: 0 }));
 }
 
