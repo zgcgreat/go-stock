@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-resty/resty/v2"
 
+	"go-stock/backend/agent"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
@@ -410,6 +411,22 @@ func GetCronTaskTypes(c *gin.Context) {
 		{"name": "news_summary", "label": "新闻摘要"},
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": types})
+}
+
+// CreateCronTask 创建定时任务
+func CreateCronTask(c *gin.Context) {
+	var task models.CronTask
+	if err := c.ShouldBindJSON(&task); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	err := agent.NewCronTaskApi().Create(&task)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建失败：" + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建成功"})
 }
 
 // ShareText 分享文本

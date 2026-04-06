@@ -849,7 +849,9 @@ export function ClsCalendar() {
 
 export function CreateCronTask(arg1) {
   if (isWailsMode()) return window.go.main.App.CreateCronTask(arg1);
-  return Promise.resolve(true);
+  return apiService.client.post('/cron-task', arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '创建成功')
+    .catch(err => err.message || '创建失败');
 }
 
 export function DeleteAIResponseResult(arg1) {
