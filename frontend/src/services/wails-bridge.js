@@ -859,11 +859,6 @@ export function DeleteAIResponseResult(arg1) {
     .catch(() => false);
 }
 
-export function DeleteAiRecommendStocks(arg1) {
-  if (isWailsMode()) return window.go.main.App.DeleteAiRecommendStocks(arg1);
-  return Promise.resolve(true);
-}
-
 export function DeleteCronTask(arg1) {
   if (isWailsMode()) return window.go.main.App.DeleteCronTask(arg1);
   return Promise.resolve(true);
@@ -938,7 +933,31 @@ export function GetAiAssistantSession(arg1) {
 
 export function GetAiRecommendStocksList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetAiRecommendStocksList(arg1);
-  return Promise.resolve([]);
+  // Web 模式：调用后端 API
+  return apiService.client.get('/ai/recommend-stocks', { params: arg1, headers: getAuthHeaders() })
+    .then(res => {
+      const d = res.data?.data;
+      if (d && d.list) return d;
+      if (Array.isArray(d)) return { list: d, total: d.length };
+      return { list: [], total: 0 };
+    })
+    .catch(() => ({ list: [], total: 0 }));
+}
+
+export function DeleteAiRecommendStocks(id) {
+  if (isWailsMode()) return window.go.main.App.DeleteAiRecommendStocks(id);
+  // Web 模式：调用后端 API
+  return apiService.client.delete(`/ai/recommend-stocks/${id}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => err.message || '删除失败');
+}
+
+export function UpdateAiRecommendStocksAlert(id, enableAlert) {
+  if (isWailsMode()) return window.go.main.App.UpdateAiRecommendStocksAlert(id, enableAlert);
+  // Web 模式：调用后端 API
+  return apiService.client.put('/ai/recommend-stocks/alert', { id, enableAlert }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '更新成功')
+    .catch(err => err.message || '更新失败');
 }
 
 export function GetAllConcepts() {
@@ -1311,11 +1330,6 @@ export function UnFollowFund(arg1) {
   return apiService.client.delete('/funds/unfollow', { params: { code: arg1 }, headers: getAuthHeaders() })
     .then(res => res.data?.message || '取消关注成功')
     .catch(err => err.message || '取消关注失败');
-}
-
-export function UpdateAiRecommendStocksAlert(arg1, arg2) {
-  if (isWailsMode()) return window.go.main.App.UpdateAiRecommendStocksAlert(arg1, arg2);
-  return Promise.resolve(true);
 }
 
 export function UpdateConfig(arg1) {

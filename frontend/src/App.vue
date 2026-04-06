@@ -229,7 +229,7 @@ const menuOptions = ref([
   },
   {
     label: () => h(RouterLink, {
-      to: {name: 'research', query: {name: "研究中心"}},
+      to: {name: 'research'},
       onClick: () => {
         activeKey.value = 'research'
         setTimeout(() => { window.dispatchEvent(new CustomEvent('changeResearchTab', {detail: {ID: 0, name: 'AI分析报告'}})) }, 100)

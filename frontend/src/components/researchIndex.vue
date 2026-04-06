@@ -17,7 +17,8 @@ import {useRoute} from 'vue-router'
 const nowTab = ref("AI分析报告")
 const route = useRoute()
 onBeforeMount(() => {
-  nowTab.value = route.query.name
+  // 如果路由中有 name 参数则使用，否则默认为"AI分析报告"
+  nowTab.value = route.query.name || "AI分析报告"
 })
 
 onBeforeUnmount(() => {

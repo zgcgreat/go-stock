@@ -345,6 +345,120 @@ func AgentChat(c *gin.Context) {
 	flusher.Flush()
 }
 
+// GetAIRecommendStocksList 获取AI推荐股票列表
+func GetAIRecommendStocksList(c *gin.Context) {
+	page, _ := strconv.Atoi(c.Query("page"))
+	if page <= 0 {
+		page = 1
+	}
+
+	pageSize, _ := strconv.Atoi(c.Query("pageSize"))
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	query := &models.AiRecommendStocksQuery{
+		Page:        page,
+		PageSize:    pageSize,
+		ModelName:   c.Query("modelName"),
+		StockName:   c.Query("stockName"),
+		StockCode:   c.Query("stockCode"),
+		BkName:      c.Query("bkName"),
+		StartDate:   c.Query("startDate"),
+		EndDate:     c.Query("endDate"),
+		EnableAlert: nil,
+	}
+
+	// 处理 enableAlert 参数
+	if enableAlertStr := c.Query("enableAlert"); enableAlertStr != "" {
+		if enableAlertStr == "true" {
+			enableAlert := true
+			query.EnableAlert = &enableAlert
+		} else if enableAlertStr == "false" {
+			enableAlert := false
+			query.EnableAlert = &enableAlert
+		}
+	}
+
+	pageData, err := data.NewAiRecommendStocksService().GetAiRecommendStocksList(query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to fetch AI recommend stocks",
+			"message": "获取AI推荐股票失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"list":       pageData.List,
+			"total":      pageData.Total,
+			"page":       pageData.Page,
+			"pageSize":   pageData.PageSize,
+			"totalPages": pageData.TotalPages,
+		},
+	})
+}
+
+// DeleteAIRecommendStock 删除AI推荐股票记录
+func DeleteAIRecommendStock(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid ID format",
+			"message": "无效的ID格式",
+		})
+		return
+	}
+
+	err = data.NewAiRecommendStocksService().DeleteAiRecommendStocks(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete AI recommend stock",
+			"message": "删除失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+	})
+}
+
+// UpdateAIRecommendStockAlert 更新AI推荐股票预警状态
+func UpdateAIRecommendStockAlert(c *gin.Context) {
+	var req struct {
+		ID          uint `json:"id" binding:"required"`
+		EnableAlert bool `json:"enableAlert"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request data",
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	err := data.NewAiRecommendStocksService().UpdateAiRecommendStocksAlert(req.ID, req.EnableAlert)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update alert status",
+			"message": "更新预警状态失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+	})
+}
+
 // 辅助函数：序列化事件数据
 func marshalEvent(data map[string]interface{}) string {
 	bytes, _ := json.Marshal(data)
