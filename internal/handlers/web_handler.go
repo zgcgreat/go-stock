@@ -429,6 +429,13 @@ func CreateCronTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建成功"})
 }
 
+// SearchCronTasks 搜索定时任务
+func SearchCronTasks(c *gin.Context) {
+	keyword := c.DefaultQuery("keyword", "")
+	tasks := agent.NewCronTaskApi().SearchTasks(keyword)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": tasks})
+}
+
 // ShareText 分享文本
 func ShareText(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "分享成功"})

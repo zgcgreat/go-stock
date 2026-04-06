@@ -1258,7 +1258,9 @@ export function SaveStockChangesToHistory(arg1) {
 
 export function SearchCronTasks(arg1) {
   if (isWailsMode()) return window.go.main.App.SearchCronTasks(arg1);
-  return Promise.resolve([]);
+  return apiService.client.get('/cron-task/search', { params: { keyword: arg1 || '' }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function SearchStock(arg1) {
