@@ -825,7 +825,7 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function CheckFrequentTrading(arg1) {
   if (isWailsMode()) return window.go.main.App.CheckFrequentTrading(arg1);
-  return apiService.client.get('/trades/check-frequent', { params: arg1, headers: getAuthHeaders() })
+  return apiService.client.get('/trades/check-frequent', { params: arg1 })
     .then(res => res.data?.data || false)
     .catch(() => false);
 }
