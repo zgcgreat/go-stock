@@ -1163,8 +1163,8 @@ const handleToggleEnable = async (row) => {
   try {
     const newEnable = !row.enable
     const result = await EnableCronTask(row.id, newEnable)
-    if (result === '操作成功') {
-      message.success(newEnable ? '任务已启用' : '任务已禁用')
+    if (result && (result.includes('成功') || result.includes('启用') || result.includes('暂停') || result.includes('已'))) {
+      message.success(result)
       await loadTaskList()
     } else {
       message.error(result)
