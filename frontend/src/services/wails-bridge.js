@@ -1439,7 +1439,9 @@ export function UpdateTradingRecord(arg1) {
 
 export function ValidateCronExpr(arg1) {
   if (isWailsMode()) return window.go.main.App.ValidateCronExpr(arg1);
-  return Promise.resolve({ valid: true });
+  return apiService.client.get('/cron-task/validate', { params: { expr: arg1 }, headers: getAuthHeaders() })
+    .then(res => res.data?.valid ? 'Cron 表达式有效' : res.data?.message || '无效')
+    .catch(err => err.message || '验证失败');
 }
 
 export function BrowserOpenURL(url) {

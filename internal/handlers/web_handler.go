@@ -840,3 +840,19 @@ func GetStockChangeHistoryHandler(c *gin.Context) {
 		},
 	})
 }
+
+// ValidateCronExpr 验证 Cron 表达式
+func ValidateCronExpr(c *gin.Context) {
+	expr := c.DefaultQuery("expr", "")
+	if expr == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "Cron 表达式无效：表达式不能为空", "valid": false})
+		return
+	}
+
+	err := agent.NewCronTaskApi().ValidateCronExpr(expr)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "Cron 表达式无效：" + err.Error(), "valid": false})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "Cron 表达式有效", "valid": true})
+}
