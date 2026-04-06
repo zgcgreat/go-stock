@@ -405,12 +405,15 @@ func GetSponsorInfo(c *gin.Context) {
 
 // GetCronTaskTypes 获取定时任务类型
 func GetCronTaskTypes(c *gin.Context) {
-	types := []map[string]string{
-		{"name": "ai_analyze", "label": "AI分析"},
-		{"name": "data_sync", "label": "数据同步"},
-		{"name": "news_summary", "label": "新闻摘要"},
+	types := agent.NewCronTaskApi().GetTaskTypes()
+	result := make([]map[string]string, len(types))
+	for i, t := range types {
+		result[i] = map[string]string{
+			"name":  t.A,
+			"label": t.B,
+		}
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": types})
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
 
 // CreateCronTask 创建定时任务
