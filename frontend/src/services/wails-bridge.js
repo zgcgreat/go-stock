@@ -691,7 +691,7 @@ export function AddPromptTemplate(arg1) {
 
 export function AddTradingRecord(arg1) {
   if (isWailsMode()) return window.go.main.App.AddTradingRecord(arg1);
-  return apiService.client.post('/trades', arg1, { headers: getAuthHeaders() })
+  return apiService.client.post('/trades', arg1)
     .then(res => res.data?.message || '添加成功')
     .catch(err => err.message || '添加失败');
 }
