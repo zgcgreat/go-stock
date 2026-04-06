@@ -1030,8 +1030,8 @@ export function GetAllStockInfoById(arg1) {
 export function GetAllStockInfoList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetAllStockInfoList(arg1);
   return apiService.client.get('/stocks/all-info/list', { params: { page: arg1?.page || 1, pageSize: arg1?.pageSize || 50 }, headers: getAuthHeaders() })
-    .then(res => res.data?.data?.list || [])
-    .catch(() => []);
+    .then(res => res.data?.data || { list: [], total: 0 })
+    .catch(() => ({ list: [], total: 0 }));
 }
 
 export function GetAllStocks(arg1, arg2, arg3, arg4) {
