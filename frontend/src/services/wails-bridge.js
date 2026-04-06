@@ -1036,7 +1036,24 @@ export function GetAllStockInfoList(arg1) {
 
 export function GetAllStocks(arg1, arg2, arg3, arg4) {
   if (isWailsMode()) return window.go.main.App.GetAllStocks(arg1, arg2, arg3, arg4);
-  return Promise.resolve([]);
+  const params = {
+    page: arg1 || 1,
+    pageSize: arg2 || 50,
+    keyword: arg3 || '',
+  };
+  // 将技术指标对象转换为查询参数
+  if (arg4) {
+    Object.keys(arg4).forEach(key => {
+      if (arg4[key] === true) {
+        params[key] = 'true';
+      } else if (typeof arg4[key] === 'number' && arg4[key] > 0) {
+        params[key] = arg4[key].toString();
+      }
+    });
+  }
+  return apiService.client.get('/stocks/all', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { result: { data: [], count: 0 } })
+    .catch(() => ({ result: { data: [], count: 0 } }));
 }
 
 export function GetCronTaskByID(arg1) {

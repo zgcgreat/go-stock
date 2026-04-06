@@ -165,6 +165,7 @@ func (ws *WebServer) initRouter() {
 
 			// 股票信息
 			protected.GET("/stocks/all-info/list", handlers.GetAllStockInfoList)
+			protected.GET("/stocks/all", handlers.GetAllStocks)
 
 			// 定时任务
 			protected.GET("/cron-task/types", handlers.GetCronTaskTypes)

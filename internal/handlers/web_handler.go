@@ -242,6 +242,152 @@ func GetAllStockInfoList(c *gin.Context) {
 	})
 }
 
+// GetAllStocks 获取股票列表（技术面筛选）
+func GetAllStocks(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "50"))
+	keyword := c.DefaultQuery("keyword", "")
+
+	// 解析技术指标筛选条件
+	indicators := models.TechnicalIndicators{}
+	// 从请求参数解析布尔类型指标
+	if c.Query("MACD_GOLDEN_FORK") == "true" {
+		indicators.MACDGOLDENFORK = true
+	}
+	if c.Query("KDJ_GOLDEN_FORK") == "true" {
+		indicators.KDJGOLDENFORK = true
+	}
+	if c.Query("BREAK_THROUGH") == "true" {
+		indicators.BREAKTHROUGH = true
+	}
+	if c.Query("LOW_FUNDS_INFLOW") == "true" {
+		indicators.LOWFUNDSINFLOW = true
+	}
+	if c.Query("HIGH_FUNDS_OUTFLOW") == "true" {
+		indicators.HIGHFUNDSOUTFLOW = true
+	}
+	if c.Query("BREAKUP_MA_5DAYS") == "true" {
+		indicators.BREAKUPMA5DAYS = true
+	}
+	if c.Query("LONG_AVG_ARRAY") == "true" {
+		indicators.LONGAVGARRAY = true
+	}
+	if c.Query("SHORT_AVG_ARRAY") == "true" {
+		indicators.SHORTAVGARRAY = true
+	}
+	if c.Query("UPPER_LARGE_VOLUME") == "true" {
+		indicators.UPPERLARGEVOLUME = true
+	}
+	if c.Query("DOWN_NARROW_VOLUME") == "true" {
+		indicators.DOWNNARROWVOLUME = true
+	}
+	if c.Query("ONE_DAYANG_LINE") == "true" {
+		indicators.ONEDAYANGLINE = true
+	}
+	if c.Query("TWO_DAYANG_LINES") == "true" {
+		indicators.TWODAYANGLINES = true
+	}
+	if c.Query("RISE_SUN") == "true" {
+		indicators.RISESUN = true
+	}
+	if c.Query("POWER_FULGUN") == "true" {
+		indicators.POWERFULGUN = true
+	}
+	if c.Query("RESTORE_JUSTICE") == "true" {
+		indicators.RESTOREJUSTICE = true
+	}
+	if c.Query("DOWN_7DAYS") == "true" {
+		indicators.DOWN7DAYS = true
+	}
+	if c.Query("UPPER_8DAYS") == "true" {
+		indicators.UPPER8DAYS = true
+	}
+	if c.Query("UPPER_9DAYS") == "true" {
+		indicators.UPPER9DAYS = true
+	}
+	if c.Query("UPPER_4DAYS") == "true" {
+		indicators.UPPER4DAYS = true
+	}
+	if c.Query("HEAVEN_RULE") == "true" {
+		indicators.HEAVENRULE = true
+	}
+	if c.Query("UPSIDE_VOLUME") == "true" {
+		indicators.UPSIDEVOLUME = true
+	}
+	if c.Query("BEARISH_ENGULFING") == "true" {
+		indicators.BEARISHENGULFING = true
+	}
+	if c.Query("REVERSING_HAMMER") == "true" {
+		indicators.REVERSINGHAMMER = true
+	}
+	if c.Query("SHOOTING_STAR") == "true" {
+		indicators.SHOOTINGSTAR = true
+	}
+	if c.Query("EVENING_STAR") == "true" {
+		indicators.EVENINGSTAR = true
+	}
+	if c.Query("FIRST_DAWN") == "true" {
+		indicators.FIRSTDAWN = true
+	}
+	if c.Query("PREGNANT") == "true" {
+		indicators.PREGNANT = true
+	}
+	if c.Query("BLACK_CLOUD_TOPS") == "true" {
+		indicators.BLACKCLOUDTOPS = true
+	}
+	if c.Query("MORNING_STAR") == "true" {
+		indicators.MORNINGSTAR = true
+	}
+	if c.Query("NARROW_FINISH") == "true" {
+		indicators.NARROWFINISH = true
+	}
+
+	// 解析数值类型指标
+	if v := c.Query("UPP_DAYS"); v != "" {
+		if num, err := strconv.Atoi(v); err == nil {
+			indicators.UPP_DAYS = num
+		}
+	}
+	if v := c.Query("CONCERN_RANK_7DAYS"); v != "" {
+		if num, err := strconv.Atoi(v); err == nil {
+			indicators.CONCERN_RANK_7DAYS = num
+		}
+	}
+	if v := c.Query("UPNDAY"); v != "" {
+		if num, err := strconv.Atoi(v); err == nil {
+			indicators.UPNDAY = num
+		}
+	}
+	if v := c.Query("DOWNNDAY"); v != "" {
+		if num, err := strconv.Atoi(v); err == nil {
+			indicators.DOWNNDAY = num
+		}
+	}
+
+	result := data.NewStockDataApi().GetAllStocks(page, pageSize, keyword, indicators)
+	if result == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "success",
+			"data":    gin.H{"result": gin.H{"data": []interface{}{}, "count": 0}},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"result": gin.H{
+				"data":        result.Result.Data,
+				"count":       result.Result.Count,
+				"nextpage":    result.Result.Nextpage,
+				"currentpage": result.Result.Currentpage,
+			},
+		},
+	})
+}
+
 // GetSponsorInfo 获取赞助信息
 func GetSponsorInfo(c *gin.Context) {
 	level, active := data.EffectiveSponsorVipLevel()
