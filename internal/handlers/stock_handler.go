@@ -9,6 +9,7 @@ import (
 
 	"go-stock/backend/data"
 	"go-stock/backend/db"
+	"go-stock/backend/models"
 )
 
 // GetStockBasics 获取股票基本信息
@@ -169,6 +170,70 @@ func SearchStocks(c *gin.Context) {
 	var results []data.StockBasic
 	db.Dao.Where("name LIKE ? OR ts_code LIKE ? OR symbol LIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%").
 		Limit(50).Find(&results)
+
+	// 搜索全部股票信息表
+	var allStockResults []models.AllStockInfo
+	db.Dao.Model(&models.AllStockInfo{}).Where("SECURITYNAMEABBR LIKE ? OR SECUCODE LIKE ? OR SECURITYCODE LIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%").
+		Limit(50).Find(&allStockResults)
+	for _, item := range allStockResults {
+		market := item.MARKET
+		if market == "上海证券交易所" || market == "SZSE" {
+			market = "SSE"
+		} else if market == "深圳证券交易所" || market == "SSE" {
+			market = "SZSE"
+		}
+		tsCode := item.SECUCODE
+		if tsCode == "" {
+			tsCode = item.SECURITYCODE
+		}
+		results = append(results, data.StockBasic{
+			TsCode:   tsCode,
+			Name:     item.SECURITYNAMEABBR,
+			Symbol:   item.SECURITYCODE,
+			Market:   market,
+			Industry: item.INDUSTRY,
+		})
+	}
+
+	// 搜索指数
+	var results2 []data.IndexBasic
+	db.Dao.Where("market IN ?", []string{"SSE", "SZSE"}).Where("name LIKE ? OR ts_code LIKE ?", "%"+keyword+"%", "%"+keyword+"%").
+		Limit(20).Find(&results2)
+	for _, item := range results2 {
+		results = append(results, data.StockBasic{
+			TsCode:   item.TsCode,
+			Name:     item.Name,
+			Fullname: item.FullName,
+			Symbol:   item.Symbol,
+			Market:   item.Market,
+		})
+	}
+
+	// 搜索港股
+	var results3 []models.StockInfoHK
+	db.Dao.Model(&models.StockInfoHK{}).Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%").
+		Limit(20).Find(&results3)
+	for _, item := range results3 {
+		results = append(results, data.StockBasic{
+			TsCode: "hk" + item.Code,
+			Name:   item.Name,
+			Symbol: item.Code,
+			Market: "HK",
+		})
+	}
+
+	// 搜索美股
+	var results4 []models.StockInfoUS
+	db.Dao.Model(&models.StockInfoUS{}).Where("name LIKE ? OR code LIKE ? OR e_name LIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%").
+		Limit(20).Find(&results4)
+	for _, item := range results4 {
+		results = append(results, data.StockBasic{
+			TsCode: "us" + item.Code,
+			Name:   item.Name,
+			Symbol: item.Code,
+			Market: "US",
+		})
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,

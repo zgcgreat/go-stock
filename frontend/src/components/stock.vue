@@ -330,6 +330,7 @@ onBeforeMount(() => {
     }
   })
   GetStockList("").then(result => {
+    console.log('GetStockList result:', result)
     const stocks = Array.isArray(result) ? result : []
     stockList.value = stocks
     options.value = stocks.map(item => {
@@ -731,9 +732,17 @@ function SendDanmu() {
 }
 
 function getStockList(value) {
+  if (!value) {
+    options.value = stockList.value.map(item => {
+      return {
+        label: item.name + " - " + item.ts_code,
+        value: item.ts_code
+      }
+    })
+    return
+  }
 
-
-  // //console.log("getStockList",value)
+  // 先从本地列表过滤
   let result;
   result = stockList.value.filter(item => item.name.includes(value) || item.ts_code.includes(value))
   options.value = result.map(item => {
@@ -742,6 +751,28 @@ function getStockList(value) {
       value: item.ts_code
     }
   })
+
+  // 本地搜索无结果时，调用后端接口搜索
+  if (result.length === 0 && value.length >= 2) {
+    GetStockList(value).then(res => {
+      if (res && res.length > 0) {
+        const searchResults = res.map(item => ({
+          label: item.name + " - " + item.ts_code,
+          value: item.ts_code
+        }))
+        // 合并本地和搜索结果，去重
+        const existingValues = new Set(options.value.map(o => o.value))
+        searchResults.forEach(item => {
+          if (!existingValues.has(item.value)) {
+            options.value.push(item)
+          }
+        })
+      }
+    }).catch(err => {
+      console.error('搜索股票失败:', err)
+    })
+  }
+
   if (value && value.indexOf("-") <= 0) {
     data.code = value
   }

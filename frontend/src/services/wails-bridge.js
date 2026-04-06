@@ -135,9 +135,17 @@ export function GetStockList(keyword) {
   if (isWailsMode()) {
     return window.go.main.App.GetStockList(keyword || '');
   }
-  const params = keyword ? { keyword } : {};
-  return apiService.client.get('/stocks/basic', { params, headers: getAuthHeaders() })
-    .then(extractApiData)
+  if (!keyword) {
+    return Promise.resolve([]);
+  }
+  const params = { keyword };
+  return apiService.client.get('/stocks/search', { params, headers: getAuthHeaders() })
+    .then(res => {
+      if (res.data && res.data.data) {
+        return res.data.data
+      }
+      return []
+    })
     .catch(err => {
       console.warn('GetStockList web fallback failed:', err.message);
       return [];
