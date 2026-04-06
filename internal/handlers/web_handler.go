@@ -531,12 +531,16 @@ func EnableCronTask(c *gin.Context) {
 		return
 	}
 
-	err = agent.NewCronTaskApi().Enable(uint(id), req.Enable)
+	err = agent.NewCronTaskApi().EnableTask(uint(id), req.Enable)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "操作失败：" + err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": req.Enable ? "已启用" : "已暂停"})
+	msg := "已暂停"
+	if req.Enable {
+		msg = "已启用"
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": msg})
 }
 
 // ShareText 分享文本
