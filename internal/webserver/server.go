@@ -188,6 +188,11 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/sentiment", handlers.AnalyzeSentiment)
 			protected.GET("/ai/models", handlers.FetchAiModels)
 			protected.GET("/trades/check-frequent", handlers.CheckFrequentTrading)
+
+			// 异动监控
+			protected.GET("/stock-changes", handlers.GetStockChanges)
+			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
+			protected.GET("/stock-changes/history", handlers.GetStockChangeHistoryHandler)
 		}
 	}
 
