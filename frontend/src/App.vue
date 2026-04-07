@@ -162,15 +162,34 @@ onBeforeMount(async () => {
   if (localStorage.getItem('token')) {
     try {
       const userProfile = await apiService.getUserProfile()
-      if (userProfile.data && userProfile.data.is_admin === true) {
-        // 找到用户管理菜单项并设为显示
-        const adminMenuItem = menuOptions.value.find(item => item.key === 'admin')
-        if (adminMenuItem) {
-          adminMenuItem.show = true
+      console.log('[DEBUG] API完整响应:', userProfile)
+      console.log('[DEBUG] userProfile.data:', userProfile.data)
+      
+      // axios返回的response.data就是后端返回的数据
+      const userData = userProfile.data || userProfile
+      console.log('[DEBUG] 实际用户数据:', userData)
+      
+      if (userData) {
+        const role = userData.role
+        console.log('[DEBUG] 用户角色:', role)
+        // admin 或 super_admin 可以访问用户管理
+        if (role === 'admin' || role === 'super_admin') {
+          console.log('[DEBUG] 显示用户管理菜单')
+          // 找到用户管理菜单项并设为显示
+          const adminMenuIndex = menuOptions.value.findIndex(item => item.key === 'admin')
+          if (adminMenuIndex !== -1) {
+            // 使用splice触发响应式更新
+            const updatedMenu = [...menuOptions.value]
+            updatedMenu[adminMenuIndex] = { ...updatedMenu[adminMenuIndex], show: true }
+            menuOptions.value = updatedMenu
+            console.log('[DEBUG] 菜单项已设置为显示, 当前菜单:', menuOptions.value[adminMenuIndex])
+          }
+        } else {
+          console.log('[DEBUG] 用户角色不是admin或super_admin,不显示菜单')
         }
       }
     } catch (error) {
-      console.error('获取用户信息失败:', error)
+      console.error('[ERROR] 获取用户信息失败:', error)
       // 出错时不显示用户管理菜单
     }
   }

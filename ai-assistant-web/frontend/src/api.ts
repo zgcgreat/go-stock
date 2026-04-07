@@ -26,30 +26,53 @@ export type VipStatus = {
   ok: boolean;
   vipLevel: number;
   active: boolean;
+  role?: string;
   message?: string;
 };
 
-/** 与桌面端一致：当前 data 配置下是否为 VIP2+ 且赞助在有效期内 */
+// 从 localStorage 获取 JWT token
+function getAuthToken(): string | null {
+  return localStorage.getItem('token');
+}
+
+// 创建带有认证头的请求选项
+function createAuthHeaders(headers: HeadersInit = {}): HeadersInit {
+  const token = getAuthToken();
+  return {
+    ...headers,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+}
+
+/** 获取当前用户的VIP状态 */
 export async function getVipStatus(): Promise<VipStatus> {
-  const res = await fetch("/api/vip-status");
+  const res = await fetch("/api/vip-status", {
+    headers: createAuthHeaders(),
+  });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }
 
 export async function getAiConfigs(): Promise<AiConfig[]> {
-  const res = await fetch("/api/ai-configs");
+  const res = await fetch("/api/ai-configs", {
+    headers: createAuthHeaders(),
+  });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }
 
 export async function getPrompts(): Promise<PromptTemplate[]> {
-  const res = await fetch("/api/prompts?name=&type=");
+  const res = await fetch("/api/prompts?name=&type=", {
+    headers: createAuthHeaders(),
+  });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }
 
 export async function getSession(): Promise<SessionMessage[]> {
-  const res = await fetch("/api/session");
+  const res = await fetch("/api/session", {
+    headers: createAuthHeaders(),
+  });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }
@@ -57,7 +80,7 @@ export async function getSession(): Promise<SessionMessage[]> {
 export async function saveSession(messages: SessionMessage[]): Promise<void> {
   const res = await fetch("/api/session", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: createAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ messages }),
   });
   if (!res.ok) throw new Error(await res.text());
@@ -66,7 +89,7 @@ export async function saveSession(messages: SessionMessage[]): Promise<void> {
 export async function shareText(text: string, title = "AI助手"): Promise<string> {
   const res = await fetch("/api/share", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: createAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ text, title }),
   });
   const data = await res.json();

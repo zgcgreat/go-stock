@@ -8,6 +8,8 @@ import (
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	"go-stock/internal/handlers"
+	"go-stock/internal/middleware"
 	"io/fs"
 	"net/http"
 	"os"
@@ -64,12 +66,15 @@ func Start() error {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/health", a.health)
+	mux.HandleFunc("/api/auth/login", handlers.HandleLogin)
+	mux.HandleFunc("/api/auth/register", handlers.HandleRegister)
+	mux.HandleFunc("/api/user/profile", middleware.RequireVipRole(http.HandlerFunc(handlers.HandleGetUserProfile)).ServeHTTP)
 	mux.HandleFunc("/api/vip-status", a.vipStatus)
-	mux.HandleFunc("/api/ai-configs", a.getAIConfigs)
-	mux.HandleFunc("/api/prompts", a.getPrompts)
-	mux.HandleFunc("/api/session", a.session)
-	mux.HandleFunc("/api/chat/summary-stream", a.summaryChatStream)
-	mux.HandleFunc("/api/share", a.shareText)
+	mux.HandleFunc("/api/ai-configs", middleware.RequireVipRole(http.HandlerFunc(a.getAIConfigs)).ServeHTTP)
+	mux.HandleFunc("/api/prompts", middleware.RequireVipRole(http.HandlerFunc(a.getPrompts)).ServeHTTP)
+	mux.HandleFunc("/api/session", middleware.RequireVipRole(http.HandlerFunc(a.session)).ServeHTTP)
+	mux.HandleFunc("/api/chat/summary-stream", middleware.RequireVipRole(http.HandlerFunc(a.summaryChatStream)).ServeHTTP)
+	mux.HandleFunc("/api/share", middleware.RequireVipRole(http.HandlerFunc(a.shareText)).ServeHTTP)
 
 	subFS, err := fs.Sub(staticFS, "static")
 	if err != nil {
@@ -95,44 +100,72 @@ func (a *app) vipStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	level, active := data.EffectiveSponsorVipLevel()
-	ok := active && level >= 2
+
+	// 从请求头中获取用户ID
+	userID := middleware.GetUserIDFromHTTPContext(r)
+	if userID == 0 {
+		// 未登录用户，返回未授权状态
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":       false,
+			"vipLevel": 0,
+			"active":   false,
+			"message":  "请先登录",
+		})
+		return
+	}
+
+	// 查询用户信息
+	var user models.User
+	if err := db.Dao.Where("id = ?", userID).First(&user).Error; err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"ok":      false,
+			"message": "用户信息查询失败",
+		})
+		return
+	}
+
+	// 检查用户是否激活
+	if !user.IsActive {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":      false,
+			"message": "账户已被禁用",
+		})
+		return
+	}
+
+	// 获取用户角色
+	role := middleware.GetUserRole(user)
+
+	// 根据角色判断VIP权限
+	isVip := role == middleware.RoleVIP || role == middleware.RoleAdmin || role == middleware.RoleSuperAdmin
+
+	// 映射角色到vipLevel（兼容前端）
+	vipLevel := 0
+	switch role {
+	case middleware.RoleVIP:
+		vipLevel = 2
+	case middleware.RoleAdmin:
+		vipLevel = 3
+	case middleware.RoleSuperAdmin:
+		vipLevel = 4
+	}
+
 	payload := map[string]any{
-		"ok":       ok,
-		"vipLevel": level,
-		"active":   active,
+		"ok":       isVip,
+		"vipLevel": vipLevel,
+		"active":   isVip,
+		"role":     string(role),
 	}
-	if !ok {
-		payload["message"] = vipDeniedMessage(level, active)
+
+	if !isVip {
+		payload["message"] = "当前用户不是VIP，请联系管理员升级权限"
 	}
+
 	writeJSON(w, http.StatusOK, payload)
 }
 
-func vipDeniedMessage(level int, active bool) string {
-	if !active && level > 0 {
-		return "检测到赞助信息，但当前不在 VIP 有效期内或尚未到授权生效时间。请在 go-stock 客户端「关于」确认赞助状态。"
-	}
-	return "go-stock AI 助手（Web）仅对 VIP2 及以上有效赞助用户开放。请在 go-stock 桌面客户端「关于」页面填写赞助码后，使用与本机相同的 data 目录启动服务。"
-}
-
-func requireVip2(w http.ResponseWriter) bool {
-	level, active := data.EffectiveSponsorVipLevel()
-	if active && level >= 2 {
-		return true
-	}
-	writeJSON(w, http.StatusForbidden, map[string]any{
-		"code":     "VIP2_REQUIRED",
-		"message":  vipDeniedMessage(level, active),
-		"vipLevel": level,
-		"active":   active,
-	})
-	return false
-}
 
 func (a *app) getAIConfigs(w http.ResponseWriter, _ *http.Request) {
-	if !requireVip2(w) {
-		return
-	}
 	cfgs := data.GetSettingConfig().AiConfigs
 	resp := make([]aiConfigResp, 0, len(cfgs))
 	for _, c := range cfgs {
@@ -147,9 +180,6 @@ func (a *app) getAIConfigs(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *app) getPrompts(w http.ResponseWriter, r *http.Request) {
-	if !requireVip2(w) {
-		return
-	}
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	promptType := strings.TrimSpace(r.URL.Query().Get("type"))
 	res := data.NewPromptTemplateApi().GetPromptTemplates(name, promptType)
@@ -157,9 +187,6 @@ func (a *app) getPrompts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) session(w http.ResponseWriter, r *http.Request) {
-	if !requireVip2(w) {
-		return
-	}
 	switch r.Method {
 	case http.MethodGet:
 		sessionId := r.URL.Query().Get("sessionId")
@@ -188,9 +215,6 @@ func (a *app) session(w http.ResponseWriter, r *http.Request) {
 func (a *app) summaryChatStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	if !requireVip2(w) {
 		return
 	}
 
@@ -268,9 +292,6 @@ func (a *app) summaryChatStream(w http.ResponseWriter, r *http.Request) {
 func (a *app) shareText(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	if !requireVip2(w) {
 		return
 	}
 	var req shareRequest
@@ -360,7 +381,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

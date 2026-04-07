@@ -1,12 +1,17 @@
 <template>
-  <div v-if="vipGateLoading" class="vip-gate">
+  <div v-if="authLoading" class="auth-loading">
     <NSpin size="large" />
-    <div class="vip-gate-text">正在校验赞助身份…</div>
+    <div class="auth-loading-text">正在验证身份...</div>
+  </div>
+  <div v-else-if="!isAuthenticated" class="auth-required">
+    <div class="auth-title">需要登录</div>
+    <p class="auth-desc">请先登录以使用 go-stock AI 助手</p>
+    <NButton type="primary" @click="goToLogin">前往登录</NButton>
   </div>
   <div v-else-if="!vipGateOk" class="vip-gate vip-gate-denied">
-    <div class="vip-gate-title">需要 VIP2 及以上</div>
+    <div class="vip-gate-title">权限不足</div>
     <p class="vip-gate-desc">{{ vipGateMessage }}</p>
-    <p class="vip-gate-hint">请使用已在「关于」页填写赞助码的 go-stock，并确保 Web 服务读取同一套 data 配置（默认工作目录下的 data 目录）。</p>
+    <p class="vip-gate-hint">请联系管理员将您的账户升级为VIP或更高权限。</p>
   </div>
   <div v-else class="page">
         <div class="header">
@@ -198,10 +203,12 @@ const shareLoading = ref(false);
 const controller = ref<AbortController | null>(null);
 const saveImageLoading = ref<number | null>(null);
 
+const authLoading = ref(true);
+const isAuthenticated = ref(false);
 const vipGateLoading = ref(true);
 const vipGateOk = ref(false);
 const vipGateMessage = ref(
-  "go-stock AI 助手（Web）仅对 VIP2 及以上有效赞助用户开放。请在 go-stock 桌面客户端「关于」页面填写赞助码。"
+  "您的账户没有VIP权限。"
 );
 
 const aiConfigId = ref<number | null>(null);
@@ -531,6 +538,17 @@ async function shareLast() {
 }
 
 onMounted(async () => {
+  // 检查用户是否登录
+  const token = localStorage.getItem('token');
+  if (!token) {
+    authLoading.value = false;
+    isAuthenticated.value = false;
+    return;
+  }
+
+  isAuthenticated.value = true;
+  
+  // 验证VIP状态
   vipGateLoading.value = true;
   try {
     const st = await getVipStatus();
@@ -538,19 +556,61 @@ onMounted(async () => {
     if (!st.ok && st.message) vipGateMessage.value = st.message;
   } catch (e: any) {
     vipGateOk.value = false;
-    vipGateMessage.value = "无法连接校验接口，请确认 ai-assistant-web 已启动：" + String(e?.message ?? e);
+    vipGateMessage.value = "无法连接校验接口：" + String(e?.message ?? e);
   } finally {
     vipGateLoading.value = false;
+    authLoading.value = false;
   }
+  
   if (!vipGateOk.value) return;
+  
   loadInit().catch((e) => {
     message.error(String(e?.message ?? e));
     startNewChat();
   });
 });
+
+function goToLogin() {
+  window.location.href = '/login';
+}
 </script>
 
 <style scoped>
+.auth-loading {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px 20px;
+  text-align: center;
+}
+.auth-loading-text {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.auth-required {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px 20px;
+  text-align: center;
+}
+.auth-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+.auth-desc {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #374151;
+}
 .vip-gate {
   min-height: 60vh;
   display: flex;

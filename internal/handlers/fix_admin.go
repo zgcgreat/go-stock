@@ -21,8 +21,8 @@ func FixAdminRole(c *gin.Context) {
 		return
 	}
 	
-	// 设置 is_admin = true
-	if err := db.Dao.Model(&adminUser).Update("is_admin", true).Error; err != nil {
+	// 设置 role = admin
+	if err := db.Dao.Model(&adminUser).Update("role", "admin").Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "更新失败",
 			"message": err.Error(),
@@ -36,7 +36,7 @@ func FixAdminRole(c *gin.Context) {
 		"data": gin.H{
 			"id":       adminUser.ID,
 			"username": adminUser.Username,
-			"is_admin": adminUser.IsAdmin,
+			"role":     adminUser.Role,
 		},
 	})
 }

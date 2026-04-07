@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+	"log"
 	"go-stock/backend/db"
 	"go-stock/backend/models"
 )
@@ -71,20 +72,30 @@ func HasPermission(userID uint, permission Permission) (bool, error) {
 func IsAdmin(userID uint) (bool, error) {
 	var user models.User
 	if err := db.Dao.Where("id = ?", userID).First(&user).Error; err != nil {
+		log.Printf("[IsAdmin] 查询用户失败: userID=%d, err=%v", userID, err)
 		return false, err
 	}
-	return user.IsAdmin, nil
+	log.Printf("[IsAdmin] 用户信息: userID=%d, username=%s, role=%s", userID, user.Username, user.Role)
+	role := GetUserRole(user)
+	log.Printf("[IsAdmin] 解析角色: %s, 是否管理员: %v", role, role == RoleAdmin || role == RoleSuperAdmin)
+	return role == RoleAdmin || role == RoleSuperAdmin, nil
 }
 
 // GetUserRole 根据用户信息获取角色
 func GetUserRole(user models.User) Role {
-	if user.IsAdmin {
+	switch user.Role {
+	case "super_admin":
+		return RoleSuperAdmin
+	case "admin":
 		return RoleAdmin
+	case "vip":
+		return RoleVIP
+	default:
+		return RoleUser
 	}
-	return RoleUser
 }
 
-// SetUserRole 设置用户角色（通过 IsAdmin 字段）
-func SetUserRole(userID uint, isAdmin bool) error {
-	return db.Dao.Model(&models.User{}).Where("id = ?", userID).Update("is_admin", isAdmin).Error
+// SetUserRole 设置用户角色
+func SetUserRole(userID uint, role Role) error {
+	return db.Dao.Model(&models.User{}).Where("id = ?", userID).Update("role", string(role)).Error
 }

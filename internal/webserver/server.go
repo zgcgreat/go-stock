@@ -212,8 +212,11 @@ func (ws *WebServer) initRouter() {
 				admin.GET("/users", handlers.AdminUserList)
 				admin.PUT("/users/status", handlers.UpdateUserActiveStatus)
 				admin.POST("/users", handlers.CreateUser)
+				admin.PUT("/users/:id", handlers.UpdateUserInfoHandler)
 				admin.DELETE("/users/:id", handlers.DeleteUserHandler)
 				admin.PUT("/users/password", handlers.ResetUserPasswordHandler)
+				admin.PUT("/users/:id/role", handlers.UpdateUserRoleHandler)
+				admin.PUT("/users/:id/vip", handlers.UpdateUserVipInfoHandler)
 			}
 
 			// 临时工具：修复 admin 用户角色（生产环境应删除）
