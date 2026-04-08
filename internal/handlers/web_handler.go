@@ -16,6 +16,7 @@ import (
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"go-stock/backend/services"
+	"go-stock/internal/middleware"
 )
 
 // GetTelegraphList 获取新闻电报列表
@@ -389,9 +390,42 @@ func GetAllStocks(c *gin.Context) {
 	})
 }
 
-// GetSponsorInfo 获取赞助信息
+// GetSponsorInfo 获取赞助信息（综合用户管理和本地配置）
 func GetSponsorInfo(c *gin.Context) {
+	// 获取本地配置的赞助信息
 	level, active := data.EffectiveSponsorVipLevel()
+
+	// 检查用户管理中的 VIP 信息
+	userID, _ := middleware.GetUserIDFromContext(c)
+	if userID > 0 {
+		var user models.User
+		if err := db.Dao.Where("id = ?", userID).First(&user).Error; err == nil {
+			if user.IsActive {
+				role := middleware.GetUserRole(user)
+				// 角色是VIP及以上
+				if role == middleware.RoleVIP || role == middleware.RoleAdmin || role == middleware.RoleSuperAdmin {
+					active = true
+					if role == middleware.RoleVIP && level < 2 {
+						level = 2
+					} else if role == middleware.RoleAdmin && level < 3 {
+						level = 3
+					} else if role == middleware.RoleSuperAdmin && level < 4 {
+						level = 4
+					}
+				}
+				// 检查用户表中的VIP信息
+				if !active && user.VipLevel > 0 && user.VipEndAt != nil && !user.VipEndAt.IsZero() {
+					if time.Now().Before(*user.VipEndAt) {
+						active = true
+						if user.VipLevel > level {
+							level = user.VipLevel
+						}
+					}
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",

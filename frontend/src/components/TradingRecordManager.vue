@@ -230,7 +230,22 @@ function toEastMoneyCode(code) {
   return c.toLowerCase()
 }
 
+function getUserRole() {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}')
+    return userInfo.role || 'user'
+  } catch {
+    return 'user'
+  }
+}
+
 async function refreshEffectiveVip() {
+  // 检查用户角色，管理员/超级管理员直接为VIP2
+  const role = getUserRole()
+  if (role === 'admin' || role === 'super_admin') {
+    vipLevel.value = 2
+    return
+  }
   try {
     const r = await GetEffectiveSponsorVip()
     const active = !!r?.active

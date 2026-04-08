@@ -597,6 +597,15 @@ function closePanel() {
   panelVisible.value = false
 }
 
+function getUserRole() {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}')
+    return userInfo.role || 'user'
+  } catch {
+    return 'user'
+  }
+}
+
 async function ensureVipInfo() {
   if (vipLoaded.value || vipLoading.value) return
   vipLoading.value = true
@@ -614,6 +623,12 @@ async function ensureVipInfo() {
 
 async function togglePanel() {
   if (!panelVisible.value) {
+    // 检查用户角色，管理员/超级管理员直接放行
+    const role = getUserRole()
+    if (role === 'admin' || role === 'super_admin') {
+      openPanel()
+      return
+    }
     await ensureVipInfo()
     if ((vipLevel.value ?? 0) < 2) {
       message.warning('go-stock AI Agent 助手功能仅对 VIP2 及以上赞助用户开放，请前往关于页面查看赞助方式。')

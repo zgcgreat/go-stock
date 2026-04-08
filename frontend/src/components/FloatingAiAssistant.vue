@@ -631,6 +631,15 @@ function closePanel() {
   panelVisible.value = false
 }
 
+function getUserRole() {
+  try {
+    const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}')
+    return userInfo.role || 'user'
+  } catch {
+    return 'user'
+  }
+}
+
 async function ensureVipInfo() {
   if (vipLoaded.value || vipLoading.value) return
   vipLoading.value = true
@@ -648,6 +657,12 @@ async function ensureVipInfo() {
 
 async function togglePanel() {
   if (!panelVisible.value) {
+    // 检查用户角色，管理员/超级管理员直接放行
+    const role = getUserRole()
+    if (role === 'admin' || role === 'super_admin') {
+      openPanel()
+      return
+    }
     ensureSummaryEvent()
     await ensureVipInfo()
     if ((vipLevel.value ?? 0) < 2) {

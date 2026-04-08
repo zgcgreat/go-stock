@@ -102,8 +102,8 @@ func (a *app) vipStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 从请求头中获取用户ID
-	userID := middleware.GetUserIDFromHTTPContext(r)
-	if userID == 0 {
+	userID, ok := middleware.GetUserIDFromHTTPContext(r)
+	if !ok || userID == 0 {
 		// 未登录用户，返回未授权状态
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok":       false,
@@ -139,15 +139,27 @@ func (a *app) vipStatus(w http.ResponseWriter, r *http.Request) {
 	// 根据角色判断VIP权限
 	isVip := role == middleware.RoleVIP || role == middleware.RoleAdmin || role == middleware.RoleSuperAdmin
 
+	// 同时检查用户表中的VIP信息（VipLevel + VipEndAt）
+	if !isVip && user.VipLevel > 0 && user.VipEndAt != nil && !user.VipEndAt.IsZero() {
+		if time.Now().Before(*user.VipEndAt) {
+			isVip = true
+		}
+	}
+
 	// 映射角色到vipLevel（兼容前端）
 	vipLevel := 0
-	switch role {
-	case middleware.RoleVIP:
-		vipLevel = 2
-	case middleware.RoleAdmin:
-		vipLevel = 3
-	case middleware.RoleSuperAdmin:
-		vipLevel = 4
+	if isVip {
+		switch role {
+		case middleware.RoleVIP:
+			vipLevel = 2
+		case middleware.RoleAdmin:
+			vipLevel = 3
+		case middleware.RoleSuperAdmin:
+			vipLevel = 4
+		}
+	} else if user.VipLevel > 0 && user.VipEndAt != nil && !user.VipEndAt.IsZero() && time.Now().Before(*user.VipEndAt) {
+		// 使用用户管理中的VIP等级
+		vipLevel = user.VipLevel
 	}
 
 	payload := map[string]any{
@@ -163,7 +175,6 @@ func (a *app) vipStatus(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, payload)
 }
-
 
 func (a *app) getAIConfigs(w http.ResponseWriter, _ *http.Request) {
 	cfgs := data.GetSettingConfig().AiConfigs
