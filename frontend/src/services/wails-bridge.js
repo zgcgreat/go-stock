@@ -4,7 +4,11 @@ import apiService from './api.js';
 
 // 检测是否在 Wails 环境中
 function isWailsMode() {
-  return typeof window !== 'undefined' && window.go && window.go.main && window.go.main.App;
+  try {
+    return !!(typeof window !== 'undefined' && window.go && window.go.main && window.go.main.App);
+  } catch (e) {
+    return false;
+  }
 }
 
 // 获取认证 token
@@ -158,8 +162,15 @@ export function GetFollowList(groupId) {
   }
   const params = groupId ? { groupId } : {};
   return apiService.client.get('/stocks/follow/list', { params, headers: getAuthHeaders() })
-    .then(extractApiData)
+    .then(res => {
+      console.log('[GetFollowList] Raw response:', res);
+      console.log('[GetFollowList] Response data:', res.data);
+      const extracted = extractApiData(res);
+      console.log('[GetFollowList] Extracted data:', extracted);
+      return extracted;
+    })
     .catch(err => {
+      console.error('[GetFollowList] Error:', err);
       console.warn('GetFollowList web fallback failed:', err.message);
       return [];
     });
@@ -226,16 +237,70 @@ export function Greet(code) {
   if (isWailsMode()) {
     return window.go.main.App.Greet(code);
   }
-  // Web 模式下获取股票实时数据 - API 期望 codes 参数
+  console.log('[Greet] Requesting realtime data for code:', code);
+  // Web端：调用实时行情API，获取单只股票数据
   return apiService.client.get('/stocks/realtime', { params: { codes: code }, headers: getAuthHeaders() })
     .then(res => {
-      if (res.data?.code === 0 && Array.isArray(res.data.data) && res.data.data.length > 0) {
-        return res.data.data[0];
+      console.log('[Greet] Raw response:', res);
+      console.log('[Greet] Response data:', res.data);
+      
+      if (res.data && res.data.code === 0 && res.data.data) {
+        // 后端返回的是数组格式 [{...}]
+        const stockList = Array.isArray(res.data.data) ? res.data.data : [];
+        console.log('[Greet] Stock list:', stockList);
+        
+        if (stockList.length > 0) {
+          const stockInfo = stockList[0];
+          console.log('[Greet] First stock info:', stockInfo);
+          
+          // 转换为前端期望的格式（与桌面端保持一致）
+          // 注意：后端StockInfo结构体使用中文JSON标签
+          const result = {
+            '股票代码': stockInfo['股票代码'] || code,
+            '股票名称': stockInfo['股票名称'] || '',
+            '当前价格': stockInfo['当前价格'] || 0,
+            '今日最高价': stockInfo['今日最高价'] || 0,
+            '今日最低价': stockInfo['今日最低价'] || 0,
+            '今日开盘价': stockInfo['今日开盘价'] || 0,
+            '昨日收盘价': stockInfo['昨日收盘价'] || 0,
+            '上次当前价格': stockInfo['上次当前价格'] || 0,
+            changePercent: stockInfo['changePercent'] || 0,
+            '涨跌值': stockInfo['changePrice'] || 0,
+            '成交量': stockInfo['成交的股票数'] || 0,
+            '成交额': stockInfo['成交金额'] || 0,
+            '买一报价': stockInfo['买一报价'] || 0,
+            '卖一报价': stockInfo['卖一报价'] || 0,
+            '买一申报': stockInfo['买一申报'] || 0,
+            '卖一申报': stockInfo['卖一申报'] || 0,
+            '买二报价': stockInfo['买二报价'] || 0,
+            '卖二报价': stockInfo['卖二报价'] || 0,
+            '买三报价': stockInfo['买三报价'] || 0,
+            '卖三报价': stockInfo['卖三报价'] || 0,
+            '买四报价': stockInfo['买四报价'] || 0,
+            '卖四报价': stockInfo['卖四报价'] || 0,
+            '买五报价': stockInfo['买五报价'] || 0,
+            '卖五报价': stockInfo['卖五报价'] || 0,
+            sort: stockInfo['sort'] || 999,
+            costPrice: stockInfo['costPrice'] || 0,
+            volume: stockInfo['costVolume'] || 0,
+            profit: stockInfo['profit'] || 0,
+            profitAmount: stockInfo['profitAmount'] || 0,
+            profitAmountToday: stockInfo['profitAmountToday'] || 0,
+            highRate: stockInfo['highRate'] || 0,
+            lowRate: stockInfo['lowRate'] || 0,
+            date: stockInfo['日期'] || '',
+            time: stockInfo['时间'] || '',
+            ...stockInfo // 保留其他字段
+          };
+          console.log('[Greet] Converted result:', result);
+          return result;
+        }
       }
+      console.warn('[Greet] No valid data found, returning empty object');
       return {};
     })
     .catch(err => {
-      console.warn('Greet web fallback failed:', err.message);
+      console.error('[Greet] Error:', err);
       return {};
     });
 }
@@ -295,8 +360,40 @@ export function GetStockMinutePriceLineData(code, name) {
   if (isWailsMode()) {
     return window.go.main.App.GetStockMinutePriceLineData(code, name);
   }
-  // Web 模式下暂不支持分时数据
-  return Promise.resolve({ priceData: [] });
+  let stockCode = code;
+  if (code.startsWith('sh') || code.startsWith('sz')) {
+    stockCode = code;
+  } else if (code.startsWith('hk')) {
+    stockCode = 'hk' + code.replace('hk', '');
+  } else if (code.startsWith('gb_')) {
+    stockCode = code.replace('gb_', '').toUpperCase() + '.OQ';
+  } else {
+    stockCode = 'sh' + code;
+  }
+  return fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${stockCode}`)
+    .then(res => res.json())
+    .then(res => {
+      const data = res.data;
+      if (!data) return { priceData: [] };
+      const stockData = data[stockCode];
+      if (!stockData || !stockData.data || !stockData.data.data) return { priceData: [] };
+      const minuteData = stockData.data.data;
+      const date = stockData.date || stockData.qh_date || stockData.data.qh_date || stockData.data.date || '';
+      const priceData = minuteData.map(item => {
+        const parts = item.split(' ');
+        return {
+          time: parts[0],
+          price: parseFloat(parts[1]) || 0,
+          volume: parseFloat(parts[2]) || 0,
+          amount: parseFloat(parts[3]) || 0
+        };
+      });
+      return { priceData, date: date, stockName: name, stockCode: code };
+    })
+    .catch(err => {
+      console.error('GetStockMinutePriceLineData error:', err);
+      return { priceData: [] };
+    });
 }
 
 export function SetCostPriceAndVolume(code, price, volume) {
@@ -1060,7 +1157,10 @@ export function GetAllStocks(arg1, arg2, arg3, arg4) {
     });
   }
   return apiService.client.get('/stocks/all', { params, headers: getAuthHeaders() })
-    .then(res => res.data?.data || { result: { data: [], count: 0 } })
+    .then(res => {
+      console.log('GetAllStocks web response:', res.data)
+      return res.data?.data || { result: { data: [], count: 0 } }
+    })
     .catch(() => ({ result: { data: [], count: 0 } }));
 }
 

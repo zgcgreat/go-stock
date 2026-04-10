@@ -110,55 +110,58 @@ func UnfollowStock(c *gin.Context) {
 }
 
 func GetFollowList(c *gin.Context) {
-	page, _ := strconv.Atoi(c.Query("page"))
-	if page <= 0 {
-		page = 1
-	}
+	// 获取groupId参数,默认为0(全部)
+	groupId, _ := strconv.Atoi(c.Query("groupId"))
 
-	pageSize, _ := strconv.Atoi(c.Query("pageSize"))
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-
-	offset := (page - 1) * pageSize
-
-	var total int64
 	var followedStocks []data.FollowedStock
 
-	query := db.Dao.Model(&data.FollowedStock{})
+	if groupId == 0 {
+		// 获取所有关注的股票
+		err := db.Dao.Model(&data.FollowedStock{}).Order("sort ASC, time DESC").Find(&followedStocks).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to fetch follow list",
+				"message": "获取关注列表失败",
+			})
+			return
+		}
+	} else {
+		// 根据分组ID获取该分组下的股票
+		groupApi := data.NewStockGroupApi(db.Dao)
+		groupStocks := groupApi.GetGroupStockByGroupId(groupId)
+		if len(groupStocks) == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"code":    0,
+				"message": "success",
+				"data":    []data.FollowedStock{},
+			})
+			return
+		}
 
-	if code := c.Query("code"); code != "" {
-		query = query.Where("stock_code LIKE ?", "%"+code+"%")
-	}
-	if name := c.Query("name"); name != "" {
-		query = query.Where("name LIKE ?", "%"+name+"%")
-	}
+		// 提取股票代码列表
+		stockCodes := make([]string, 0, len(groupStocks))
+		for _, gs := range groupStocks {
+			stockCodes = append(stockCodes, gs.StockCode)
+		}
 
-	query.Count(&total)
-	err := query.Offset(offset).Limit(pageSize).Order("sort ASC").Find(&followedStocks).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to fetch follow list",
-			"message": "获取关注列表失败",
-		})
-		return
-	}
-
-	totalPages := int(total) / pageSize
-	if total%int64(pageSize) > 0 {
-		totalPages++
+		// 查询这些股票的详细信息
+		err := db.Dao.Model(&data.FollowedStock{}).
+			Where("stock_code IN ?", stockCodes).
+			Order("sort ASC, time DESC").
+			Find(&followedStocks).Error
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to fetch follow list",
+				"message": "获取关注列表失败",
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
-		"data": gin.H{
-			"list":       followedStocks,
-			"total":      total,
-			"page":       page,
-			"pageSize":   pageSize,
-			"totalPages": totalPages,
-		},
+		"data":    followedStocks,
 	})
 }
 

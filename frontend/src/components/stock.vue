@@ -524,16 +524,21 @@ onMounted(() => {
 
   message.loading("Loading...")
   GetFollowList(currentGroupId.value).then(result => {
+    console.log('[stock.vue] GetFollowList result:', result);
+    console.log('[stock.vue] followList length:', result.length);
 
     followList.value = result
     for (const followedStock of result) {
+      console.log('[stock.vue] Processing stock:', followedStock.StockCode);
       if (followedStock.StockCode.startsWith("us")) {
         followedStock.StockCode = "gb_" + followedStock.StockCode.replace("us", "").toLowerCase()
       }
       if (!stocks.value.includes(followedStock.StockCode)) {
         stocks.value.push(followedStock.StockCode)
       }
+      console.log('[stock.vue] Calling Greet for:', followedStock.StockCode);
       Greet(followedStock.StockCode).then(result => {
+        console.log('[stock.vue] Greet result for', followedStock.StockCode, ':', result);
         updateData(result)
       })
     }
@@ -812,7 +817,9 @@ function blinkBorder(findId) {
 }
 
 async function updateData(result) {
-  ////console.log("stock_price",result['日期'],result['时间'],result['股票代码'],result['股票名称'],result['当前价格'],result['盘前盘后'])
+  if (!result.changePercent && result.changePercent !== 0) {
+    result.changePercent = 0
+  }
 
   if (result["当前价格"] <= 0) {
     result["当前价格"] = result["卖一报价"]
@@ -1026,7 +1033,11 @@ function showFsChart(code, name) {
   data.code = code
   const chart = echarts.init(kLineChartRef2.value);
   GetStockMinutePriceLineData(code, name).then(result => {
-    // console.log("GetStockMinutePriceLineData", result)
+    console.log('GetStockMinutePriceLineData result:', result)
+    if (!result || !result.priceData || result.priceData.length === 0) {
+      console.warn('No price data available')
+      return
+    }
     const priceData = result.priceData
     let category = []
     let price = []
@@ -1252,7 +1263,7 @@ function showFsChart(code, name) {
 function showFenshi(code, name, changePercent) {
   data.code = code
   data.name = name
-  data.changePercent = changePercent
+  data.changePercent = typeof changePercent === 'string' ? parseFloat(changePercent) : (changePercent || 0)
   data.fenshiURL = 'http://image.sinajs.cn/newchart/min/n/' + data.code + '.gif' + "?t=" + Date.now()
 
   if (code.startsWith('hk')) {
@@ -1905,7 +1916,15 @@ function checkPriceLineAlerts(result) {
   // })
 
   if (triggeredType > 0) {
-    const msg = `### 📈 价位线预警\n\n### ${stockName} (${stockCodeDisplay})\n\n- 当前价格: ${price}\n- 预警类型: ${triggeredType === 4 ? '止盈触及' : '止损触及'}\n- 开仓价: ${followedStock.EntryPrice || '-'}\n- 止盈价: ${followedStock.TakeProfitPrice || '-'}\n- 止损价: ${followedStock.StopLossPrice || '-'}`;
+    const msg = `### 📈 价位线预警
+
+### ${stockName} (${stockCodeDisplay})
+
+- 当前价格: ${price}
+- 预警类型: ${triggeredType === 4 ? '止盈触及' : '止损触及'}
+- 开仓价: ${followedStock.EntryPrice || '-'}
+- 止盈价: ${followedStock.TakeProfitPrice || '-'}
+- 止损价: ${followedStock.StopLossPrice || '-'}`;
     SendDingDingMessageByType(msg, code, triggeredType)
   }
 }
