@@ -281,6 +281,7 @@ const menuOptions = ref([
       {label: () => h(RouterLink, {to: {name: 'research', query: {name: "异动监控"}}}, {default: () => '异动监控'}), key: 'stockChanges', icon: renderIcon(TrendingUp)},
       {label: () => h(RouterLink, {to: {name: 'research', query: {name: "提示词模板"}}}, {default: () => '提示词模板'}), key: 'research3', icon: renderIcon(Prompt)},
       {label: () => h(RouterLink, {to: {name: 'research', query: {name: "股票信息筛选"}}}, {default: () => '股票信息筛选'}), key: 'research4', icon: renderIcon(AppsList20Regular)},
+      {label: () => h(RouterLink, {to: {name: 'research', query: {name: "定时任务"}}}, {default: () => '定时任务'}), key: 'research5', icon: renderIcon(TimeOutline)},
       {label: () => h(RouterLink, {to: {name: 'research', query: {name: "交易日志"}}}, {default: () => '交易日志(beta)'}), key: 'research6', icon: renderIcon(MoneyCollectOutlined)},
     ],
   },
