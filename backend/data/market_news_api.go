@@ -344,6 +344,49 @@ func (m MarketNewsApi) GetSinaNews(crawlTimeOut uint) *[]models.Telegraph {
 }
 
 func (m MarketNewsApi) GlobalStockIndexes(crawlTimeOut uint) map[string]any {
+	// 构建结果
+	result := make(map[string]any)
+
+	// 从财联社API获取中国主要指数（优先获取，保证有数据）
+	clsResp, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36").
+		Get("https://x-quote.cls.cn/quote/index/home?app=CailianpressWeb&os=web&sv=8.4.6")
+	var clsData map[string]any
+	json.Unmarshal(clsResp.Body(), &clsData)
+
+	// 将中国主要指数放入common
+	var common []map[string]any
+	if clsData != nil && clsData["data"] != nil {
+		if data, ok := clsData["data"].(map[string]any); ok {
+			if indexQuote, ok := data["index_quote"].([]any); ok {
+				for _, item := range indexQuote {
+					if idx, ok := item.(map[string]any); ok {
+						secuCode, _ := idx["secu_code"].(string)
+						secuName, _ := idx["secu_name"].(string)
+						lastPx, _ := idx["last_px"].(float64)
+						change, _ := idx["change"].(float64)
+						changePx, _ := idx["change_px"].(float64)
+
+						zxj := fmt.Sprintf("%.2f", lastPx)
+						zdf := fmt.Sprintf("%.2f", change*100)
+
+						common = append(common, map[string]any{
+							"code":     secuCode,
+							"name":     secuName,
+							"zxj":      zxj,
+							"zdf":      zdf,
+							"change":   changePx,
+							"location": "中国",
+							"state":    "open",
+							"img":      "",
+						})
+					}
+				}
+			}
+		}
+	}
+	result["common"] = common
+
 	// 获取腾讯的全球指数数据
 	response, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://stockapp.finance.qq.com/mstats").
@@ -352,52 +395,20 @@ func (m MarketNewsApi) GlobalStockIndexes(crawlTimeOut uint) map[string]any {
 	js := string(response.Body())
 	res := make(map[string]any)
 	json.Unmarshal([]byte(js), &res)
-	tencentData := res["data"].(map[string]any)
-
-	// 从财联社API获取中国主要指数
-	clsResp, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
-		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36").
-		Get("https://x-quote.cls.cn/quote/index/home?app=CailianpressWeb&os=web&sv=8.4.6")
-	var clsData map[string]any
-	json.Unmarshal(clsResp.Body(), &clsData)
-
-	// 构建结果
-	result := make(map[string]any)
-	result["america"] = tencentData["america"]
-	result["europe"] = tencentData["europe"]
-	result["asia"] = tencentData["asia"]
-	result["other"] = tencentData["other"]
-
-	// 将中国主要指数放入common
-	var common []map[string]any
-	if clsData != nil && clsData["data"] != nil {
-		data := clsData["data"].(map[string]any)
-		if indexQuote, ok := data["index_quote"].([]any); ok {
-			for _, item := range indexQuote {
-				idx := item.(map[string]any)
-				secuCode := idx["secu_code"].(string)
-				secuName := idx["secu_name"].(string)
-				lastPx := idx["last_px"].(float64)
-				change := idx["change"].(float64)
-				changePx := idx["change_px"].(float64)
-
-				zxj := fmt.Sprintf("%.2f", lastPx)
-				zdf := fmt.Sprintf("%.2f", change*100)
-
-				common = append(common, map[string]any{
-					"code":     secuCode,
-					"name":     secuName,
-					"zxj":      zxj,
-					"zdf":      zdf,
-					"change":   changePx,
-					"location": "中国",
-					"state":    "open",
-					"img":      "",
-				})
-			}
+	if data, ok := res["data"].(map[string]any); ok && data != nil {
+		if v, ok := data["america"].([]any); ok {
+			result["america"] = v
+		}
+		if v, ok := data["europe"].([]any); ok {
+			result["europe"] = v
+		}
+		if v, ok := data["asia"].([]any); ok {
+			result["asia"] = v
+		}
+		if v, ok := data["other"].([]any); ok {
+			result["other"] = v
 		}
 	}
-	result["common"] = common
 
 	return result
 }

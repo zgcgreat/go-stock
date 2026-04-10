@@ -817,19 +817,29 @@ export function AddTradingRecord(arg1) {
 
 export function AnalyzeSentimentWithFreqWeight(arg1) {
   if (isWailsMode()) return window.go.main.App.AnalyzeSentimentWithFreqWeight(arg1);
-  return apiService.client.get('/market/hot-words', { headers: getAuthHeaders() })
-    .then(res => {
-      const d = res.data?.data || {};
-      return {
-        frequencies: d.frequencies || [],
-        result: { Score: d.score || 0 },
-        score: d.score || 0,
-        category: d.category || 0,
-        PositiveCount: 0,
-        NegativeCount: 0,
-      };
-    })
-    .catch(() => ({ frequencies: [], result: { Score: 0 }, score: 0, category: 0, PositiveCount: 0, NegativeCount: 0 }));
+  // Web 模式：先触发新闻刷新（与桌面端用户手动刷新一致），再分析情绪
+  // 两个来源并行爬取，不管成功失败都继续分析
+  const refresh = Promise.allSettled([
+    apiService.client.get('/telegraph/refresh?source=财联社电报', { headers: getAuthHeaders() }),
+    apiService.client.get('/telegraph/refresh?source=新浪财经', { headers: getAuthHeaders() }),
+  ]);
+  return refresh.then(() =>
+    apiService.client.get('/market/hot-words', { headers: getAuthHeaders() })
+  ).then(res => {
+    // 后端直接序列化 SentimentResult struct，字段名与桌面端一致（Go 无 json tag 时用原始大写字段名）
+    const apiData = res.data || {};
+    const d = (apiData.code === 0 ? apiData.data : apiData) || {};
+    const resultData = (d.result && typeof d.result.Score === 'number')
+      ? d.result
+      : { Score: 0, Category: 0, PositiveCount: 0, NegativeCount: 0, Description: '' };
+    return {
+      frequencies: Array.isArray(d.frequencies) ? d.frequencies : [],
+      result: resultData,
+    };
+  }).catch(() => {
+    console.error('AnalyzeSentimentWithFreqWeight failed');
+    return { frequencies: [], result: { Score: 0 } };
+  });
 }
 
 export function CalculateNextRunTime(arg1) {

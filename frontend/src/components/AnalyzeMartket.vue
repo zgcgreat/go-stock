@@ -86,6 +86,7 @@ function getIndex() {
 function  handleChart(){
   const formatUtil = echarts.format;
   AnalyzeSentimentWithFreqWeight("").then((res) => {
+    if (!res || !res.frequencies) return;
     const treemapchart = echarts.init(chartRef.value);
     const gaugeChart=echarts.init(gaugeChartRef.value);
     let data = res['frequencies'].map(item => ({
@@ -163,7 +164,7 @@ function  handleChart(){
       },
       tooltip: {
         formatter: function (info) {
-          var value = info.value.toFixed(2);
+          var value = (Number(info.value) || 0).toFixed(2);
           var frequency = info.data.frequency;
           var weight = info.data.weight;
           return [
@@ -280,7 +281,7 @@ function  handleChart(){
           },
           data: [
             {
-              value: res.result.Score*0.2,
+              value: Math.max(Math.min((Number(res.result?.Score) || 0) * 10, 100), -100), // 将分数缩放到[-100, 100]范围内
               name: '市场情绪强弱'
             }
           ]

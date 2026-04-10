@@ -557,6 +557,17 @@ func SaveStockSentimentAnalysis(result models.SentimentResult) {
 func NewsAnalyze(text string, save bool) (models.SentimentResult, []models.WordFreqWithWeight) {
 	if text == "" {
 		telegraphs := NewMarketNewsApi().GetNews24HoursList("", 1000*10)
+		if telegraphs == nil || len(*telegraphs) == 0 {
+			// 如果没有获取到新闻数据，返回默认的中性情感
+			defaultResult := models.SentimentResult{
+				Score:         0.0,
+				Category:      Neutral,
+				PositiveCount: 0,
+				NegativeCount: 0,
+				Description:   GetSentimentDescription(Neutral),
+			}
+			return defaultResult, []models.WordFreqWithWeight{}
+		}
 		messageText := strings.Builder{}
 		for _, telegraph := range *telegraphs {
 			messageText.WriteString(telegraph.Content + "\n")

@@ -49,35 +49,16 @@ func RefreshTelegraphList(c *gin.Context) {
 
 // GlobalStockIndexes 获取全球指数
 func GlobalStockIndexes(c *gin.Context) {
-	// 先尝试从缓存获取
-	indexes := data.NewMarketNewsApi().GetCachedGlobalStockIndexes("all")
-	if indexes != nil && len(*indexes) > 0 {
-		// 按区域组织
-		result := map[string][]map[string]any{}
-		for _, idx := range *indexes {
-			result[idx.Region] = append(result[idx.Region], map[string]any{
-				"code":     idx.Code,
-				"name":     idx.Name,
-				"location": idx.Location,
-				"qtcode":   idx.Qtcode,
-				"state":    idx.State,
-				"zdf":      idx.Zdf,
-				"zxj":      idx.Zxj,
-				"img":      idx.Img,
-			})
-		}
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
-		return
-	}
-
-	// 缓存没有则从接口获取并缓存
-	go func() {
-		data.NewMarketNewsApi().CacheGlobalStockIndexes(30)
-	}()
-
-	// 直接从API获取
+	// 直接从API获取最新数据
 	apiData := data.NewMarketNewsApi().GlobalStockIndexes(30)
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": apiData})
+
+	// 返回与桌面端一致的格式
+	c.JSON(http.StatusOK, gin.H{
+		"code":      0,
+		"msg":       "success",
+		"data":      apiData,
+		"message":   "success",
+	})
 }
 
 // GetIndustryRank 获取行业排名
@@ -721,38 +702,15 @@ func AnalyzeSentiment(c *gin.Context) {
 }
 
 // GetHotWords 获取最近24小时热词
+// 与桌面端 app_common.go AnalyzeSentimentWithFreqWeight 逻辑完全一致：
+// 直接调 data.NewsAnalyze，不在此处爬取（爬取由前端先调 /telegraph/refresh 完成）
 func GetHotWords(c *gin.Context) {
-	var wordAnalyzes []models.WordAnalyze
-	db.Dao.Order("created_at DESC").Limit(100).Find(&wordAnalyzes)
-
-	// 如果没有数据，触发一次分析
-	if len(wordAnalyzes) == 0 {
-		data.NewsAnalyze("", true)
-		c.JSON(http.StatusOK, gin.H{
-			"code":    0,
-			"message": "success",
-			"data": gin.H{
-				"frequencies": []map[string]any{},
-			},
-		})
-		return
-	}
-
-	// 转换为前端需要的格式
-	var frequencies []map[string]any
-	for _, w := range wordAnalyzes {
-		frequencies = append(frequencies, map[string]any{
-			"Word":      w.Word,
-			"Frequency": w.Frequency,
-			"Weight":    w.Weight,
-			"Score":     w.Score,
-		})
-	}
-
+	result, frequencies := data.NewsAnalyze("", false)
 	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
+		"code": 0,
+		"msg":  "success",
+		"data": map[string]any{
+			"result":      result,
 			"frequencies": frequencies,
 		},
 	})
