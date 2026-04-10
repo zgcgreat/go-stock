@@ -318,35 +318,43 @@ async function fetchHistoryData() {
       page: paginationReactive.page,
       pageSize: paginationReactive.pageSize,
     }
+
+    // 日期范围筛选
     if (paginationReactive.range && paginationReactive.range.length === 2) {
       query.startDate = formatDate(paginationReactive.range[0])
       query.endDate = formatDate(paginationReactive.range[1])
     }
+
+    // 时间范围筛选
     if (paginationReactive.startTime) {
       query.startTime = formatTime(paginationReactive.startTime)
     }
     if (paginationReactive.endTime) {
       query.endTime = formatTime(paginationReactive.endTime)
     }
-    if (paginationReactive.minVolume) {
+
+    // 数值筛选条件
+    if (paginationReactive.minVolume !== null && paginationReactive.minVolume !== undefined) {
       query.minVolume = paginationReactive.minVolume
     }
-    if (paginationReactive.minAmount) {
+    if (paginationReactive.minAmount !== null && paginationReactive.minAmount !== undefined) {
       query.minAmount = paginationReactive.minAmount
     }
-    if (paginationReactive.minChangeRate) {
+    if (paginationReactive.minChangeRate !== null && paginationReactive.minChangeRate !== undefined) {
       query.minChangeRate = paginationReactive.minChangeRate
     }
-    if (paginationReactive.maxChangeRate) {
+    if (paginationReactive.maxChangeRate !== null && paginationReactive.maxChangeRate !== undefined) {
       query.maxChangeRate = paginationReactive.maxChangeRate
     }
-    if (paginationReactive.industry.trim()) {
+
+    // 文本筛选条件
+    if (paginationReactive.industry && paginationReactive.industry.trim()) {
       query.industry = paginationReactive.industry.trim()
     }
-    if (paginationReactive.concept.trim()) {
+    if (paginationReactive.concept && paginationReactive.concept.trim()) {
       query.concept = paginationReactive.concept.trim()
     }
-    if (paginationReactive.keyword.trim()) {
+    if (paginationReactive.keyword && paginationReactive.keyword.trim()) {
       const keyword = paginationReactive.keyword.trim()
       if (/^\d+$/.test(keyword)) {
         query.stockCode = keyword
@@ -354,17 +362,26 @@ async function fetchHistoryData() {
         query.stockName = keyword
       }
     }
-    if (selectedTypes.value.length > 0) {
+
+    // 异动类型筛选
+    if (selectedTypes.value && selectedTypes.value.length > 0) {
       query.changeTypes = selectedTypes.value.map(t => parseInt(t))
     }
+
+    console.log('正在查询异动历史数据，参数:', query)
+
     const result = await GetStockChangeHistory(query)
     if (result) {
       dataRef.value = result.list || []
       paginationReactive.itemCount = result.total || 0
       paginationReactive.pageCount = result.totalPages || 1
+      console.log(`查询完成，共${result.total}条记录，当前页显示${result.list?.length || 0}条`)
+    } else {
+      console.error('获取历史数据失败: 无返回结果')
     }
   } catch (e) {
     console.error('获取历史数据失败:', e)
+    message.error('获取历史数据失败: ' + (e.message || e))
   } finally {
     loadingRef.value = false
   }

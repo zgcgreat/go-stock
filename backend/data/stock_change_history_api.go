@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"go-stock/backend/db"
 	"go-stock/backend/models"
 	"time"
@@ -109,81 +110,122 @@ func (s *StockChangeHistoryService) GetHistoryList(query models.StockChangeHisto
 	if query.Page <= 0 {
 		query.Page = 1
 	}
-	//if query.PageSize <= 0 || query.PageSize > 100 {
-	//	query.PageSize = 50
-	//}
+	if query.PageSize <= 0 {
+		query.PageSize = 50
+	}
 
 	dbQuery := db.Dao.Model(&models.StockChangeHistory{})
 
+	// 股票代码筛选 - 支持模糊匹配
 	if query.StockCode != "" {
 		dbQuery = dbQuery.Where("stock_code LIKE ?", "%"+query.StockCode+"%")
 	}
+
+	// 股票名称筛选 - 支持模糊匹配
 	if query.StockName != "" {
 		dbQuery = dbQuery.Where("stock_name LIKE ?", "%"+query.StockName+"%")
 	}
+
+	// 单个异动类型筛选
 	if query.ChangeType > 0 {
 		dbQuery = dbQuery.Where("change_type = ?", query.ChangeType)
 	}
+
+	// 多个异动类型筛选 - 优先级高于单个类型筛选
 	if len(query.ChangeTypes) > 0 {
 		dbQuery = dbQuery.Where("change_type IN ?", query.ChangeTypes)
 	}
+
+	// 异动类型名称筛选
 	if query.TypeName != "" {
 		dbQuery = dbQuery.Where("type_name = ?", query.TypeName)
 	}
+
+	// 日期范围筛选
 	if query.StartDate != "" {
 		dbQuery = dbQuery.Where("change_date >= ?", query.StartDate)
 	}
 	if query.EndDate != "" {
 		dbQuery = dbQuery.Where("change_date <= ?", query.EndDate)
 	}
+
+	// 时间范围筛选
 	if query.StartTime != "" {
 		dbQuery = dbQuery.Where("change_time >= ?", query.StartTime)
 	}
 	if query.EndTime != "" {
 		dbQuery = dbQuery.Where("change_time <= ?", query.EndTime)
 	}
+
+	// 最小成交量筛选
 	if query.MinVolume > 0 {
 		dbQuery = dbQuery.Where("volume >= ?", query.MinVolume)
 	}
+
+	// 最小金额筛选
 	if query.MinAmount > 0 {
 		dbQuery = dbQuery.Where("amount >= ?", query.MinAmount)
 	}
+
+	// 涨跌幅范围筛选
 	if query.MinChangeRate != 0 {
 		dbQuery = dbQuery.Where("change_rate >= ?", query.MinChangeRate)
 	}
 	if query.MaxChangeRate != 0 {
 		dbQuery = dbQuery.Where("change_rate <= ?", query.MaxChangeRate)
 	}
+
+	// 行业筛选 - 支持模糊匹配
 	if query.Industry != "" {
 		dbQuery = dbQuery.Where("industry LIKE ?", "%"+query.Industry+"%")
 	}
+
+	// 概念筛选 - 支持模糊匹配
 	if query.Concept != "" {
 		dbQuery = dbQuery.Where("concept LIKE ?", "%"+query.Concept+"%")
 	}
 
+	// 计算总数
 	var total int64
 	if err := dbQuery.Count(&total).Error; err != nil {
 		return nil, err
 	}
 
+	// 查询列表数据
 	var list []models.StockChangeHistory
 	offset := (query.Page - 1) * query.PageSize
-	if err := dbQuery.Order("change_date DESC, change_time DESC").Offset(offset).Limit(query.PageSize).Find(&list).Error; err != nil {
+
+	// 按日期和时间倒序排列，这样最新数据在前面
+	orderQuery := dbQuery.Order("change_date DESC, change_time DESC")
+	if err := orderQuery.Offset(offset).Limit(query.PageSize).Find(&list).Error; err != nil {
 		return nil, err
 	}
 
+	// 计算总页数
 	totalPages := int(total) / query.PageSize
 	if int(total)%query.PageSize > 0 {
 		totalPages++
 	}
 
-	return &models.StockChangeHistoryPageData{
+	// 返回结果
+	result := &models.StockChangeHistoryPageData{
 		List:       list,
 		Total:      total,
 		Page:       query.Page,
 		PageSize:   query.PageSize,
 		TotalPages: totalPages,
-	}, nil
+	}
+
+	// 添加空数据警告日志
+	if len(list) == 0 {
+		fmt.Printf("警告: 查询完成但无数据 - 页码:%d, 每页:%d, 总数:%d, 总页:%d, 实际返回:%d, 查询条件: %+v\n",
+			query.Page, query.PageSize, total, totalPages, len(list), query)
+	} else {
+		fmt.Printf("查询完成 - 页码:%d, 每页:%d, 总数:%d, 总页:%d, 实际返回:%d\n",
+			query.Page, query.PageSize, total, totalPages, len(list))
+	}
+
+	return result, nil
 }
 
 func (s *StockChangeHistoryService) DeleteOldData(days int) error {
