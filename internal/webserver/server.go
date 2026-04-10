@@ -196,6 +196,7 @@ func (ws *WebServer) initRouter() {
 			// 其他
 			protected.GET("/market/em-dict/:code", handlers.GetEMDictCode)
 			protected.GET("/market/sentiment", handlers.AnalyzeSentiment)
+			protected.GET("/market/hot-words", handlers.GetHotWords)
 			protected.GET("/ai/models", handlers.FetchAiModels)
 			protected.GET("/trades/check-frequent", handlers.CheckFrequentTrading)
 

@@ -344,6 +344,7 @@ func (m MarketNewsApi) GetSinaNews(crawlTimeOut uint) *[]models.Telegraph {
 }
 
 func (m MarketNewsApi) GlobalStockIndexes(crawlTimeOut uint) map[string]any {
+	// 获取腾讯的全球指数数据
 	response, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://stockapp.finance.qq.com/mstats").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
@@ -351,7 +352,54 @@ func (m MarketNewsApi) GlobalStockIndexes(crawlTimeOut uint) map[string]any {
 	js := string(response.Body())
 	res := make(map[string]any)
 	json.Unmarshal([]byte(js), &res)
-	return res["data"].(map[string]any)
+	tencentData := res["data"].(map[string]any)
+
+	// 从财联社API获取中国主要指数
+	clsResp, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36").
+		Get("https://x-quote.cls.cn/quote/index/home?app=CailianpressWeb&os=web&sv=8.4.6")
+	var clsData map[string]any
+	json.Unmarshal(clsResp.Body(), &clsData)
+
+	// 构建结果
+	result := make(map[string]any)
+	result["america"] = tencentData["america"]
+	result["europe"] = tencentData["europe"]
+	result["asia"] = tencentData["asia"]
+	result["other"] = tencentData["other"]
+
+	// 将中国主要指数放入common
+	var common []map[string]any
+	if clsData != nil && clsData["data"] != nil {
+		data := clsData["data"].(map[string]any)
+		if indexQuote, ok := data["index_quote"].([]any); ok {
+			for _, item := range indexQuote {
+				idx := item.(map[string]any)
+				secuCode := idx["secu_code"].(string)
+				secuName := idx["secu_name"].(string)
+				lastPx := idx["last_px"].(float64)
+				change := idx["change"].(float64)
+				changePx := idx["change_px"].(float64)
+
+				zxj := fmt.Sprintf("%.2f", lastPx)
+				zdf := fmt.Sprintf("%.2f", change*100)
+
+				common = append(common, map[string]any{
+					"code":     secuCode,
+					"name":     secuName,
+					"zxj":      zxj,
+					"zdf":      zdf,
+					"change":   changePx,
+					"location": "中国",
+					"state":    "open",
+					"img":      "",
+				})
+			}
+		}
+	}
+	result["common"] = common
+
+	return result
 }
 
 // GlobalStockIndexesReadable 获取全球指数并转换为 AI 易读的 Markdown 文本。

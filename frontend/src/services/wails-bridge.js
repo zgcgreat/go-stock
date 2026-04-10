@@ -817,11 +817,11 @@ export function AddTradingRecord(arg1) {
 
 export function AnalyzeSentimentWithFreqWeight(arg1) {
   if (isWailsMode()) return window.go.main.App.AnalyzeSentimentWithFreqWeight(arg1);
-  return apiService.client.get('/market/sentiment', { params: { text: arg1 }, headers: getAuthHeaders() })
+  return apiService.client.get('/market/hot-words', { headers: getAuthHeaders() })
     .then(res => {
       const d = res.data?.data || {};
       return {
-        frequencies: [],
+        frequencies: d.frequencies || [],
         result: { Score: d.score || 0 },
         score: d.score || 0,
         category: d.category || 0,

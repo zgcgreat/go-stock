@@ -720,6 +720,44 @@ func AnalyzeSentiment(c *gin.Context) {
 	})
 }
 
+// GetHotWords 获取最近24小时热词
+func GetHotWords(c *gin.Context) {
+	var wordAnalyzes []models.WordAnalyze
+	db.Dao.Order("created_at DESC").Limit(100).Find(&wordAnalyzes)
+
+	// 如果没有数据，触发一次分析
+	if len(wordAnalyzes) == 0 {
+		data.NewsAnalyze("", true)
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "success",
+			"data": gin.H{
+				"frequencies": []map[string]any{},
+			},
+		})
+		return
+	}
+
+	// 转换为前端需要的格式
+	var frequencies []map[string]any
+	for _, w := range wordAnalyzes {
+		frequencies = append(frequencies, map[string]any{
+			"Word":      w.Word,
+			"Frequency": w.Frequency,
+			"Weight":    w.Weight,
+			"Score":     w.Score,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data": gin.H{
+			"frequencies": frequencies,
+		},
+	})
+}
+
 // GetStockChanges 获取股票异动数据（实时）
 func GetStockChanges(c *gin.Context) {
 	changeTypesStr := c.Query("changeTypes")
