@@ -691,7 +691,29 @@ export function GetEffectiveSponsorVip() {
   if (isWailsMode()) {
     return window.go.main.App.GetEffectiveSponsorVip();
   }
-  return Promise.resolve({ active: false, vipLevel: 0 });
+  // Web端：调用 /user/profile 接口获取用户信息和VIP等级
+  return apiService.client.get('/user/profile', { headers: getAuthHeaders() })
+    .then(res => {
+      const user = res.data || {};
+      const role = user.role || 'user';
+      // 管理员/超级管理员直接返回VIP2
+      if (role === 'admin' || role === 'super_admin') {
+        return { active: true, vipLevel: 2 };
+      }
+      // 普通用户：根据vipLevel和vipEndAt判断
+      const vipLevel = Number(user.vipLevel ?? 0);
+      const vipEndAt = user.vipEndAt || '';
+      let active = false;
+      if (vipLevel > 0 && vipEndAt) {
+        const endDate = new Date(vipEndAt);
+        active = endDate > new Date();
+      }
+      return { active, vipLevel };
+    })
+    .catch(err => {
+      console.error('[GetEffectiveSponsorVip] Error:', err);
+      return { active: false, vipLevel: 0 };
+    });
 }
 
 export function OpenURL(url) {

@@ -68,7 +68,6 @@ const handleLogin = async () => {
   try {
     const res = await apiService.login(formData.value)
     if (res.token) {
-      // 使用统一的 Auth 工具类来处理 token 存储
       localStorage.setItem('token', res.token)
       message.success('登录成功')
       const redirect = sessionStorage.getItem('redirectAfterLogin') || '/'

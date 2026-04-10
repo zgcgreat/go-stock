@@ -348,7 +348,16 @@ func GetUserProfile(c *gin.Context) {
 		return
 	}
 
-	// 返回用户信息（不包含密码）
+	// 格式化VIP时间
+	var vipStartAt, vipEndAt string
+	if user.VipStartAt != nil && !user.VipStartAt.IsZero() {
+		vipStartAt = user.VipStartAt.Format("2006-01-02 15:04:05")
+	}
+	if user.VipEndAt != nil && !user.VipEndAt.IsZero() {
+		vipEndAt = user.VipEndAt.Format("2006-01-02 15:04:05")
+	}
+
+	// 返回用户信息（包含VIP字段）
 	c.JSON(http.StatusOK, gin.H{
 		"id":          user.ID,
 		"username":    user.Username,
@@ -357,6 +366,9 @@ func GetUserProfile(c *gin.Context) {
 		"role":        user.Role,
 		"isActive":    user.IsActive,
 		"createdAt":   user.CreatedAt,
+		"vipLevel":    user.VipLevel,
+		"vipStartAt":  vipStartAt,
+		"vipEndAt":    vipEndAt,
 	})
 }
 
