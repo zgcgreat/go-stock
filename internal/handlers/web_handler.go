@@ -702,10 +702,23 @@ func AnalyzeSentiment(c *gin.Context) {
 }
 
 // GetHotWords 获取最近24小时热词
-// 与桌面端 app_common.go AnalyzeSentimentWithFreqWeight 逻辑完全一致：
-// 直接调 data.NewsAnalyze，不在此处爬取（爬取由前端先调 /telegraph/refresh 完成）
+// 先确保数据库有最近24小时新闻，再分析（与桌面端用户手动刷新流程一致）
 func GetHotWords(c *gin.Context) {
+	// 先检查 DB 中是否已有 24h 内新闻
+	var newsCount int64
+	db.Dao.Model(&models.Telegraph{}).Where("created_at>?", time.Now().Add(-24*time.Hour)).Count(&newsCount)
+	if newsCount == 0 {
+		// DB 为空时，主动触发爬取（与 RefreshTelegraphList 完全一致）
+		logger.SugaredLogger.Info("[GetHotWords] DB无24h新闻，开始爬取...")
+		newsApi := data.NewMarketNewsApi()
+		newsApi.TelegraphList(30)
+		newsApi.GetSinaNews(30)
+		db.Dao.Model(&models.Telegraph{}).Where("created_at>?", time.Now().Add(-24*time.Hour)).Count(&newsCount)
+		logger.SugaredLogger.Infof("[GetHotWords] 爬取完成，当前24h新闻: %d条", newsCount)
+	}
 	result, frequencies := data.NewsAnalyze("", false)
+	logger.SugaredLogger.Infof("[GetHotWords] DB中24h新闻: %d条, Score: %.2f, 词频数: %d",
+		newsCount, result.Score, len(frequencies))
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "success",
