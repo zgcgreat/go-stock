@@ -85,6 +85,7 @@ function getIndex() {
 }
 function  handleChart(){
   const formatUtil = echarts.format;
+  // 在每次图表更新时也自动获取新的情感分析数据
   AnalyzeSentimentWithFreqWeight("").then((res) => {
     if (!res || !res.frequencies) return;
     const treemapchart = echarts.init(chartRef.value);
