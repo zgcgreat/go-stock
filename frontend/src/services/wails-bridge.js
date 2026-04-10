@@ -1279,14 +1279,16 @@ export function GetSponsorInfo() {
 
 export function GetStockEastMoneyKLine(arg1, arg2, arg3, arg4) {
   if (isWailsMode()) return window.go.main.App.GetStockEastMoneyKLine(arg1, arg2, arg3, arg4);
-  return apiService.client.get(`/public/stocks/${arg1}/kline`, { params: { klt: arg2, days: arg4 }, headers: getAuthHeaders() })
+  // arg1=code, arg2=stockName, arg3=klt, arg4=limit
+  return apiService.client.get(`/public/stocks/${arg1}/kline`, { params: { klt: arg3, days: arg4 }, headers: getAuthHeaders() })
     .then(res => res.data?.data?.kline || [])
     .catch(() => []);
 }
 
 export function GetStockEastMoneyKLinePage(arg1, arg2, arg3, arg4, arg5) {
   if (isWailsMode()) return window.go.main.App.GetStockEastMoneyKLinePage(arg1, arg2, arg3, arg4, arg5);
-  return apiService.client.get(`/public/stocks/${arg1}/kline`, { params: { klt: arg2, days: arg4, page: arg5 }, headers: getAuthHeaders() })
+  // arg1=code, arg2=stockName, arg3=klt, arg4=limit, arg5=end
+  return apiService.client.get(`/public/stocks/${arg1}/kline`, { params: { klt: arg3, days: arg4, page: arg5 }, headers: getAuthHeaders() })
     .then(res => res.data?.data || { kline: [], total: 0 })
     .catch(() => ({ kline: [], total: 0 }));
 }
