@@ -22,7 +22,10 @@
       "Bash(powershell:*)",
       "Bash(git checkout:*)",
       "Bash(netstat -ano)",
-      "Bash(findstr :8080)"
+      "Bash(findstr :8080)",
+      "Bash(curl:*)",
+      "Bash(npm run:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }
