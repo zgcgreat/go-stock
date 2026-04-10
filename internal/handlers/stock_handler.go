@@ -130,10 +130,13 @@ func GetStockKLine(c *gin.Context) {
 	api := data.NewEastMoneyKLineApi(config)
 	kLines := api.GetKLineDataBefore(stockCode, kLineType, adjustFlag, days, "")
 
+	// Web端返回格式与桌面端保持一致：直接返回数组
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
-		"data":    kLines,
+		"data": gin.H{
+			"kline": kLines,
+		},
 	})
 }
 
