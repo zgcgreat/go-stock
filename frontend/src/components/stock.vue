@@ -405,6 +405,7 @@ onBeforeMount(() => {
       SaveAIResponseResult(data.code, data.name, data.airesult, data.chatId, data.question, data.aiConfigId)
       message.info("AI分析完成！")
       message.destroyAll()
+      data.loading = false
     } else {
       if (msg.chatId) {
         data.chatId = msg.chatId
@@ -415,10 +416,14 @@ onBeforeMount(() => {
       if (msg.content) {
         data.airesult = data.airesult + msg.content
       }
+      if (msg.reasoning_content) {
+        data.airesult = data.airesult + msg.reasoning_content
+      }
       if (msg.extraContent) {
         data.airesult = data.airesult + msg.extraContent
       }
-
+      data.loading= true
+      scrollToAiResultBottom()
     }
   })
 
@@ -2066,6 +2071,20 @@ async function copyToClipboard() {
   } catch (err) {
     message.error('复制失败: ' + err);
   }
+}
+
+function scrollToAiResultBottom() {
+  nextTick(() => {
+    const previewEl = mdPreviewRef.value?.$el || mdEditorRef.value?.$el
+    if (previewEl) {
+      const scrollContainer = previewEl.querySelector('.md-editor-preview-wrapper') || 
+                               previewEl.querySelector('.md-editor-preview') ||
+                               previewEl
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  })
 }
 
 function saveAsMarkdown() {

@@ -95,6 +95,15 @@
                       </div>
                       <div class="msg-bubble">
                         <div class="msg-content">
+                          <div v-if="group.assistantMsg.reasoning" class="msg-reasoning-wrapper">
+                            <div class="msg-reasoning-header" @click="toggleReasoning(group.assistantIndex)">
+                              <NIcon :component="reasoningExpandedMap[group.assistantIndex] ? ChevronDownOutline : ChevronForwardOutline" size="14" />
+                              <span class="msg-reasoning-title">💭 思考过程</span>
+                            </div>
+                            <div v-show="reasoningExpandedMap[group.assistantIndex]" class="msg-reasoning-content">
+                              {{ group.assistantMsg.reasoning }}
+                            </div>
+                          </div>
                           <MdPreview
                             :theme="theme"
                             :style="{ textAlign: 'left' }"
@@ -343,6 +352,7 @@ const vipLoaded = ref(false)
 const vipLoading = ref(false)
 const isAborted = ref(false)
 const expandedGroups = ref(new Set())
+const reasoningExpandedMap = ref({})
 
 const hasBackgroundTask = computed(() => isStreamLoad.value && sentFromFloating.value && !panelVisible.value)
 const AGENT_EVENT = 'agent-message'
@@ -401,6 +411,13 @@ function ensureLatestGroupExpanded() {
     const newSet = new Set(expandedGroups.value)
     newSet.add(lastIndex)
     expandedGroups.value = newSet
+  }
+}
+
+function toggleReasoning(index) {
+  reasoningExpandedMap.value = {
+    ...reasoningExpandedMap.value,
+    [index]: !reasoningExpandedMap.value[index]
   }
 }
 
@@ -551,7 +568,8 @@ async function loadHistory() {
         role: m.role ?? '',
         content: m.content ?? '',
         time: m.time ?? '',
-        modelName: m.modelName ?? ''
+        modelName: m.modelName ?? '',
+        reasoning: m.reasoning ?? ''
       }))
       nextTick(() => {
         initDefaultExpanded()
@@ -567,7 +585,8 @@ function saveHistory() {
     role: m.role,
     content: m.content,
     time: m.time ?? '',
-    modelName: m.modelName ?? ''
+    modelName: m.modelName ?? '',
+    reasoning: m.reasoning ?? ''
   }))
   SaveAiAssistantSession(sessionId.value, list).catch(() => {})
 }
@@ -583,7 +602,8 @@ function openPanel() {
         role: 'assistant',
         content: '我是 go-stock AI Agent 助手，可以帮您分析股票、查询市场数据、获取研究报告等。请问有什么可以帮您的？',
         time: new Date().toLocaleString(),
-        modelName: ''
+        modelName: '',
+        reasoning: ''
       }
     ]
   }
@@ -660,7 +680,8 @@ function sendMessage() {
     role: 'user',
     content: text,
     time: new Date().toLocaleString(),
-    modelName: ''
+    modelName: '',
+    reasoning: ''
   })
   const configId = aiConfigId.value ?? aiConfigOptions.value[0]?.value ?? 0
   const modelName = modelLabelForConfig(configId)
@@ -668,7 +689,8 @@ function sendMessage() {
     role: 'assistant',
     content: '',
     time: new Date().toLocaleString(),
-    modelName
+    modelName,
+    reasoning: ''
   })
   inputValue.value = ''
   isStreamLoad.value = true
@@ -714,8 +736,9 @@ function onAgentMessage(msg) {
   }
 
   const last = messages.value[messages.value.length - 1]
-  if (last && last.role === 'assistant' && msg?.content) {
-    last.content = (last.content || '') + msg.content
+  if (last && last.role === 'assistant') {
+    if (msg?.reasoning_content) last.reasoning = (last.reasoning || '') + msg.reasoning_content
+    if (msg?.content) last.content = (last.content || '') + msg.content
     nextTick(scrollToBottom)
   }
 }
@@ -1043,6 +1066,52 @@ onBeforeUnmount(() => {
   width: 100%;
   min-width: 0;
   flex: 1;
+}
+.msg-reasoning-wrapper {
+  margin-bottom: 12px;
+  border: 1px solid var(--n-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--n-color-hover);
+}
+.msg-reasoning-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  border-bottom: 1px solid var(--n-border-color);
+  transition: background 0.2s;
+}
+.msg-reasoning-header:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+}
+.msg-reasoning-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--n-text-color-2);
+}
+.msg-reasoning-content {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  white-space: pre-wrap;
+  padding: 12px;
+  line-height: 1.6;
+  max-height: 300px;
+  overflow-y: auto;
+  text-align: left;
+}
+.msg-reasoning {
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  white-space: pre-wrap;
+  background: var(--n-color-hover);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--n-primary-color);
 }
 .msg-bubble-actions {
   display: flex;

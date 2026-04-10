@@ -23,10 +23,52 @@ const paginationReactive = reactive({
   itemCount: 0,
   keyword: "",
   range: null,
+  startTime: null,
+  endTime: null,
+  minVolume: null,
+  minAmount: null,
+  minChangeRate: null,
+  maxChangeRate: null,
+  industry: "",
+  concept: "",
   prefix({ itemCount }) {
     return `${itemCount} 条记录`
   }
 })
+
+const volumeOptions = [
+  { label: '不限', value: null },
+  { label: '>100手', value: 10000 },
+  { label: '>200手', value: 20000 },
+  { label: '>500手', value: 50000 },
+  { label: '>1000手', value: 100000 },
+  { label: '>2000手', value: 200000 },
+  { label: '>5000手', value: 500000 },
+  { label: '>10000手', value: 1000000 },
+  { label: '>20000手', value: 2000000 },
+  { label: '>50000手', value: 5000000 },
+]
+
+const amountOptions = [
+  { label: '不限', value: null },
+  { label: '>100万', value: 1000000 },
+  { label: '>500万', value: 5000000 },
+  { label: '>1000万', value: 10000000 },
+  { label: '>2000万', value: 20000000 },
+  { label: '>5000万', value: 50000000 },
+  { label: '>1亿', value: 100000000 },
+  { label: '>2亿', value: 200000000 },
+  { label: '>5亿', value: 500000000 },
+]
+
+const changeRateOptions = [
+  { label: '不限', value: null },
+  { label: '>3%', value: 3 },
+  { label: '>5%', value: 5 },
+  { label: '>7%', value: 7 },
+  { label: '>9%', value: 9 },
+  { label: '>涨停', value: 9.9 },
+]
 
 const bullishTypes = [
   {label: '火箭发射', value: '8201'},
@@ -158,6 +200,28 @@ const columnsRef = ref([
       return '-'
     }
   },
+  {
+    title: '行业',
+    key: 'industry',
+    width: 100,
+    ellipsis: {
+      tooltip: true
+    },
+    render(row) {
+      return row.industry || row.Industry || '-'
+    }
+  },
+  {
+    title: '概念',
+    key: 'concept',
+    width: 150,
+    ellipsis: {
+      tooltip: true
+    },
+    render(row) {
+      return row.concept || row.Concept || '-'
+    }
+  },
 ])
 
 function formatVolume(vol) {
@@ -258,6 +322,30 @@ async function fetchHistoryData() {
       query.startDate = formatDate(paginationReactive.range[0])
       query.endDate = formatDate(paginationReactive.range[1])
     }
+    if (paginationReactive.startTime) {
+      query.startTime = formatTime(paginationReactive.startTime)
+    }
+    if (paginationReactive.endTime) {
+      query.endTime = formatTime(paginationReactive.endTime)
+    }
+    if (paginationReactive.minVolume) {
+      query.minVolume = paginationReactive.minVolume
+    }
+    if (paginationReactive.minAmount) {
+      query.minAmount = paginationReactive.minAmount
+    }
+    if (paginationReactive.minChangeRate) {
+      query.minChangeRate = paginationReactive.minChangeRate
+    }
+    if (paginationReactive.maxChangeRate) {
+      query.maxChangeRate = paginationReactive.maxChangeRate
+    }
+    if (paginationReactive.industry.trim()) {
+      query.industry = paginationReactive.industry.trim()
+    }
+    if (paginationReactive.concept.trim()) {
+      query.concept = paginationReactive.concept.trim()
+    }
     if (paginationReactive.keyword.trim()) {
       const keyword = paginationReactive.keyword.trim()
       if (/^\d+$/.test(keyword)) {
@@ -289,6 +377,15 @@ function formatDate(dateValue) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function formatTime(timeValue) {
+  if (!timeValue) return ''
+  const date = new Date(timeValue)
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${hours}:${minutes}:${seconds}`
 }
 
 async function fetchData() {
@@ -492,12 +589,61 @@ onBeforeUnmount(() => {
             @keyup="handleSearchKeyup"
           />
           <n-date-picker v-model:value="paginationReactive.range" type="daterange" clearable />
+          <n-time-picker 
+            v-model:value="paginationReactive.startTime" 
+            placeholder="开始时间" 
+            clearable 
+            format="HH:mm:ss"
+            style="width: 120px"
+          />
+          <n-time-picker 
+            v-model:value="paginationReactive.endTime" 
+            placeholder="结束时间" 
+            clearable 
+            format="HH:mm:ss"
+            style="width: 120px"
+          />
           <n-button type="primary" @click="handleSearch" :loading="loadingRef">
             查询
           </n-button>
           <n-button @click="fetchAllCurrentData" :loading="loadingRef">
             获取今日全部数据
           </n-button>
+        </n-space>
+        <n-space v-if="viewMode === 'history'" align="center" style="margin-top: 8px">
+          <n-select
+            v-model:value="paginationReactive.minVolume"
+            :options="volumeOptions"
+            placeholder="成交量筛选"
+            style="width: 120px"
+            clearable
+          />
+          <n-select
+            v-model:value="paginationReactive.minAmount"
+            :options="amountOptions"
+            placeholder="金额筛选"
+            style="width: 120px"
+            clearable
+          />
+          <n-select
+            v-model:value="paginationReactive.minChangeRate"
+            :options="changeRateOptions"
+            placeholder="涨跌幅筛选"
+            style="width: 120px"
+            clearable
+          />
+          <n-input 
+            v-model:value="paginationReactive.industry" 
+            placeholder="行业关键词" 
+            clearable 
+            style="width: 120px"
+          />
+          <n-input 
+            v-model:value="paginationReactive.concept" 
+            placeholder="概念关键词" 
+            clearable 
+            style="width: 120px"
+          />
         </n-space>
         
         <n-space align="center" style="margin-top: 8px">
@@ -549,7 +695,7 @@ onBeforeUnmount(() => {
         :pagination="viewMode === 'history' ? paginationReactive : false"
         :bordered="false"
         :max-height="500"
-        :scroll-x="1000"
+        :scroll-x="1300"
         striped
         size="small"
         @update:page="handlePageChange"

@@ -1,6 +1,6 @@
 ﻿<script setup>
 import * as echarts from "echarts";
-import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref} from 'vue'
+import {computed, h, nextTick, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref} from 'vue'
 import {
   GetAIResponseResult,
   GetConfig,
@@ -78,6 +78,7 @@ const sort = ref("0")
 const nowTab = ref("市场快讯")
 const indexInterval = ref(null)
 const indexIndustryRank = ref(null)
+const mdPreviewRef = ref(null)
 const stockCode= ref('')
 const enableTools= ref(true)
 const thinkingMode = ref(false)
@@ -284,7 +285,7 @@ EventsOn("summaryStockNews", async (msg) => {
     await SaveAIResponseResult("市场资讯", "市场资讯", aiSummary.value, chatId.value, question.value,aiConfigId.value)
     message.info("AI分析完成！")
     message.destroyAll()
-
+    loading.value = false
   } else {
     if (msg.chatId) {
       chatId.value = msg.chatId
@@ -295,6 +296,9 @@ EventsOn("summaryStockNews", async (msg) => {
     if (msg.content) {
       aiSummary.value = aiSummary.value + msg.content
     }
+    if (msg.reasoning_content) {
+      aiSummary.value = aiSummary.value + msg.reasoning_content
+    }
     if (msg.extraContent) {
       aiSummary.value = aiSummary.value + msg.extraContent
     }
@@ -304,8 +308,24 @@ EventsOn("summaryStockNews", async (msg) => {
     if (msg.time) {
       aiSummaryTime.value = msg.time
     }
+    loading.value = true
+    scrollToAiResultBottom()
   }
 })
+
+function scrollToAiResultBottom() {
+  nextTick(() => {
+    const previewEl = mdPreviewRef.value?.$el
+    if (previewEl) {
+      const scrollContainer = previewEl.querySelector('.md-editor-preview-wrapper') || 
+                               previewEl.querySelector('.md-editor-preview') ||
+                               previewEl
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+  })
+}
 
 async function copyToClipboard() {
   try {
@@ -720,7 +740,7 @@ function ReFlesh(source) {
   <n-modal transform-origin="center" v-model:show="summaryModal" preset="card" style="width: 800px;"
            :title="'AI市场资讯总结'">
     <n-spin size="small" :show="loading">
-      <MdPreview style="height: 440px;text-align: left" :modelValue="aiSummary" :theme="theme"/>
+      <MdPreview ref="mdPreviewRef" style="height: 440px;text-align: left" :modelValue="aiSummary" :theme="theme"/>
     </n-spin>
     <template #footer>
       <n-flex justify="space-between" ref="tipsRef">
