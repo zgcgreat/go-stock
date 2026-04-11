@@ -672,6 +672,64 @@ func GetHotStrategy(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// FetchAndSaveMarketStatistic 获取并保存市场统计数据
+func FetchAndSaveMarketStatistic(c *gin.Context) {
+	err := data.NewMarketStatisticApi().FetchAndSave()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    -1,
+			"message": "获取市场统计数据失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "获取成功",
+	})
+}
+
+// GetTodayMarketStatistic 获取今日市场统计数据
+func GetTodayMarketStatistic(c *gin.Context) {
+	stats := data.NewMarketStatisticApi().GetTodayData()
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    stats,
+	})
+}
+
+// GetRecentDaysMarketStatistic 获取最近N天市场统计数据
+func GetRecentDaysMarketStatistic(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
+	if days <= 0 {
+		days = 7
+	}
+	stats := data.NewMarketStatisticApi().GetRecentDaysData(days)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    stats,
+	})
+}
+
+// GetMarketStatisticByDate 按日期获取市场统计数据
+func GetMarketStatisticByDate(c *gin.Context) {
+	date := c.Query("date")
+	if date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    -1,
+			"message": "日期参数不能为空",
+		})
+		return
+	}
+	stats := data.NewMarketStatisticApi().GetByDate(date)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    stats,
+	})
+}
+
 // IndicatorSearchStock 指标选股（从东方财富接口）
 func IndicatorSearchStock(c *gin.Context) {
 	keyword := c.Query("keyword")

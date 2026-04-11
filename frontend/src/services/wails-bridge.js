@@ -1044,6 +1044,35 @@ export function FetchAiModels(arg1, arg2) {
     .catch(() => []);
 }
 
+export function FetchAndSaveMarketStatistic() {
+  if (isWailsMode()) return window.go.main.App.FetchAndSaveMarketStatistic();
+  return apiService.client.post('/market/statistic/fetch', {}, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '获取成功')
+    .catch(err => err.message || '获取失败');
+}
+
+export function GetTodayMarketStatistic() {
+  if (isWailsMode()) return window.go.main.App.GetTodayMarketStatistic();
+  return apiService.client.get('/market/statistic/today', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function GetRecentDaysMarketStatistic(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetRecentDaysMarketStatistic(arg1);
+  const days = arg1 || 7;
+  return apiService.client.get('/market/statistic/recent', { params: { days }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function GetMarketStatisticByDate(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetMarketStatisticByDate(arg1);
+  return apiService.client.get('/market/statistic/by-date', { params: { date: arg1 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
 export function FollowFund(arg1) {
   if (isWailsMode()) return window.go.main.App.FollowFund(arg1);
   return apiService.client.post('/funds/follow', { code: arg1 }, { headers: getAuthHeaders() })

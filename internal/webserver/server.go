@@ -200,6 +200,12 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/ai/models", handlers.FetchAiModels)
 			protected.GET("/trades/check-frequent", handlers.CheckFrequentTrading)
 
+			// 市场统计
+			protected.POST("/market/statistic/fetch", handlers.FetchAndSaveMarketStatistic)
+			protected.GET("/market/statistic/today", handlers.GetTodayMarketStatistic)
+			protected.GET("/market/statistic/recent", handlers.GetRecentDaysMarketStatistic)
+			protected.GET("/market/statistic/by-date", handlers.GetMarketStatisticByDate)
+
 			// 异动监控
 			protected.GET("/stock-changes", handlers.GetStockChanges)
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
@@ -302,6 +308,7 @@ func MigrateAllTables() {
 		&models.CronTask{},
 		&models.VersionInfo{},
 		&models.StockChangeHistory{},
+		&models.MarketStatistic{},
 		&handlers.UserSetting{},
 		&models.User{},
 	)

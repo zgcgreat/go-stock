@@ -31,6 +31,7 @@ declare module 'vue' {
     Login: typeof import('./src/components/Login.vue')['default']
     LongTigerRankList: typeof import('./src/components/LongTigerRankList.vue')['default']
     Market: typeof import('./src/components/market.vue')['default']
+    MarketStatistic: typeof import('./src/components/MarketStatistic.vue')['default']
     MoneyTrend: typeof import('./src/components/moneyTrend.vue')['default']
     NewsList: typeof import('./src/components/newsList.vue')['default']
     PromptTemplateList: typeof import('./src/components/promptTemplateList.vue')['default']

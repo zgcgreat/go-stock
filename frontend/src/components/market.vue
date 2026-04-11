@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import * as echarts from "echarts";
 import {computed, h, nextTick, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref} from 'vue'
 import {
@@ -37,6 +37,7 @@ import InvestCalendarTimeLine from "./InvestCalendarTimeLine.vue";
 import ClsCalendarTimeLine from "./ClsCalendarTimeLine.vue";
 import SelectStock from "./SelectStock.vue";
 import Stockhotmap from "./stockhotmap.vue";
+import MarketStatistic from "./MarketStatistic.vue";
 
 const route = useRoute()
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
@@ -84,6 +85,7 @@ const enableTools= ref(true)
 const thinkingMode = ref(false)
 const treemapRef = ref(null);
 let treemapchart =null;
+const marketStatisticRef = ref(null);
 
 // 将指数数据中的字符串数值转为数字类型
 function normalizeIndexData(items) {
@@ -276,6 +278,12 @@ function getAiSummary() {
 function updateTab(name) {
   summaryBTN.value = (name === "市场快讯");
   nowTab.value = name
+  
+  // 当切换到市场统计tab时，刷新数据
+  if (name === "市场统计" && marketStatisticRef.value) {
+    console.log('[market] 切换到市场统计tab，刷新数据')
+    marketStatisticRef.value.refresh()
+  }
 }
 
 EventsOn("summaryStockNews", async (msg) => {
@@ -731,6 +739,9 @@ function ReFlesh(source) {
       </n-tab-pane>
       <n-tab-pane name="指标选股" tab="指标选股">
         <select-stock />
+      </n-tab-pane>
+      <n-tab-pane name="市场统计" tab="市场统计">
+        <MarketStatistic ref="marketStatisticRef" :dark-theme="darkTheme" :chart-height="350" />
       </n-tab-pane>
       <n-tab-pane name="名站优选" tab="名站优选">
         <Stockhotmap />
