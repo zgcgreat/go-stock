@@ -375,6 +375,9 @@ func (receiver StockDataApi) GetStockCodeRealTimeData(StockCodes ...string) (*[]
 				logger.SugaredLogger.Error(err.Error())
 				continue
 			}
+			if stockData == nil {
+				continue
+			}
 			stockInfos = append(stockInfos, *stockData)
 			go func() {
 				var count int64

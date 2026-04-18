@@ -83,6 +83,34 @@ func (a *App) ClsCalendar() []any {
 	return data.NewMarketNewsApi().ClsCalendar()
 }
 
+func (a *App) GetUplimitHot(date string, limit int) map[string]any {
+	return data.NewMarketNewsApi().GetUplimitHot(date, limit)
+}
+
+func (a *App) IsTradingTime() bool {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	return isTradingTime(time.Now().In(loc))
+}
+
+func (a *App) GetLatestTradingDay() string {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	now := time.Now().In(loc)
+	if isTradingDay(now) {
+		hour, minute, _ := now.Clock()
+		if hour < 15 || (hour == 15 && minute == 0) {
+			return now.AddDate(0, 0, -1).Format("2006-01-02")
+		}
+		return now.Format("2006-01-02")
+	}
+	for i := 1; i <= 7; i++ {
+		d := now.AddDate(0, 0, -i)
+		if isTradingDay(d) {
+			return d.Format("2006-01-02")
+		}
+	}
+	return now.Format("2006-01-02")
+}
+
 func (a *App) SearchStock(words string) map[string]any {
 	return data.NewSearchStockApi(words).SearchStock(5000)
 }
@@ -94,7 +122,7 @@ func (a *App) GetAllStocks(page int, pageSize int, name string, technicalIndicat
 	return data.NewStockDataApi().GetAllStocks(page, pageSize, name, technicalIndicators)
 }
 
-func (a *App) ChatWithAgent(question string, aiConfigId int, sysPromptId *int, memoryMode bool, memoryCount int, thinkingMode bool) {
+func (a *App) ChatWithAgent(question string, aiConfigId int, sysPromptId *int, memoryMode bool, memoryCount int, thinkingMode bool, agentMode string) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.SugaredLogger.Errorf("ChatWithAgent panic: %v", r)
@@ -115,7 +143,7 @@ func (a *App) ChatWithAgent(question string, aiConfigId int, sysPromptId *int, m
 		a.agentMu.Unlock()
 	}()
 
-	ch := agent.NewStockAiAgentApi().ChatWithContext(ctx, question, aiConfigId, sysPromptId, memoryMode, memoryCount, thinkingMode)
+	ch := agent.NewStockAiAgentApi().ChatWithContext(ctx, question, aiConfigId, sysPromptId, memoryMode, memoryCount, thinkingMode, agentMode)
 	for msg := range ch {
 		runtime.EventsEmit(a.ctx, "agent-message", agentMessageToFrontendMap(msg))
 	}
@@ -228,6 +256,46 @@ func (a *App) DeleteStockChangeHistory(days int) string {
 		return "删除失败: " + err.Error()
 	}
 	return fmt.Sprintf("已删除 %d 天前的历史数据", days)
+}
+
+func (a *App) GetDailyChangeStats(days int) []data.DailyChangeStats {
+	result, err := data.NewStockChangeHistoryService().GetDailyChangeStats(days)
+	if err != nil {
+		return []data.DailyChangeStats{}
+	}
+	return result
+}
+
+func (a *App) GetChangeTypeDailyStats(days int) []data.ChangeTypeDailyStats {
+	result, err := data.NewStockChangeHistoryService().GetChangeTypeDailyStats(days)
+	if err != nil {
+		return []data.ChangeTypeDailyStats{}
+	}
+	return result
+}
+
+func (a *App) GetChangeRank(days int, topN int) *data.ChangeRankResult {
+	result, err := data.NewStockChangeHistoryService().GetChangeRank(days, topN)
+	if err != nil {
+		return &data.ChangeRankResult{}
+	}
+	return result
+}
+
+func (a *App) GetDailyDimensionStats(dimension string, name string, days int) []data.DailyDimensionStats {
+	result, err := data.NewStockChangeHistoryService().GetDailyDimensionStats(dimension, name, days)
+	if err != nil {
+		return []data.DailyDimensionStats{}
+	}
+	return result
+}
+
+func (a *App) GetTypeStatsByDate(date string) []data.TypeCountStats {
+	result, err := data.NewStockChangeHistoryService().GetTypeStatsByDate(date)
+	if err != nil {
+		return []data.TypeCountStats{}
+	}
+	return result
 }
 
 func (a *App) GetAiRecommendStocksList(query models.AiRecommendStocksQuery) *models.AiRecommendStocksPageData {

@@ -9,11 +9,12 @@ import {
   SendDingDingMessageByType,
   UpdateConfig,
   CheckSponsorCode,
-  FetchAiModels
-} from "../services/wails-bridge.js";
+  FetchAiModels,
+  FetchAiModelInfo
+} from "../../wailsjs/go/main/App";
 import {NTag, NTooltip, NIcon, useMessage} from "naive-ui";
-// Models imported from wailsjs/go/models - may need manual handling
-import {EventsEmit} from "../services/wails-bridge.js";
+import {data, models} from "../../wailsjs/go/models";
+import {EventsEmit} from "../../wailsjs/runtime";
 import {HelpCircleFilledIcon, HelpIcon} from "tdesign-icons-vue-next";
 
 const message = useMessage()
@@ -22,6 +23,8 @@ const formRef = ref(null)
 const formValue = ref({
   ID: 1,
   tushareToken: '',
+  iwencaiApiKey: '',
+  emApiKey: '',
   dingPush: {
     enable: false,
     dingRobot: ''
@@ -57,7 +60,7 @@ const formValue = ref({
 
 // 添加一个新的AI配置到列表
 function addAiConfig() {
-  formValue.value.openAI.aiConfigs.push({
+  formValue.value.openAI.aiConfigs.push(new data.AIConfig({
     name: '',
     baseUrl: 'https://api.deepseek.com',
     apiKey: '',
@@ -67,7 +70,7 @@ function addAiConfig() {
     timeOut: 6000,
     httpProxy:"",
     httpProxyEnabled:false,
-  });
+  }));
 }
 
 // 从列表中移除一个AI配置
@@ -93,6 +96,7 @@ async function fetchAiModels(aiConfig) {
     aiConfig._modelOptions = options
     if (!aiConfig.modelName && options.length > 0) {
       aiConfig.modelName = options[0].value
+      onModelNameChange(aiConfig, aiConfig.modelName)
     }
     if (!options.length) {
       message.warning('未从接口获取到可用模型，请检查地址和 apiKey')
@@ -164,12 +168,30 @@ function onModelNameChange(aiConfig, newModelName) {
       aiConfig.name = aiConfig.name + '-' + newModelName
     }
   }
+
+  fetchModelInfo(aiConfig, newModelName)
+}
+
+async function fetchModelInfo(aiConfig, modelName) {
+  if (!modelName || !aiConfig.baseUrl) return
+  try {
+    const info = await FetchAiModelInfo(aiConfig.baseUrl, aiConfig.apiKey || '', modelName)
+    if (info && info.maxTokens > 0) {
+      aiConfig.maxTokens = info.maxTokens
+      const sourceLabel = info.source === 'api' ? 'API' : '内置数据'
+      message.success(`已自动设置 ${modelName} 的 MaxTokens 为 ${info.maxTokens}（来源：${sourceLabel}）`)
+    }
+  } catch (e) {
+    console.error('FetchAiModelInfo error', e)
+  }
 }
 
 onMounted(() => {
   GetConfig().then(res => {
     formValue.value.ID = res.ID
     formValue.value.tushareToken = res.tushareToken
+    formValue.value.iwencaiApiKey = res.iwencaiApiKey || ''
+    formValue.value.emApiKey = res.emApiKey || ''
     formValue.value.dingPush = {
       enable: res.dingPushEnable,
       dingRobot: res.dingRobot
@@ -218,7 +240,7 @@ onBeforeUnmount(() => {
 function saveConfig() {
   console.log('开始保存设置', formValue.value);
   // 构建配置时，包含aiConfigs列表
-  let config = {
+  let config = new data.SettingConfig({
     ID: formValue.value.ID,
     dingPushEnable: formValue.value.dingPush.enable,
     dingRobot: formValue.value.dingPush.dingRobot,
@@ -229,6 +251,8 @@ function saveConfig() {
     aiConfigs: formValue.value.openAI.aiConfigs,
     // 序列化aiConfigs列表以传递给后端
     tushareToken: formValue.value.tushareToken,
+    iwencaiApiKey: formValue.value.iwencaiApiKey,
+    emApiKey: formValue.value.emApiKey,
     prompt: formValue.value.openAI.prompt,
     questionTemplate: formValue.value.openAI.questionTemplate,
     crawlTimeOut: formValue.value.openAI.crawlTimeOut,
@@ -245,7 +269,7 @@ function saveConfig() {
     httpProxyEnabled:formValue.value.httpProxyEnabled,
     enableAgent: formValue.value.enableAgent,
     qgqpBId: formValue.value.qgqpBId
-  }
+  })
 
   if (config.sponsorCode) {
     CheckSponsorCode(config.sponsorCode).then(res => {
@@ -306,6 +330,8 @@ function importConfig() {
       let config = JSON.parse(e.target.result);
       formValue.value.ID = config.ID
       formValue.value.tushareToken = config.tushareToken
+      formValue.value.iwencaiApiKey = config.iwencaiApiKey || ''
+      formValue.value.emApiKey = config.emApiKey || ''
       formValue.value.dingPush = {
         enable: config.dingPushEnable,
         dingRobot: config.dingRobot
@@ -444,6 +470,48 @@ function deletePrompt(ID) {
                     打开浏览器,访问东财网站，<br>
                     按F12打开开发人员工具-》网络面板，<br>
                     随便点开一个请求，复制请求cookie中qgqp_b_id对应的值。
+                  </div>
+                  </n-gradient-text>
+                </template>
+              </n-tooltip>
+            </n-form-item-gi>
+
+            <n-form-item-gi :span="11" label="问财API密钥：" path="iwencaiApiKey">
+              <n-input type="password" placeholder="同花顺问财开放平台API Key" v-model:value="formValue.iwencaiApiKey" clearable show-password-on="click"/>
+              <n-tooltip placement="top">
+                <template #trigger>
+                  <n-icon color="#0e7a0d" size="20">
+                    <HelpCircleFilledIcon />
+                  </n-icon>
+                </template>
+                <template #default>
+                  <n-gradient-text :type="'warning'">
+                  <div style="max-width: 400px;text-align: left">
+                    获取方法：<br>
+                    访问同花顺问财开放平台：<br>
+                    <a href="https://open.iwencai.com" target="_blank" style="color: #63e2b7">https://open.iwencai.com</a><br>
+                    注册并登录后，在控制台获取API Key。<br>
+                    配置后可使用问财智能选股、行情查询、研报搜索等功能。
+                  </div>
+                  </n-gradient-text>
+                </template>
+              </n-tooltip>
+            </n-form-item-gi>
+
+            <n-form-item-gi :span="11" label="东财AI密钥：" path="emApiKey">
+              <n-input type="password" placeholder="东方财富AI SaaS API Key" v-model:value="formValue.emApiKey" clearable show-password-on="click"/>
+              <n-tooltip placement="top">
+                <template #trigger>
+                  <n-icon color="#0e7a0d" size="20">
+                    <HelpCircleFilledIcon />
+                  </n-icon>
+                </template>
+                <template #default>
+                  <n-gradient-text :type="'warning'">
+                  <div style="max-width: 400px;text-align: left">
+                    获取方法：<br>
+                    访问东方财富妙想AI平台获取API Key。<br>
+                    配置后可使用个股业绩点评功能。
                   </div>
                   </n-gradient-text>
                 </template>

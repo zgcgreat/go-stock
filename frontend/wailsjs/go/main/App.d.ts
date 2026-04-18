@@ -3,6 +3,7 @@
 import {models} from '../models';
 import {data} from '../models';
 import {context} from '../models';
+import {main} from '../models';
 import {lo} from '../models';
 
 export function AbortChatWithAgent():Promise<void>;
@@ -35,7 +36,7 @@ export function CalculateNextRunTime(arg1:string):Promise<string>;
 
 export function CalculateNextRunTimes(arg1:string,arg2:number):Promise<Array<string>>;
 
-export function ChatWithAgent(arg1:string,arg2:number,arg3:any,arg4:boolean,arg5:number,arg6:boolean):Promise<void>;
+export function ChatWithAgent(arg1:string,arg2:number,arg3:any,arg4:boolean,arg5:number,arg6:boolean,arg7:string):Promise<void>;
 
 export function CheckFrequentTrading(arg1:string):Promise<Record<string, any>>;
 
@@ -49,6 +50,10 @@ export function ClsCalendar():Promise<Array<any>>;
 
 export function CreateCronTask(arg1:models.CronTask):Promise<string>;
 
+export function CreateMCPServer(arg1:models.MCPServer):Promise<string>;
+
+export function CreateSkill(arg1:models.Skill):Promise<string>;
+
 export function DelPrompt(arg1:number):Promise<string>;
 
 export function DeleteAIResponseResult(arg1:number):Promise<string>;
@@ -59,7 +64,11 @@ export function DeleteAllStockInfo(arg1:number):Promise<string>;
 
 export function DeleteCronTask(arg1:number):Promise<string>;
 
+export function DeleteMCPServer(arg1:number):Promise<string>;
+
 export function DeletePromptTemplate(arg1:number):Promise<string>;
+
+export function DeleteSkill(arg1:number):Promise<string>;
 
 export function DeleteStockChangeHistory(arg1:number):Promise<string>;
 
@@ -69,9 +78,15 @@ export function EMDictCode(arg1:string):Promise<Array<any>>;
 
 export function EnableCronTask(arg1:number,arg2:boolean):Promise<string>;
 
+export function EnableMCPServer(arg1:number,arg2:boolean):Promise<string>;
+
+export function EnableSkill(arg1:number,arg2:boolean):Promise<string>;
+
 export function ExecuteCronTaskNow(arg1:number):Promise<string>;
 
 export function ExportConfig():Promise<string>;
+
+export function FetchAiModelInfo(arg1:string,arg2:string,arg3:string):Promise<main.AiModelInfo>;
 
 export function FetchAiModels(arg1:string,arg2:string):Promise<Array<string>>;
 
@@ -95,7 +110,11 @@ export function GetAllConcepts():Promise<Array<string>>;
 
 export function GetAllIndustries():Promise<Array<string>>;
 
+export function GetAllMCPTools():Promise<Array<models.MCPServerTool>>;
+
 export function GetAllMarkets():Promise<Array<string>>;
+
+export function GetAllSkills():Promise<Array<models.Skill>>;
 
 export function GetAllStockChangesWithPaging(arg1:number):Promise<data.StockChangesResponse>;
 
@@ -105,6 +124,10 @@ export function GetAllStockInfoList(arg1:data.AllStockInfoQuery):Promise<data.Al
 
 export function GetAllStocks(arg1:number,arg2:number,arg3:string,arg4:models.TechnicalIndicators):Promise<models.AllStocksResp>;
 
+export function GetChangeRank(arg1:number,arg2:number):Promise<data.ChangeRankResult>;
+
+export function GetChangeTypeDailyStats(arg1:number):Promise<Array<data.ChangeTypeDailyStats>>;
+
 export function GetConfig():Promise<data.SettingConfig>;
 
 export function GetCronTaskByID(arg1:number):Promise<models.CronTask>;
@@ -112,6 +135,10 @@ export function GetCronTaskByID(arg1:number):Promise<models.CronTask>;
 export function GetCronTaskList(arg1:models.CronTaskQuery):Promise<models.CronTaskPageResp>;
 
 export function GetCronTaskTypes():Promise<Array<lo.Tuple2_string_string_>>;
+
+export function GetDailyChangeStats(arg1:number):Promise<Array<data.DailyChangeStats>>;
+
+export function GetDailyDimensionStats(arg1:string,arg2:string,arg3:number):Promise<Array<data.DailyDimensionStats>>;
 
 export function GetEffectiveSponsorVip():Promise<Record<string, any>>;
 
@@ -129,6 +156,14 @@ export function GetIndustryMoneyRankSina(arg1:string,arg2:string):Promise<Array<
 
 export function GetIndustryRank(arg1:string,arg2:number):Promise<Array<any>>;
 
+export function GetLatestTradingDay():Promise<string>;
+
+export function GetMCPServerByID(arg1:number):Promise<models.MCPServer>;
+
+export function GetMCPServerList(arg1:models.MCPServerQuery):Promise<models.MCPServerPageResp>;
+
+export function GetMCPToolsByServerID(arg1:number):Promise<Array<models.MCPServerTool>>;
+
 export function GetMarketStatisticByDate(arg1:string):Promise<Array<models.MarketStatistic>>;
 
 export function GetMoneyRankSina(arg1:string):Promise<Array<Record<string, any>>>;
@@ -138,6 +173,10 @@ export function GetPromptTemplateList(arg1:models.PromptTemplateQuery):Promise<m
 export function GetPromptTemplates(arg1:string,arg2:string):Promise<any>;
 
 export function GetRecentDaysMarketStatistic(arg1:number):Promise<Array<models.MarketStatistic>>;
+
+export function GetSkillByID(arg1:number):Promise<models.Skill>;
+
+export function GetSkillList(arg1:models.SkillQuery):Promise<models.SkillPageResp>;
 
 export function GetSponsorInfo():Promise<Record<string, any>>;
 
@@ -173,6 +212,10 @@ export function GetTradingRecordList(arg1:data.TradingRecordListQuery):Promise<d
 
 export function GetTradingRecordStatistics():Promise<data.TradingRecordStatistics>;
 
+export function GetTypeStatsByDate(arg1:string):Promise<Array<data.TypeCountStats>>;
+
+export function GetUplimitHot(arg1:string,arg2:number):Promise<Record<string, any>>;
+
 export function GetVersionInfo():Promise<models.VersionInfo>;
 
 export function GetfundList(arg1:string):Promise<Array<data.FundBasic>>;
@@ -196,6 +239,8 @@ export function InitCronTasks():Promise<void>;
 export function InitializeGroupSort():Promise<boolean>;
 
 export function InvestCalendarTimeLine(arg1:string):Promise<Array<any>>;
+
+export function IsTradingTime():Promise<boolean>;
 
 export function LongTigerRank(arg1:string):Promise<any>;
 
@@ -251,6 +296,8 @@ export function StockResearchReport(arg1:string):Promise<Array<any>>;
 
 export function SummaryStockNews(arg1:string,arg2:number,arg3:any,arg4:boolean,arg5:boolean,arg6:string,arg7:string):Promise<void>;
 
+export function TestMCPServer(arg1:number):Promise<string>;
+
 export function UnFollow(arg1:string):Promise<string>;
 
 export function UnFollowFund(arg1:string):Promise<string>;
@@ -263,7 +310,11 @@ export function UpdateCronTask(arg1:models.CronTask):Promise<string>;
 
 export function UpdateGroupSort(arg1:number,arg2:number):Promise<boolean>;
 
+export function UpdateMCPServer(arg1:models.MCPServer):Promise<string>;
+
 export function UpdatePromptTemplate(arg1:models.PromptTemplate):Promise<string>;
+
+export function UpdateSkill(arg1:models.Skill):Promise<string>;
 
 export function UpdateTradingRecord(arg1:data.TradingRecord):Promise<void>;
 

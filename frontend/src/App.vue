@@ -14,8 +14,8 @@ import {
   PeopleOutline,
   PowerOutline, Pulse,
   ReorderTwoOutline,
-  SettingsOutline, Skull, SkullOutline, SkullSharp,
-  SparklesOutline,
+  SettingsOutline, ServerOutline, Skull, SkullOutline, SkullSharp,
+  SparklesOutline, FlashOutline,
   StarOutline,
   Wallet, WarningOutline, TimeOutline,
   LogOutOutline
@@ -45,9 +45,729 @@ const containerRef = ref({})
 const realtimeProfit = ref(0)
 const telegraph = ref([])
 const groupList = ref([])
-const officialStatement = ref("")
 const config = ref({})
 const isWebMode = ref(true)
+const officialStatement = ref("")
+const menuOptions = ref([
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'stock',
+                query: {
+                  groupName: '全部',
+                  groupId: 0,
+                },
+                params: {},
+              },
+              onClick: () => {
+                activeKey.value = 'stock'
+              },
+            },
+            {default: () => '股票自选',}
+        ),
+    key: 'stock',
+    icon: renderIcon(StarOutline),
+    children: [
+      {
+        label: () =>
+            h(
+                'a',
+                {
+                  href: '#',
+                  type: 'info',
+                  onClick: () => {
+                    activeKey.value = 'stock'
+                    //console.log("push",item)
+                    router.push({
+                      name: 'stock',
+                      query: {
+                        groupName: '全部',
+                        groupId: 0,
+                      },
+                    })
+                    EventsEmit("changeTab", {ID: 0, name: '全部'})
+                  },
+                  to: {
+                    name: 'stock',
+                    query: {
+                      groupName: '全部',
+                      groupId: 0,
+                    },
+                  }
+                },
+                {default: () => '全部',}
+            ),
+        key: 0,
+      }
+    ],
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              href: '#',
+              to: {
+                name: 'market',
+                params: {}
+              },
+              onClick: () => {
+                activeKey.value = 'market'
+                EventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
+              },
+            },
+            {default: () => '市场行情'}
+        ),
+    key: 'market',
+    icon: renderIcon(NewspaperOutline),
+    children: [
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "市场快讯",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
+                  },
+                },
+                {default: () => '市场快讯',}
+            ),
+        key: 'market1',
+        icon: renderIcon(NewspaperSharp),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "全球股指",
+                    },
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '全球股指'})
+                  },
+                },
+                {default: () => '全球股指',}
+            ),
+        key: 'market2',
+        icon: renderIcon(BarChartSharp),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "重大指数",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '重大指数'})
+                  },
+                },
+                {default: () => '重大指数',}
+            ),
+        key: 'market3',
+        icon: renderIcon(AnalyticsOutline),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "行业排名",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '行业排名'})
+                  },
+                },
+                {default: () => '行业排名',}
+            ),
+        key: 'market4',
+        icon: renderIcon(Flag),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "个股资金流向",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '个股资金流向'})
+                  },
+                },
+                {default: () => '个股资金流向',}
+            ),
+        key: 'market5',
+        icon: renderIcon(Pulse),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "龙虎榜",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '龙虎榜'})
+                  },
+                },
+                {default: () => '龙虎榜',}
+            ),
+        key: 'market6',
+        icon: renderIcon(Dragon),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "个股研报",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '个股研报'})
+                  },
+                },
+                {default: () => '个股研报',}
+            ),
+        key: 'market7',
+        icon: renderIcon(StockOutlined),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "公司公告",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '公司公告'})
+                  },
+                },
+                {default: () => '公司公告',}
+            ),
+        key: 'market8',
+        icon: renderIcon(NotificationFilled),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "行业研究",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '行业研究'})
+                  },
+                },
+                {default: () => '行业研究',}
+            ),
+        key: 'market9',
+        icon: renderIcon(ReportSearch),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "当前热门",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '当前热门'})
+                  },
+                },
+                {default: () => '当前热门',}
+            ),
+        key: 'market10',
+        icon: renderIcon(Gripfire),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "指标选股",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '指标选股'})
+                  },
+                },
+                {default: () => '指标选股',}
+            ),
+        key: 'market11',
+        icon: renderIcon(BoxSearch20Regular),
+      },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "名站优选",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '名站优选'})
+                  },
+                },
+                {default: () => '名站优选',}
+            ),
+        key: 'market12',
+        icon: renderIcon(FirefoxBrowser),
+      },
+    ]
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'fund',
+                query: {
+                  name: '基金自选',
+                },
+              },
+              onClick: () => {
+                activeKey.value = 'fund'
+              },
+            },
+            {default: () => '基金自选',}
+        ),
+    show: enableFund.value,
+    key: 'fund',
+    icon: renderIcon(SparklesOutline),
+    children: [
+      {
+        label: () => h(NText, {type: realtimeProfit.value > 0 ? 'error' : 'success'}, {default: () => '功能完善中！'}),
+        key: 'realtimeProfit',
+        show: realtimeProfit.value,
+        icon: renderIcon(AlarmOutline),
+      },
+    ]
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'agent',
+                query: {
+                  name:"Ai智能体",
+                },
+                onClick: () => {
+                  activeKey.value = 'agent'
+                },
+              }
+            },
+            {default: () => 'Ai智能体'}
+        ),
+    key: 'agent',
+    show:enableAgent.value,
+    icon: renderIcon(Robot),
+  },
+    {
+      label: () =>
+          h(
+              RouterLink,
+              {
+                to: {
+                  name: 'research',
+                  query: {
+                    name:"研究中心",
+                  },
+                },
+                onClick: () => {
+                  activeKey.value = 'research'
+                  setTimeout(() => {
+                    EventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
+                  }, 100)
+                },
+              },
+              {default: () => '研究中心'}
+          ),
+      key: 'research',
+      icon: renderIcon(FlaskOutline),
+      children:[
+          {
+            label: () =>
+                h(
+                    RouterLink,
+                    {
+                      to: {
+                        name: 'research',
+                        query: {
+                          name:"AI分析报告",
+                        },
+                      },
+                      onClick: () => {
+                        activeKey.value = 'research'
+                        setTimeout(() => {
+                          EventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
+                        }, 100)
+                      },
+                    },
+                    {default: () => 'AI分析报告'}
+                ),
+            key: 'research1',
+            icon: renderIcon(ReportAnalytics),
+          },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"股票推荐记录",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 1, name: '股票推荐记录'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '股票推荐记录'}
+              ),
+          key: 'research2',
+          icon: renderIcon(DiamondOutline),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"异动监控",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 2, name: '异动监控'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '异动监控'}
+              ),
+          key: 'stockChanges',
+          icon: renderIcon(TrendingUp),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"涨停梯队",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 9, name: '涨停梯队'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '涨停梯队'}
+              ),
+          key: 'uplimitLadder',
+          icon: renderIcon(LocalFireDepartmentRound),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"提示词模板",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 3, name: '提示词模板'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '提示词模板'}
+              ),
+          key: 'research3',
+          icon: renderIcon(Prompt),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"股票信息筛选",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 3, name: '股票信息筛选'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '股票信息筛选'}
+              ),
+          key: 'research4',
+          icon: renderIcon(AppsList20Regular),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"定时任务",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 5, name: '定时任务'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '定时任务'}
+              ),
+          key: 'research5',
+          icon: renderIcon(TimeOutline),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"交易日志",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 6, name: '交易日志'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '交易日志(beta)'}
+              ),
+          key: 'research6',
+          icon: renderIcon(MoneyCollectOutlined),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 7, name: 'MCP服务'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => 'MCP服务'}
+              ),
+          key: 'mcpServers',
+          icon: renderIcon(ServerOutline),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 8, name: '技能管理'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '技能管理'}
+              ),
+          key: 'skills',
+          icon: renderIcon(FlashOutline),
+          show: false,
+        },
+      ],
+    },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'settings',
+                query: {
+                  name:"设置",
+                },
+                onClick: () => {
+                  activeKey.value = 'settings'
+                },
+              }
+            },
+            {default: () => '设置'}
+        ),
+    key: 'settings',
+    icon: renderIcon(SettingsOutline),
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'about',
+                query: {
+                  name:"关于",
+                }
+              },
+              onClick: () => {
+                activeKey.value = 'about'
+              },
+            },
+            {default: () => '关于'}
+        ),
+    key: 'about',
+    icon: renderIcon(LogoGithub),
+  },
+  {
+    show:false,
+    label: () => h("a", {
+      href: '#',
+      onClick: toggleFullscreen,
+      title: '全屏 Ctrl+F 退出全屏 Esc',
+    }, {default: () => isFullscreen.value ? '取消全屏' : '全屏'}),
+    key: 'full',
+    icon: renderIcon(ExpandOutline),
+  },
+  {
+    label: () => h("a", {
+      href: '#',
+      onClick: WindowHide,
+      title: '隐藏到托盘区 Ctrl+Z',
+    }, {default: () => '隐藏到托盘区'}),
+    key: 'hide',
+    icon: renderIcon(ReorderTwoOutline),
+  },
+  // {
+  //   label: ()=> h("a", {
+  //     href: 'javascript:void(0)',
+  //     style: 'cursor: move;',
+  //     onClick: toggleStartMoveWindow,
+  //   }, { default: () => '移动' }),
+  //   key: 'move',
+  //   icon: renderIcon(MoveOutline),
+  // },
+  {
+    label: () => h("a", {
+      href: '#',
+      onClick: Quit,
+    }, {default: () => '退出程序'}),
+    key: 'exit',
+    icon: renderIcon(PowerOutline),
+  },
+])
+>>>>>>> origin/dev
 
 function renderIcon(icon) {
   return () => h(NIcon, null, {default: () => h(icon)})

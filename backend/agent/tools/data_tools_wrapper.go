@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2581,7 +2582,1765 @@ func GetAllDataTools() []tool.BaseTool {
 		},
 	))
 
+	tools = append(tools, NewDataToolWrapper(
+		"GetDailyChangeStats",
+		"获取近N日每日异动统计趋势，包括每天的上涨异动数、下跌异动数、封涨停数、封跌停数和总异动数。用于分析市场异动活跃度的变化趋势。",
+		map[string]*schema.ParameterInfo{
+			"days": {
+				Type:     "integer",
+				Desc:     "查询天数，如7表示近7日，30表示近30日，默认30",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			days := int(gjson.Get(args, "days").Int())
+			if days <= 0 {
+				days = 30
+			}
+			result, err := data.NewStockChangeHistoryService().GetDailyChangeStats(days)
+			if err != nil {
+				return "", err
+			}
+			if len(result) == 0 {
+				return "暂无异动统计数据", nil
+			}
+			type row struct {
+				ChangeDate string `md:"日期"`
+				TotalCount int64  `md:"总异动数"`
+				UpCount    int64  `md:"上涨异动"`
+				DownCount  int64  `md:"下跌异动"`
+				LimitUp    int64  `md:"封涨停"`
+				LimitDown  int64  `md:"封跌停"`
+			}
+			var rows []row
+			for _, d := range result {
+				rows = append(rows, row{
+					ChangeDate: d.ChangeDate,
+					TotalCount: d.TotalCount,
+					UpCount:    d.UpCount,
+					DownCount:  d.DownCount,
+					LimitUp:    d.LimitUp,
+					LimitDown:  d.LimitDown,
+				})
+			}
+			return util.MarkdownTableWithTitle(fmt.Sprintf("近%d日每日异动统计", days), rows), nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"GetChangeRank",
+		"获取异动次数排行榜，支持按股票、行业、概念三个维度排名，区分利好异动（封涨停板、火箭发射、快速反弹等）和利空异动（封跌停板、高台跳水、加速下跌等）。",
+		map[string]*schema.ParameterInfo{
+			"days": {
+				Type:     "integer",
+				Desc:     "查询天数，1=当日，3=近3日，5=近5日，10=近10日，默认1",
+				Required: false,
+			},
+			"topN": {
+				Type:     "integer",
+				Desc:     "返回排名前N个，默认20",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			days := int(gjson.Get(args, "days").Int())
+			if days <= 0 {
+				days = 1
+			}
+			topN := int(gjson.Get(args, "topN").Int())
+			if topN <= 0 {
+				topN = 20
+			}
+			result, err := data.NewStockChangeHistoryService().GetChangeRank(days, topN)
+			if err != nil {
+				return "", err
+			}
+			periodLabel := "当日"
+			if days > 1 {
+				periodLabel = fmt.Sprintf("近%d日", days)
+			}
+			var sb strings.Builder
+			if len(result.TopStocks) > 0 {
+				type row struct {
+					Rank      int    `md:"排名"`
+					StockName string `md:"股票名称"`
+					StockCode string `md:"股票代码"`
+					UpCount   int64  `md:"利好异动"`
+					DownCount int64  `md:"利空异动"`
+					Total     int64  `md:"合计"`
+				}
+				var rows []row
+				for i, d := range result.TopStocks {
+					rows = append(rows, row{Rank: i + 1, StockName: d.Name, StockCode: d.Code, UpCount: d.UpCount, DownCount: d.DownCount, Total: d.Count})
+				}
+				sb.WriteString(util.MarkdownTableWithTitle(periodLabel+"异动次数最多的股票", rows))
+				sb.WriteString("\n\n")
+			}
+			if len(result.TopIndustries) > 0 {
+				type row struct {
+					Rank      int    `md:"排名"`
+					Industry  string `md:"行业"`
+					UpCount   int64  `md:"利好异动"`
+					DownCount int64  `md:"利空异动"`
+					Total     int64  `md:"合计"`
+				}
+				var rows []row
+				for i, d := range result.TopIndustries {
+					rows = append(rows, row{Rank: i + 1, Industry: d.Name, UpCount: d.UpCount, DownCount: d.DownCount, Total: d.Count})
+				}
+				sb.WriteString(util.MarkdownTableWithTitle(periodLabel+"异动次数最多的行业", rows))
+				sb.WriteString("\n\n")
+			}
+			if len(result.TopConcepts) > 0 {
+				type row struct {
+					Rank      int    `md:"排名"`
+					Concept   string `md:"概念"`
+					UpCount   int64  `md:"利好异动"`
+					DownCount int64  `md:"利空异动"`
+					Total     int64  `md:"合计"`
+				}
+				var rows []row
+				for i, d := range result.TopConcepts {
+					rows = append(rows, row{Rank: i + 1, Concept: d.Name, UpCount: d.UpCount, DownCount: d.DownCount, Total: d.Count})
+				}
+				sb.WriteString(util.MarkdownTableWithTitle(periodLabel+"异动次数最多的概念", rows))
+			}
+			output := sb.String()
+			if output == "" {
+				return "暂无异动排行数据", nil
+			}
+			return output, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"GetDailyDimensionStats",
+		"按维度查询近N日每日异动趋势，支持按股票、行业、概念、异动类型四个维度查询，返回每天的利好异动数、利空异动数和总异动数。用于分析某个股票/行业/概念/异动类型在一段时间内的异动变化趋势。",
+		map[string]*schema.ParameterInfo{
+			"dimension": {
+				Type:     "string",
+				Desc:     "查询维度：stock=按股票，industry=按行业，concept=按概念，type=按异动类型",
+				Required: true,
+			},
+			"name": {
+				Type:     "string",
+				Desc:     "维度名称，如股票名称/代码、行业名称、概念名称、异动类型名称",
+				Required: true,
+			},
+			"days": {
+				Type:     "integer",
+				Desc:     "查询天数，默认30",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			dimension := gjson.Get(args, "dimension").String()
+			name := gjson.Get(args, "name").String()
+			days := int(gjson.Get(args, "days").Int())
+			if dimension == "" || name == "" {
+				return "请提供dimension和name参数", nil
+			}
+			if days <= 0 {
+				days = 30
+			}
+			result, err := data.NewStockChangeHistoryService().GetDailyDimensionStats(dimension, name, days)
+			if err != nil {
+				return "", err
+			}
+			if len(result) == 0 {
+				return fmt.Sprintf("未找到%s[%s]的异动趋势数据", dimension, name), nil
+			}
+			type row struct {
+				ChangeDate string `md:"日期"`
+				UpCount    int64  `md:"利好异动"`
+				DownCount  int64  `md:"利空异动"`
+				TotalCount int64  `md:"总异动数"`
+			}
+			var rows []row
+			for _, d := range result {
+				rows = append(rows, row{
+					ChangeDate: d.ChangeDate,
+					UpCount:    d.UpCount,
+					DownCount:  d.DownCount,
+					TotalCount: d.TotalCount,
+				})
+			}
+			dimLabels := map[string]string{"stock": "股票", "industry": "行业", "concept": "概念", "type": "异动类型"}
+			title := fmt.Sprintf("%s[%s]近%d日异动趋势", dimLabels[dimension], name, days)
+			return util.MarkdownTableWithTitle(title, rows), nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"GetTypeStatsByDate",
+		"查询某一天的异动类型分布统计，返回该天每种异动类型的利好/利空次数和总次数。用于分析某天的市场异动结构。",
+		map[string]*schema.ParameterInfo{
+			"date": {
+				Type:     "string",
+				Desc:     "查询日期，格式：YYYY-MM-DD，如2025-04-13",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			date := gjson.Get(args, "date").String()
+			if date == "" {
+				return "请提供date参数", nil
+			}
+			result, err := data.NewStockChangeHistoryService().GetTypeStatsByDate(date)
+			if err != nil {
+				return "", err
+			}
+			if len(result) == 0 {
+				return fmt.Sprintf("未找到%s的异动类型分布数据", date), nil
+			}
+			type row struct {
+				TypeName   string `md:"异动类型"`
+				UpCount    int64  `md:"利好异动"`
+				DownCount  int64  `md:"利空异动"`
+				TotalCount int64  `md:"总次数"`
+			}
+			var rows []row
+			for _, d := range result {
+				rows = append(rows, row{
+					TypeName:   d.TypeName,
+					UpCount:    d.UpCount,
+					DownCount:  d.DownCount,
+					TotalCount: d.TotalCount,
+				})
+			}
+			return util.MarkdownTableWithTitle(fmt.Sprintf("%s异动类型分布", date), rows), nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryIwencai",
+		"同花顺问财行情数据查询。支持自然语言查询股票、ETF、指数等实时价格、涨跌幅、成交量、主力资金流向、大小单、技术指标等行情数据。当用户询问股票价格、ETF行情、指数行情、涨跌幅、成交量、资金流向、技术指标等行情数据查询问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：同花顺最新价格、主力资金流向、上证指数行情、连续涨停的股票等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SearchReport",
+		"研报搜索。搜索主流投研机构发布的研究报告，获取专业分析逻辑、投资评级、目标价等重要投研决策信息。当用户询问研究报告、研报、投资评级、目标价、行业分析报告、公司深度分析等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "搜索关键词，如：人工智能行业研究报告、特斯拉投资评级、芯片行业深度分析等",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			if query == "" {
+				return "请输入搜索关键词", nil
+			}
+			result := data.NewIwencaiAPI().SearchReportToMarkdown(query)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryInsResearch",
+		"机构研究与评级查询。查询研报评级、业绩预测、ESG评级、信用评级、主体评级、基金评级、券商金股等机构观点数据。支持自然语言问句输入。当用户询问研报评级、业绩预测、ESG评级、信用评级、主体评级、基金评级、券商金股等机构研究数据时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：同花顺研报评级、业绩预测、券商金股、ESG评级等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryZhishu",
+		"指数数据查询。查询上证指数、沪深300、创业板指、恒生指数、纳斯达克指数等指数行情数据，支持涨跌幅、成交量、点位等指标查询。当用户询问指数数据、上证指数、沪深300、创业板指、恒生指数、纳斯达克指数、指数行情、指数涨跌幅、指数点位等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：上证指数涨跌幅、沪深300最新点位、创业板指成交量等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryEvent",
+		"事件数据查询。查询个股业绩预告、增发配股、股权质押、限售解禁、机构调研、监管函、股东大会等事件数据。当用户询问业绩预告、增发配股、股权质押、限售解禁、机构调研、监管函等事件数据时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：同花顺业绩预告、最近的增发配股、机构调研记录等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SearchNews",
+		"财经新闻搜索。搜索财经领域新闻资讯，覆盖官媒、主流财经媒体、垂直行业网站等，帮助了解最新财经事件、政策动态、行业革新、企业业务进展。当用户询问财经新闻、最新动态、政策变化、行业趋势等新闻资讯问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "搜索关键词，如：人工智能最新动态、央行货币政策、芯片行业新闻等",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			if query == "" {
+				return "请输入搜索关键词", nil
+			}
+			result := data.NewIwencaiAPI().SearchNewsToMarkdown(query)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SearchInvestor",
+		"投资者关系活动搜索。搜索上市公司投资者关系活动记录，包括业绩说明会、路演活动、投资者调研、分析师会议等投关活动信息，获取公司管理层对业务发展、战略规划、行业前景等关键问题的回应。当用户询问投资者关系活动、业绩说明会、路演、投资者调研、分析师会议、投关活动等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "搜索关键词，如：贵州茅台投资者关系活动、宁德时代业绩说明会、芯片行业投资者调研等",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			if query == "" {
+				return "请输入搜索关键词", nil
+			}
+			result := data.NewIwencaiAPI().SearchInvestorToMarkdown(query)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectAStock",
+		"A股智能选股。通过自然语言查询进行A股股票筛选，支持行情指标（股价、涨跌幅、成交量等）、技术形态（均线多头、突破新高、K线形态等）、财务指标（营收、利润、PE、PB等）、行业概念（科技、医药、消费等）等多条件组合筛选。当用户需要进行股票筛选、选股、条件选股时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言选股条件，如：今日涨跌幅超过5%的A股、均线多头的科技股、PE小于20且营收增长超过30%的股票等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入选股条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryMacro",
+		"宏观数据查询。查询GDP、CPI、PPI、利率、汇率、社融、M2、PMI、工业增加值、消费、投资、进出口等宏观经济指标数据。当用户询问宏观经济数据、GDP、CPI、PPI、利率、汇率、社融、M2、PMI等宏观经济指标时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：2024年中国GDP、最近一期CPI、LPR利率、M2增速等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectSector",
+		"板块智能筛选。通过自然语言查询筛选市场板块，支持行业估值（PE、PB、估值分位等）、资金流向（主力资金净流入、北向资金等）、涨跌幅、板块类型（行业板块、概念板块、地域板块等）、成交量等多条件组合筛选。当用户需要进行板块筛选、选板块、板块排行时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：今日涨幅最大的板块、主力资金净流入的板块、PE最低的行业板块等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryBasicInfo",
+		"基本资料查询。查询全品类标的（股票、指数、基金、期货、期权、转债、债券、理财、保险等）的基础信息、发行主体、机构资料、费率、上市地点、上市日期等静态信息。当用户询问股票基本信息、基金资料、期货合约信息、债券资料、费率信息、上市日期等基本资料时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：同花顺上市日期、基金费率、期货合约详情、可转债基本信息等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryFinance",
+		"财务数据查询。查询全市场个股营业收入、净利润、毛利率、净利率、ROE、ROA、负债率、现金流、市盈率、市净率、市销率等财务指标。当用户询问股票财务指标、营业收入、净利润、ROE、负债率、现金流、毛利率、净利率等财务数据时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：同花顺营业收入、ROE最高的股票、负债率最低的行业等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryIndustry",
+		"行业数据查询。查询行业估值、行业财务指标、行业盈利数据、行业行情数据、板块排名等行业维度数据，支持自然语言问句输入。当用户询问行业数据、行业估值、行业排名、行业财务、行业盈利、行业行情、板块排名等行业相关问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：A股行业估值排名、银行业盈利数据、新能源板块行情等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryFutures",
+		"期货期权数据查询。查询期货期权的行情数据（价格、涨跌幅、成交量等）、波动率数据（隐含波动率、历史波动率等）、产销数据（库存、产量、销量等）、会员持仓数据（持仓量、持仓变化等）、会员榜单数据（成交量排行、持仓量排行等）、行权数据（行权价、行权量等）。当用户询问期货行情、期权波动率、期货持仓、期货产销、会员持仓、行权等期货期权数据时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：沪铜期货最新行情、50ETF期权隐含波动率、螺纹钢期货会员持仓排名等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectETF",
+		"ETF智能筛选。通过自然语言查询筛选ETF，支持行情指标（价格、涨跌幅、成交量、换手率等）、跟踪指数（沪深300、中证500、上证50、创业板指等）、基本面（估值、费率、跟踪误差等）、规模（资产规模、份额变化等）、风格类型（成长、价值、平衡等）多条件组合筛选。当用户需要筛选ETF、选ETF、查询ETF时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：沪深300ETF有哪些、规模最大的ETF、创业板ETF等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryManagement",
+		"公司股东股本查询。查询股本结构（总股本、流通股本、限售股本等）、股权结构、股东户数、前十大股东/流通股东、主要持有人、实控人信息、股权质押情况、高管信息（董事会、监事会、高管团队等）。当用户询问股本结构、股东户数、前十大股东、实控人、股权质押、高管等股东股本数据时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：同花顺股本结构、前十大股东、实控人信息、股东户数变化等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryStockConnect",
+		"沪深港通资金流查询。查询北向资金（沪股通、深股通）和南向资金（港股通）的净流入流出、个股资金流向、板块资金配置、北向持股变动、AH溢价指数等沪深港通资金流数据。当用户询问北向资金、南向资金、沪深港通、沪股通、深股通、港股通、外资流入、AH溢价等资金流问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：今日北向资金净流入、沪深港通个股资金流向、北向持股变动、AH溢价指数等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SearchAnnouncement",
+		"公告搜索。搜索A股、港股、基金、ETF等金融标的公告，公告类型包括定期财务报告、分红派息、回购增持、资产重组等。当用户询问公司公告、分红公告、回购公告、重组公告、定期报告等公告信息时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "搜索关键词，如：贵州茅台分红公告、宁德时代回购公告、资产重组公告等",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			if query == "" {
+				return "请输入搜索关键词", nil
+			}
+			result := data.NewIwencaiAPI().SearchAnnouncementToMarkdown(query)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectFundManager",
+		"智能选基金经理。根据历史业绩、管理规模、投资风格、风险控制等维度筛选公募基金经理，返回符合条件的相关基金经理数据。当用户询问基金经理筛选、基金经理排名、基金经理业绩等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：管理规模最大的基金经理、近三年业绩最好的基金经理、投资风格偏价值的基金经理等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectConvertibleBond",
+		"智能选可转债。通过转股溢价率、正股表现、评级、剩余期限等多条件组合筛选可转债，返回符合条件的相关可转债数据。当用户询问可转债筛选、可转债溢价率、可转债评级等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：转股溢价率低于10%的可转债、AAA级可转债、剩余期限3年内的可转债等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectFundCompany",
+		"智能选基金公司。根据管理规模、旗下产品业绩、投研实力、风险评级等维度筛选公募基金公司，返回符合条件的相关基金公司数据。当用户询问基金公司筛选、基金公司排名、基金公司规模等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：规模最大的基金公司、业绩最好的基金公司、头部基金公司等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectFund",
+		"智能选基金。根据基金类型、业绩、基金经理、风险、持仓、资产配置等维度筛选公募基金，返回符合条件的相关基金数据。当用户询问基金筛选、选基金、基金排名等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：股票型基金有哪些、近一年收益率最高的基金、百亿规模基金等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectFuturesOption",
+		"智能选期货期权。通过行情、波动率、产销、会员持仓、会员榜单、行权等多条件组合筛选期货期权，返回符合条件的相关期货期权数据。当用户询问期货筛选、期权筛选、期货期权组合等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：原油期货有哪些、黄金期货行情、多头持仓的期货等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectHKStock",
+		"智能选港股。通过自然语言查询进行港股筛选，支持行情指标、财务指标、行业概念、陆港通等多条件组合筛选，返回符合条件的相关港股数据。当用户询问港股筛选、选港股、港股排行等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：港股科技股有哪些、港股银行股、北向资金增持的港股等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"SelectUSStock",
+		"智能选美股。通过自然语言查询进行美股筛选，支持行情指标、财务指标、行业概念、业绩预测、研报评级等多条件组合筛选，返回符合条件的相关美股数据。当用户询问美股筛选、选美股、美股排行等问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言筛选条件，如：美股科技股有哪些、评级买入的美股、美股市盈率低于20等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入筛选条件", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryFundFinance",
+		"基金理财查询。对基金做业绩、持仓、风险、评级、获奖、基金经理、基金公司综合分析，支持自然语言问句输入，返回相关基金理财数据结果。当用户询问基金查询、基金业绩、基金持仓、基金风险、基金评级、基金获奖、基金经理、基金公司分析等基金理财相关问题时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：业绩最好的基金有哪些、基金持仓明细、基金风险评级等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"QueryBusinessData",
+		"公司经营数据查询。查询主营业务构成、主要客户、供应商、参控股公司、股权投资、重大合同等经营相关数据，支持自然语言问句输入，返回相关经营数据结果。当用户询问主营业务构成、主要客户、供应商信息、参控股公司、股权投资、重大合同等经营数据时使用此工具。数据来源于同花顺问财。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询语句，如：同花顺主营业务构成、主要客户、供应商信息、参控股公司等",
+				Required: true,
+			},
+			"page": {
+				Type:     "integer",
+				Desc:     "分页页码，默认1",
+				Required: false,
+			},
+			"limit": {
+				Type:     "integer",
+				Desc:     "每页条数，默认10",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			page := int(gjson.Get(args, "page").Int())
+			limit := int(gjson.Get(args, "limit").Int())
+			if query == "" {
+				return "请输入查询语句", nil
+			}
+			if page <= 0 {
+				page = 1
+			}
+			if limit <= 0 {
+				limit = 10
+			}
+			result := data.NewIwencaiAPI().QueryToMarkdown(query, page, limit)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"StockEarningsReview",
+		"个股业绩点评。获取上市公司业绩点评报告，包含营收分析、利润分析、财务指标解读等深度内容。支持沪深京港美市场股票。当用户询问个股业绩点评、财报分析、业绩报告、营收利润分析等问题时使用此工具。数据来源于东方财富AI。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "股票名称或代码，如：贵州茅台、600519、宁德时代等",
+				Required: true,
+			},
+			"reportDate": {
+				Type:     "string",
+				Desc:     "报告期，格式YYYY-MM-DD，如：2024-12-31。不填则使用最新报告期",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			reportDate := gjson.Get(args, "reportDate").String()
+			if query == "" {
+				return "请输入股票名称或代码", nil
+			}
+			result := data.NewEmAPI().EarningsReviewToMarkdown(query, reportDate)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"FinancialQA",
+		"金融智能问答。基于东方财富权威金融数据库，覆盖数据查询、资讯搜索、宏观分析、选股选基、金融百科、市场分析、热点解读等全链条智能问答服务。支持标准模式和深度思考模式。当用户提出自然语言金融问题，如'帮我查一下'、'分析一下'、'选股'、'XX怎么样'、'XX是什么'、'最新政策'、'宏观数据'等问答类请求时使用此工具。数据来源于东方财富AI。",
+		map[string]*schema.ParameterInfo{
+			"question": {
+				Type:     "string",
+				Desc:     "用户自然语言问题，如：今天A股市场表现如何、贵州茅台最新估值、近三年ROE最高的消费股有哪些等",
+				Required: true,
+			},
+			"deepThink": {
+				Type:     "boolean",
+				Desc:     "是否开启深度思考模式，当用户明确要求深度分析、详细分析、仔细想想时设为true",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			question := gjson.Get(args, "question").String()
+			deepThink := gjson.Get(args, "deepThink").Bool()
+			if question == "" {
+				return "请输入您想问的问题", nil
+			}
+			result := data.NewEmAPI().FinancialQAToMarkdown(question, deepThink)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"IndustryResearch",
+		"行业研究报告生成。根据行业关键词生成深度行业研究报告，包含行业概况、市场规模、竞争格局、发展趋势、投资建议等内容。当用户要求生成行业研究报告、行业深度分析、产业分析、行业趋势分析等时使用此工具。数据来源于东方财富AI。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "行业关键词，如：半导体、新能源汽车、AI芯片、消费电子等",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			if query == "" {
+				return "请输入行业关键词", nil
+			}
+			result := data.NewEmAPI().IndustryResearchToMarkdown(query)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"TrackingReport",
+		"个股/行业跟踪报告。根据用户输入的股票或行业关键词，生成跟踪报告，包含最新动态、核心观点、关键指标变化、重要事件梳理等内容。支持A股、港股、美股及行业板块。当用户要求生成跟踪报告、最新动态跟踪、个股跟踪、行业跟踪等时使用此工具。数据来源于东方财富AI。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "股票名称/代码或行业关键词，如：贵州茅台、600519、半导体行业等",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			if query == "" {
+				return "请输入股票名称/代码或行业关键词", nil
+			}
+			result := data.NewEmAPI().TrackingReportToMarkdown(query)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"FinanceDataQuery",
+		"金融数据查询。基于东方财富数据库，支持自然语言查询金融结构化数据，覆盖A股、港股、美股、基金、债券等多种资产，包含实时行情、公司信息、估值指标、财务报表等。单次查询最多支持5个实体。当用户需要查询具体的金融数据、指标数值、财务数据、行情数据等结构化数据时使用此工具。数据来源于东方财富妙想。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言查询，如：贵州茅台最近一年的营业收入和净利润、沪深300当前点位和成交额、东方财富和拼多多最近一年的营收等",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			if query == "" {
+				return "请输入查询内容", nil
+			}
+			result := data.NewEmAPI().FinanceDataQueryToMarkdown(query)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"FinanceSearch",
+		"金融资讯搜索。基于东方财富数据库，支持自然语言搜索全网最新公告、研报、财经新闻、交易所动态及官方政策等，覆盖全球市场标的。适用于热点捕捉、舆情监控、研报速览、公告精读及投资决策等场景。当用户需要搜索最新金融资讯、新闻、公告、研报等文本类信息时使用此工具。数据来源于东方财富妙想。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     "string",
+				Desc:     "自然语言搜索查询，如：格力电器最新研报与公告、商业航天板块近期新闻、美联储加息对A股影响等",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			query := gjson.Get(args, "query").String()
+			if query == "" {
+				return "请输入搜索内容", nil
+			}
+			result := data.NewEmAPI().FinanceSearchToMarkdown(query)
+			return result, nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"GetUplimitLadder",
+		"获取连板梯队数据，包括连板统计（各层级数量）和连板梯队详情（最高连板到首板各层级的股票列表，含代码、名称、封单比、成交额、市值、概念板块等）。适用于分析连板高度、市场情绪、龙头股识别等场景。当用户提到连板、梯队、连板高度、最高板等关键词时使用此工具。",
+		map[string]*schema.ParameterInfo{
+			"date": {
+				Type:     "string",
+				Desc:     "查询日期，格式：2026-04-17，默认今天",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			date := gjson.Get(args, "date").String()
+			dataMap, err := fetchUplimitData(date)
+			if err != nil {
+				return err.Error(), nil
+			}
+			loc, _ := time.LoadLocation("Asia/Shanghai")
+			if date == "" {
+				date = time.Now().In(loc).Format("2006-01-02")
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("# %s 连板梯队\n\n", date))
+			if today, _ := dataMap["today"].(bool); today {
+				sb.WriteString("> 数据为实时数据\n\n")
+			}
+			stocksStr, _ := dataMap["stocks"].(string)
+			stockList := strings.Split(stocksStr, ",")
+			ztCount := 0
+			for _, s := range stockList {
+				if strings.TrimSpace(s) != "" {
+					ztCount++
+				}
+			}
+			maxCount, _ := dataMap["max_count"].(float64)
+			sb.WriteString(fmt.Sprintf("**涨停总数**: %d只 | **最高连板**: %d\n\n", ztCount, int(maxCount)))
+			banInfo, _ := dataMap["ban_info"].(map[string]any)
+			if len(banInfo) > 0 {
+				sb.WriteString("## 连板统计\n\n")
+				sb.WriteString("| 连板层级 | 数量 |\n|:---:|:---:|\n")
+				for i := int(maxCount); i >= 1; i-- {
+					if info, ok := banInfo[fmt.Sprintf("%d", i)].(map[string]any); ok {
+						cnt, _ := info["count"].(float64)
+						sb.WriteString(fmt.Sprintf("| %d连板 | %d |\n", i, int(cnt)))
+					}
+				}
+				sb.WriteString("\n")
+			}
+			plateStocks, _ := dataMap["plate_stocks"].(map[string]any)
+			stockInfo, _ := dataMap["stock_info"].(map[string]any)
+			if len(banInfo) > 0 && len(plateStocks) > 0 {
+				sb.WriteString("## 连板梯队详情\n\n")
+				for i := int(maxCount); i >= 1; i-- {
+					if info, ok := banInfo[fmt.Sprintf("%d", i)].(map[string]any); ok {
+						cnt, _ := info["count"].(float64)
+						if int(cnt) == 0 {
+							continue
+						}
+						sb.WriteString(fmt.Sprintf("### %d连板（%d只）\n\n", i, int(cnt)))
+						sb.WriteString("| 代码 | 名称 | 类型 | 描述 | 时间 | 封单比 | 收盘封单 | 成交额 | 市值 | 概念板块 |\n|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n")
+						seen := make(map[string]bool)
+						for _, pStocks := range plateStocks {
+							for _, s := range pStocks.([]any) {
+								sm, _ := s.(map[string]any)
+								keepTimes, _ := sm["up_limit_keep_times"].(float64)
+								if int(keepTimes) != i {
+									continue
+								}
+								sCode, _ := sm["stock_code"].(string)
+								if seen[sCode] {
+									continue
+								}
+								seen[sCode] = true
+								sName, _ := sm["stock_name"].(string)
+								upType, _ := sm["up_limit_type"].(string)
+								upDesc, _ := sm["up_limit_desc"].(string)
+								upTime, _ := sm["up_limit_time"].(string)
+								fdMax := floatOrDefault(sm["fd_max"])
+								fdClose := floatOrDefault(sm["fd_close"])
+								amount := floatOrDefault(sm["amount"])
+								marketC := floatOrDefault(sm["market_c"])
+								platesStr := getPlatesStr(stockInfo, sCode)
+								sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %.2f%% | %.2f%% | %.2f亿 | %.2f亿 | %s |\n",
+									sCode, sName, upType, upDesc, upTime, fdMax, fdClose, amount, marketC, platesStr))
+							}
+						}
+						sb.WriteString("\n")
+					}
+				}
+			}
+			return sb.String(), nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"GetUplimitHotPlates",
+		"获取涨停热门板块排名和接力主线数据，包括板块热度得分、涨停数、炸板数、接力主线板块等。适用于分析板块轮动、市场热点方向、主线题材等场景。当用户提到热门板块、板块热度、板块轮动、主线题材、接力板块等关键词时使用此工具。",
+		map[string]*schema.ParameterInfo{
+			"date": {
+				Type:     "string",
+				Desc:     "查询日期，格式：2026-04-17，默认今天",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			date := gjson.Get(args, "date").String()
+			dataMap, err := fetchUplimitData(date)
+			if err != nil {
+				return err.Error(), nil
+			}
+			loc, _ := time.LoadLocation("Asia/Shanghai")
+			if date == "" {
+				date = time.Now().In(loc).Format("2006-01-02")
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("# %s 热门板块\n\n", date))
+			if today, _ := dataMap["today"].(bool); today {
+				sb.WriteString("> 数据为实时数据\n\n")
+			}
+			plateStocks, _ := dataMap["plate_stocks"].(map[string]any)
+			plateStocksZb, _ := dataMap["plate_stocks_zb"].(map[string]any)
+			plateArr, _ := dataMap["plate"].([]any)
+			if len(plateArr) > 0 {
+				sb.WriteString("## 热门板块TOP20\n\n")
+				sb.WriteString("| 排名 | 板块 | 热度得分 | 涨停数 | 炸板数 |\n|:---:|:---:|:---:|:---:|:---:|\n")
+				for idx, p := range plateArr {
+					if arr, ok := p.([]any); ok && len(arr) >= 3 {
+						name, _ := arr[0].(string)
+						pCode, _ := arr[1].(string)
+						score, _ := arr[2].(float64)
+						ztN := 0
+						if ps, ok := plateStocks[pCode].([]any); ok {
+							ztN = len(ps)
+						}
+						zbN := 0
+						if ps, ok := plateStocksZb[pCode].([]any); ok {
+							zbN = len(ps)
+						}
+						sb.WriteString(fmt.Sprintf("| %d | %s | %d | %d | %d |\n", idx+1, name, int(score), ztN, zbN))
+					}
+				}
+				sb.WriteString("\n")
+			}
+			plateInfo, _ := dataMap["plate_info"].(map[string]any)
+			relay, _ := dataMap["relay"].(map[string]any)
+			if area, ok := relay["area"].([]any); ok && len(area) > 0 {
+				sb.WriteString("## 接力主线\n\n")
+				sb.WriteString("| 板块 | 热度 | 涨停数 |\n|:---:|:---:|:---:|\n")
+				for _, a := range area {
+					am, _ := a.(map[string]any)
+					pCode, _ := am["p_code"].(string)
+					pScore, _ := am["p_score"].(float64)
+					count, _ := am["count"].(float64)
+					pName := pCode
+					if pi, ok := plateInfo[pCode].(map[string]any); ok {
+						pName, _ = pi["name"].(string)
+					}
+					sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", pName, int(pScore), int(count)))
+				}
+				sb.WriteString("\n")
+			}
+			return sb.String(), nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"GetUplimitHotStocks",
+		"获取涨停个股热度排行数据，包括股票代码、名称、热度得分、概念板块等。适用于分析个股受关注程度、市场人气股、热门标的等场景。当用户提到个股热度、热门个股、人气股、关注度等关键词时使用此工具。",
+		map[string]*schema.ParameterInfo{
+			"date": {
+				Type:     "string",
+				Desc:     "查询日期，格式：2026-04-17，默认今天",
+				Required: false,
+			},
+			"limit": {
+				Type:     "number",
+				Desc:     "返回数量，默认30",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			date := gjson.Get(args, "date").String()
+			limit := int(gjson.Get(args, "limit").Int())
+			if limit <= 0 {
+				limit = 30
+			}
+			dataMap, err := fetchUplimitData(date)
+			if err != nil {
+				return err.Error(), nil
+			}
+			loc, _ := time.LoadLocation("Asia/Shanghai")
+			if date == "" {
+				date = time.Now().In(loc).Format("2006-01-02")
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("# %s 个股热度排行\n\n", date))
+			if today, _ := dataMap["today"].(bool); today {
+				sb.WriteString("> 数据为实时数据\n\n")
+			}
+			stocksHot, _ := dataMap["stocks_hot"].(map[string]any)
+			hotN, _ := dataMap["stocks_hot_n"].(float64)
+			if len(stocksHot) == 0 {
+				sb.WriteString("暂无个股热度数据\n")
+				return sb.String(), nil
+			}
+			sb.WriteString(fmt.Sprintf("热度≥%d为超级热门\n\n", int(hotN)))
+			type hotItem struct {
+				code  string
+				score float64
+			}
+			var hotList []hotItem
+			for code, score := range stocksHot {
+				s, _ := score.(float64)
+				hotList = append(hotList, hotItem{code, s})
+			}
+			sort.Slice(hotList, func(i, j int) bool {
+				return hotList[i].score > hotList[j].score
+			})
+			plateStocks, _ := dataMap["plate_stocks"].(map[string]any)
+			stockInfo, _ := dataMap["stock_info"].(map[string]any)
+			sb.WriteString("| 排名 | 代码 | 名称 | 热度 | 概念板块 |\n|:---:|:---:|:---:|:---:|:---:|\n")
+			for idx, item := range hotList {
+				if idx >= limit {
+					break
+				}
+				platesStr := getPlatesStr(stockInfo, item.code)
+				sName := getStockNameFromPlateStocks(plateStocks, item.code)
+				sb.WriteString(fmt.Sprintf("| %d | %s | %s | %d | %s |\n", idx+1, item.code, sName, int(item.score), platesStr))
+			}
+			sb.WriteString("\n")
+			return sb.String(), nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"GetUplimitExplodedStocks",
+		"获取炸板股数据，即曾经涨停但未能封住的股票列表，包括代码、名称、炸板时间、概念板块等。适用于分析封板失败、市场分歧、抛压较重等场景。当用户提到炸板、封板失败、开板、破板等关键词时使用此工具。",
+		map[string]*schema.ParameterInfo{
+			"date": {
+				Type:     "string",
+				Desc:     "查询日期，格式：2026-04-17，默认今天",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			date := gjson.Get(args, "date").String()
+			dataMap, err := fetchUplimitData(date)
+			if err != nil {
+				return err.Error(), nil
+			}
+			loc, _ := time.LoadLocation("Asia/Shanghai")
+			if date == "" {
+				date = time.Now().In(loc).Format("2006-01-02")
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("# %s 炸板股\n\n", date))
+			if today, _ := dataMap["today"].(bool); today {
+				sb.WriteString("> 数据为实时数据\n\n")
+			}
+			plateStocksZb, _ := dataMap["plate_stocks_zb"].(map[string]any)
+			stockInfo, _ := dataMap["stock_info"].(map[string]any)
+			var zbTotal []map[string]any
+			for _, stocks := range plateStocksZb {
+				if arr, ok := stocks.([]any); ok {
+					for _, s := range arr {
+						if sm, ok := s.(map[string]any); ok {
+							zbTotal = append(zbTotal, sm)
+						}
+					}
+				}
+			}
+			if len(zbTotal) == 0 {
+				sb.WriteString("今日无炸板股\n")
+				return sb.String(), nil
+			}
+			sb.WriteString(fmt.Sprintf("共%d只炸板股\n\n", len(zbTotal)))
+			sb.WriteString("| 代码 | 名称 | 时间 | 概念板块 |\n|:---:|:---:|:---:|:---:|\n")
+			zbSeen := make(map[string]bool)
+			for _, sm := range zbTotal {
+				sCode, _ := sm["stock_code"].(string)
+				if zbSeen[sCode] {
+					continue
+				}
+				zbSeen[sCode] = true
+				sName, _ := sm["stock_name"].(string)
+				upTime, _ := sm["up_limit_time"].(string)
+				platesStr := getPlatesStr(stockInfo, sCode)
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", sCode, sName, upTime, platesStr))
+			}
+			sb.WriteString("\n")
+			return sb.String(), nil
+		},
+	))
+
+	tools = append(tools, NewDataToolWrapper(
+		"GetUplimitPlateStocks",
+		"获取指定板块的涨停股详情，包括板块内所有涨停股票的代码、名称、连板数、封单比、成交额、市值、概念板块等。适用于深入分析某个板块的涨停个股情况。当用户想查看某个板块的涨停股明细时使用此工具，必须提供板块名称参数。",
+		map[string]*schema.ParameterInfo{
+			"plate_name": {
+				Type:     "string",
+				Desc:     "板块名称，如：人工智能、机器人、芯片等",
+				Required: true,
+			},
+			"date": {
+				Type:     "string",
+				Desc:     "查询日期，格式：2026-04-17，默认今天",
+				Required: false,
+			},
+		},
+		func(args string) (string, error) {
+			plateName := gjson.Get(args, "plate_name").String()
+			if plateName == "" {
+				return "请提供板块名称参数 plate_name", nil
+			}
+			date := gjson.Get(args, "date").String()
+			dataMap, err := fetchUplimitData(date)
+			if err != nil {
+				return err.Error(), nil
+			}
+			loc, _ := time.LoadLocation("Asia/Shanghai")
+			if date == "" {
+				date = time.Now().In(loc).Format("2006-01-02")
+			}
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("# %s 板块【%s】涨停股详情\n\n", date, plateName))
+			if today, _ := dataMap["today"].(bool); today {
+				sb.WriteString("> 数据为实时数据\n\n")
+			}
+			plateInfo, _ := dataMap["plate_info"].(map[string]any)
+			plateStocks, _ := dataMap["plate_stocks"].(map[string]any)
+			stockInfo, _ := dataMap["stock_info"].(map[string]any)
+			var targetCode string
+			for pCode, pi := range plateInfo {
+				if piMap, ok := pi.(map[string]any); ok {
+					name, _ := piMap["name"].(string)
+					if name == plateName {
+						targetCode = pCode
+						break
+					}
+				}
+			}
+			if targetCode == "" {
+				plateArr, _ := dataMap["plate"].([]any)
+				for _, p := range plateArr {
+					if arr, ok := p.([]any); ok && len(arr) >= 3 {
+						name, _ := arr[0].(string)
+						pCode, _ := arr[1].(string)
+						if name == plateName {
+							targetCode = pCode
+							break
+						}
+					}
+				}
+			}
+			if targetCode == "" {
+				sb.WriteString(fmt.Sprintf("未找到板块【%s】，请检查板块名称是否正确\n", plateName))
+				return sb.String(), nil
+			}
+			stocks, ok := plateStocks[targetCode].([]any)
+			if !ok || len(stocks) == 0 {
+				sb.WriteString(fmt.Sprintf("板块【%s】暂无涨停股\n", plateName))
+				return sb.String(), nil
+			}
+			sb.WriteString(fmt.Sprintf("共%d只涨停股\n\n", len(stocks)))
+			sb.WriteString("| 代码 | 名称 | 连板 | 类型 | 描述 | 时间 | 封单比 | 收盘封单 | 成交额 | 市值 | 概念板块 |\n|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n")
+			for _, s := range stocks {
+				sm, _ := s.(map[string]any)
+				sCode, _ := sm["stock_code"].(string)
+				sName, _ := sm["stock_name"].(string)
+				keepTimes, _ := sm["up_limit_keep_times"].(float64)
+				upType, _ := sm["up_limit_type"].(string)
+				upDesc, _ := sm["up_limit_desc"].(string)
+				upTime, _ := sm["up_limit_time"].(string)
+				fdMax := floatOrDefault(sm["fd_max"])
+				fdClose := floatOrDefault(sm["fd_close"])
+				amount := floatOrDefault(sm["amount"])
+				marketC := floatOrDefault(sm["market_c"])
+				platesStr := getPlatesStr(stockInfo, sCode)
+				sb.WriteString(fmt.Sprintf("| %s | %s | %d | %s | %s | %s | %.2f%% | %.2f%% | %.2f亿 | %.2f亿 | %s |\n",
+					sCode, sName, int(keepTimes), upType, upDesc, upTime, fdMax, fdClose, amount, marketC, platesStr))
+			}
+			sb.WriteString("\n")
+			return sb.String(), nil
+		},
+	))
+
 	return tools
+}
+
+func fetchUplimitData(date string) (map[string]any, error) {
+	if date == "" {
+		loc, _ := time.LoadLocation("Asia/Shanghai")
+		date = time.Now().In(loc).Format("2006-01-02")
+	}
+	result := data.NewMarketNewsApi().GetUplimitHot(date, 20)
+	if result == nil || result["code"] == nil {
+		return nil, fmt.Errorf("获取涨停梯队数据失败")
+	}
+	code, _ := result["code"].(float64)
+	if int(code) != 20000 {
+		msg, _ := result["message"].(string)
+		return nil, fmt.Errorf("获取涨停梯队数据失败: %s", msg)
+	}
+	dataMap, ok := result["data"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("涨停梯队数据格式异常")
+	}
+	return dataMap, nil
+}
+
+func floatOrDefault(val any) float64 {
+	if f, ok := val.(float64); ok {
+		return f
+	}
+	return 0
+}
+
+func getPlatesStr(stockInfo map[string]any, code string) string {
+	if si, ok := stockInfo[code].(map[string]any); ok {
+		if pa, ok := si["plates"].([]any); ok {
+			var ps []string
+			for _, p := range pa {
+				ps = append(ps, fmt.Sprintf("%v", p))
+			}
+			return strings.Join(ps, ",")
+		}
+	}
+	return ""
+}
+
+func getStockNameFromPlateStocks(plateStocks map[string]any, code string) string {
+	for _, pStocks := range plateStocks {
+		if arr, ok := pStocks.([]any); ok {
+			for _, s := range arr {
+				if sm, ok := s.(map[string]any); ok {
+					if sm["stock_code"] == code {
+						name, _ := sm["stock_name"].(string)
+						return name
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func marketSentiment(upCount, downCount int) string {

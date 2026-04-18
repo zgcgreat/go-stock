@@ -1,6 +1,6 @@
 <script setup>
-import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive, watch} from 'vue'
-import {GetAIResponseResultList} from "../services/wails-bridge.js";
+import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive} from 'vue'
+import {GetAIResponseResultList} from "../../wailsjs/go/main/App";
 import {NButton, NEllipsis, NText} from "naive-ui";
 import ResearchReport from "./researchReport.vue";
 import AiRecommendStocksList from "./aiRecommendStocksList.vue";
@@ -10,28 +10,18 @@ import AllStockInfoList from "./allStockInfoList.vue";
 import CronTaskManager from "./cron-task-manager.vue";
 import TradingRecordManager from "./TradingRecordManager.vue";
 import StockChangesMonitor from "./stockChangesMonitor.vue";
-import {EventsOff, EventsOn} from "../services/wails-bridge.js";
+import MCPServiceManager from "./mcp-server-manager.vue";
+import SkillManager from "./skill-manager.vue";
+import UplimitLadder from "./uplimitLadder.vue";
+import {EventsOff, EventsOn} from "../../wailsjs/runtime";
 import {useRoute} from 'vue-router'
 
 
 const nowTab = ref("AI分析报告")
 const route = useRoute()
-
-// 初始化时设置标签页
 onBeforeMount(() => {
-  // 如果路由中有 name 参数则使用，否则默认为"AI分析报告"
-  nowTab.value = route.query.name || "AI分析报告"
+  nowTab.value = route.query.name
 })
-
-// 监听路由变化，自动切换标签页
-watch(
-  () => route.query.name,
-  (newName) => {
-    if (newName) {
-      nowTab.value = newName
-    }
-  }
-)
 
 onBeforeUnmount(() => {
   EventsOff("changeResearchTab")
@@ -62,6 +52,9 @@ function updateTab(name) {
       <n-tab-pane name="异动监控">
         <StockChangesMonitor/>
       </n-tab-pane>
+      <n-tab-pane name="涨停梯队">
+        <UplimitLadder/>
+      </n-tab-pane>
       <n-tab-pane name="提示词模板">
         <PromptTemplateList/>
       </n-tab-pane>
@@ -76,6 +69,12 @@ function updateTab(name) {
       </n-tab-pane>
 <!--      <n-tab-pane name="全部股票信息">-->
 <!--        <AllStockInfoList/>-->
+<!--      </n-tab-pane>-->
+      <n-tab-pane name="MCP服务">
+        <MCPServiceManager/>
+      </n-tab-pane>
+<!--      <n-tab-pane name="技能管理">-->
+<!--        <SkillManager/>-->
 <!--      </n-tab-pane>-->
     </n-tabs>
   </n-card>

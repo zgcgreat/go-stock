@@ -8,22 +8,19 @@ import marketView from "../components/market.vue";
 import agentChat from "../components/agent-chat.vue"
 import research from "../components/researchIndex.vue";
 import cronTaskManager from "../components/cron-task-manager.vue"
-import LoginView from "../components/Login.vue"
-import RegisterView from "../components/Register.vue"
-import UserManager from "../components/UserManager.vue"
+import mcpServerManager from "../components/mcp-server-manager.vue"
 
 const routes = [
-    { path: '/login', component: LoginView, name: 'login', meta: { public: true } },
-    { path: '/register', component: RegisterView, name: 'register', meta: { public: true } },
-    { path: '/', component: stockView, name: 'stock' },
-    { path: '/fund', component: fundView, name: 'fund' },
-    { path: '/settings', component: settingsView, name: 'settings' },
-    { path: '/about', component: aboutView, name: 'about' },
-    { path: '/market', component: marketView, name: 'market' },
-    { path: '/agent', component: agentChat, name: 'agent' },
-    { path: '/research', component: research, name: 'research' },
-    { path: '/cron-tasks', component: cronTaskManager, name: 'cronTasks' },
-    { path: '/admin/users', component: UserManager, name: 'userManagement' },
+    { path: '/', component: stockView,name: 'stock'},
+    { path: '/fund', component: fundView,name: 'fund' },
+    { path: '/settings', component: settingsView,name: 'settings' },
+    { path: '/about', component: aboutView,name: 'about' },
+    { path: '/market', component: marketView,name: 'market' },
+    { path: '/agent', component: agentChat,name: 'agent' },
+    { path: '/research', component: research,name: 'research' },
+    { path: '/cron-tasks', component: cronTaskManager,name: 'cronTasks' },
+    { path: '/mcp-servers', component: mcpServerManager,name: 'mcpServers' },
+]
 ]
 
 const router = createRouter({
