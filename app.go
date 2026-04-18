@@ -60,7 +60,7 @@ type App struct {
 func NewApp() *App {
 	cacheSize := 512 * 1024
 	cache := freecache.NewCache(cacheSize)
-	c := cron.New(cron.WithSeconds())
+	c := cron.New(cron.WithSeconds(), cron.WithChain(cron.Recover(cron.DefaultLogger)))
 	c.Start()
 	var tools []data.Tool
 	tools = data.Tools(tools)
@@ -171,13 +171,47 @@ func (a *App) CheckUpdate(flag int) {
 		}
 	}
 
+	updateChannel := a.GetConfig().UpdateChannel
+	if updateChannel == "" {
+		updateChannel = "release"
+	}
+
 	releaseVersion := &models.GitHubReleaseVersion{}
-	_, err := resty.New().R().
-		SetResult(releaseVersion).
-		Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases/latest")
-	if err != nil {
-		logger.SugaredLogger.Errorf("get github release version error:%s", err.Error())
-		return
+	var err error
+	if updateChannel == "release" {
+		_, err = resty.New().R().
+			SetResult(releaseVersion).
+			Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases/latest")
+		if err != nil {
+			logger.SugaredLogger.Errorf("get github release version error:%s", err.Error())
+			return
+		}
+	} else {
+		var releases []models.GitHubReleaseVersion
+		_, err = resty.New().R().
+			SetResult(&releases).
+			Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases")
+		if err != nil {
+			logger.SugaredLogger.Errorf("get github releases error:%s", err.Error())
+			return
+		}
+		if len(releases) == 0 {
+			logger.SugaredLogger.Errorf("no releases found")
+			return
+		}
+		if updateChannel == "pre" {
+			for _, r := range releases {
+				if !r.Draft {
+					releaseVersion = &r
+					break
+				}
+			}
+			if releaseVersion.TagName == "" {
+				releaseVersion = &releases[0]
+			}
+		} else {
+			releaseVersion = &releases[0]
+		}
 	}
 	//logger.SugaredLogger.Infof("releaseVersion:%+v", releaseVersion.TagName)
 
@@ -796,17 +830,17 @@ func (a *App) AddCronTask(follow data.FollowedStock) func() {
 		chatId := ""
 		question := ""
 		for msg := range msgs {
-			if msg["extraContent"] != nil {
-				res.WriteString(msg["extraContent"].(string) + "\n")
+			if v, ok := msg["extraContent"].(string); ok && v != "" {
+				res.WriteString(v + "\n")
 			}
-			if msg["content"] != nil {
-				res.WriteString(msg["content"].(string))
+			if v, ok := msg["content"].(string); ok && v != "" {
+				res.WriteString(v)
 			}
-			if msg["chatId"] != nil {
-				chatId = msg["chatId"].(string)
+			if v, ok := msg["chatId"].(string); ok {
+				chatId = v
 			}
-			if msg["question"] != nil {
-				question = msg["question"].(string)
+			if v, ok := msg["question"].(string); ok {
+				question = v
 			}
 		}
 
@@ -1400,7 +1434,10 @@ func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
 		}
 		stockCodes = append(stockCodes, follow.StockCode)
 	}
-	stockData, _ := data.NewStockDataApi().GetStockCodeRealTimeData(stockCodes...)
+	stockData, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCodes...)
+	if err != nil || stockData == nil {
+		return &stockInfos
+	}
 	for _, info := range *stockData {
 		v, ok := slice.FindBy(follows, func(idx int, follow data.FollowedStock) bool {
 			if strutil.HasPrefixAny(follow.StockCode, []string{"US", "us"}) {
@@ -1419,7 +1456,7 @@ func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
 func getStockInfo(follow data.FollowedStock) *data.StockInfo {
 	stockCode := follow.StockCode
 	stockDatas, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCode)
-	if err != nil || len(*stockDatas) == 0 {
+	if err != nil || stockDatas == nil || len(*stockDatas) == 0 {
 		return &data.StockInfo{}
 	}
 	stockData := (*stockDatas)[0]
@@ -2476,10 +2513,11 @@ func (a *App) CreateCronTask(task *models.CronTask) string {
 	if err != nil {
 		return fmt.Sprintf("创建失败：%v", err)
 	}
-	entryID, err := a.cron.AddFunc(task.CronExpr, func() {
-		err := agent.NewCronTaskApi().ExecuteTask(a.ctx, task)
+	taskCopy := *task
+	entryID, err := a.cron.AddFunc(taskCopy.CronExpr, func() {
+		err := agent.NewCronTaskApi().ExecuteTask(a.ctx, &taskCopy)
 		if err != nil {
-			logger.SugaredLogger.Errorf("执行任务失败：%v %s", err, task.Name)
+			logger.SugaredLogger.Errorf("执行任务失败：%v %s", err, taskCopy.Name)
 			return
 		}
 	})
@@ -2492,13 +2530,17 @@ func (a *App) CreateCronTask(task *models.CronTask) string {
 
 func (a *App) UpdateCronTask(task *models.CronTask) string {
 	err := agent.NewCronTaskApi().Update(task)
+	if err != nil {
+		return fmt.Sprintf("更新失败：%v", err)
+	}
 	if entryID, exists := a.getCronEntry(convertor.ToString(task.ID) + "_" + task.Name); exists {
 		a.cron.Remove(entryID)
 	}
-	entryID, err := a.cron.AddFunc(task.CronExpr, func() {
-		err := agent.NewCronTaskApi().ExecuteTask(a.ctx, task)
+	taskCopy := *task
+	entryID, err := a.cron.AddFunc(taskCopy.CronExpr, func() {
+		err := agent.NewCronTaskApi().ExecuteTask(a.ctx, &taskCopy)
 		if err != nil {
-			logger.SugaredLogger.Errorf("执行任务失败：%v %s", err, task.Name)
+			logger.SugaredLogger.Errorf("执行任务失败：%v %s", err, taskCopy.Name)
 			return
 		}
 	})
@@ -2565,10 +2607,11 @@ func (a *App) EnableCronTask(id uint, enable bool) string {
 			a.cron.Remove(entryID)
 		}
 		if enable {
-			entryID, err := a.cron.AddFunc(task.CronExpr, func() {
-				err := agent.NewCronTaskApi().ExecuteTask(a.ctx, task)
+			taskCopy := *task
+			entryID, err := a.cron.AddFunc(taskCopy.CronExpr, func() {
+				err := agent.NewCronTaskApi().ExecuteTask(a.ctx, &taskCopy)
 				if err != nil {
-					logger.SugaredLogger.Errorf("%s 执行任务失败：%v", task.Name, err)
+					logger.SugaredLogger.Errorf("%s 执行任务失败：%v", taskCopy.Name, err)
 					return
 				}
 			})
