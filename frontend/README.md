@@ -36,7 +36,8 @@ npm run dev
 
 # 方式二：Go运行
 go run .
-
+或者
+go run web/main.go
 # 方式三：Docker
 docker run -d -p 8080:8080 go-stock-backend
 ```
