@@ -1679,6 +1679,10 @@ func (a *App) GetVersionInfo() *models.VersionInfo {
 	}
 }
 
+func (a *App) GetUserManual() string {
+	return string(userManual)
+}
+
 //// checkChromeOnWindows 在 Windows 系统上检查谷歌浏览器是否安装
 //func checkChromeOnWindows() bool {
 //	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe`, registry.QUERY_VALUE)
@@ -2023,6 +2027,115 @@ func (a *App) GetStockEastMoneyKLinePage(stockCode, stockName string, klt string
 	//	return data.AggregateKLineEveryN(raw, 10)
 	//}
 	return api.GetKLineDataBefore(stockCode, klt, "", limit, end)
+}
+
+// GetStockKLineWithFallback 多数据源自动切换 K 线：优先东方财富，不可用时自动切换新浪财经。
+// 返回 KLineSourceResult，包含 data（K 线数组）和 source（实际使用的数据源标识：eastmoney / sina）。
+func (a *App) GetStockKLineWithFallback(stockCode, stockName string, klt string, limit int) *data.KLineSourceResult {
+	if limit <= 0 {
+		limit = 500
+	}
+	if limit > 5000 {
+		limit = 5000
+	}
+	klt = strings.TrimSpace(klt)
+	if klt == "" {
+		klt = "101"
+	}
+	return data.FetchKLineWithFallback(stockCode, stockName, klt, limit, "")
+}
+
+// GetStockKLinePageWithFallback 多数据源自动切换 K 线（分页）：优先东方财富，不可用时自动切换新浪财经。
+// end 参数仅对东方财富有效；新浪数据源不支持分页，将返回最新一段数据。
+func (a *App) GetStockKLinePageWithFallback(stockCode, stockName string, klt string, limit int, end string) *data.KLineSourceResult {
+	if limit <= 0 {
+		limit = 500
+	}
+	if limit > 5000 {
+		limit = 5000
+	}
+	klt = strings.TrimSpace(klt)
+	if klt == "" {
+		klt = "101"
+	}
+	end = strings.TrimSpace(end)
+	return data.FetchKLineWithFallback(stockCode, stockName, klt, limit, end)
+}
+
+// GetChipDistribution 获取/计算股票筹码分布（筹码图）数据（用于前端绘图）。
+// days：近多少个交易日；bins：分箱数量；adjustFlag：""/qfq/hfq
+func (a *App) GetChipDistribution(stockCode string, days int, bins int, adjustFlag string) (*data.ChipDistributionResult, error) {
+	stockCode = strings.TrimSpace(stockCode)
+	if stockCode == "" {
+		return nil, fmt.Errorf("stockCode 不能为空")
+	}
+	if days <= 0 {
+		days = 120
+	}
+	if bins <= 0 {
+		bins = 80
+	}
+	adjustFlag = strings.TrimSpace(strings.ToLower(adjustFlag))
+	if adjustFlag != "" && adjustFlag != "qfq" && adjustFlag != "hfq" {
+		adjustFlag = "qfq"
+	}
+
+	api := data.NewEastMoneyKLineApi(data.GetSettingConfig())
+	if !api.ValidateStockCode(stockCode) {
+		return nil, fmt.Errorf("股票代码无效：%s", stockCode)
+	}
+
+	var kLines *[]data.KLineData
+
+	if adjustFlag != "" {
+		kLines = api.GetKLineData(stockCode, "101", adjustFlag, days)
+	} else {
+		result := data.FetchKLineWithFallback(stockCode, "", "101", days, "")
+		if result != nil && result.Data != nil {
+			kLines = result.Data
+		}
+	}
+
+	if kLines == nil || len(*kLines) == 0 {
+		return nil, fmt.Errorf("未获取到K线数据")
+	}
+	calculator := data.NewChipDistributionCalculator()
+	return calculator.Calculate(stockCode, *kLines, bins)
+}
+
+// GetTdxCallAuction 通过通达信协议获取集合竞价数据。
+// stockCode 格式如 600519.SH、000001.SZ、430047.BJ；start 为起始位置（0=最新）；count 为请求数量（最大 500）。
+func (a *App) GetTdxCallAuction(stockCode string, start uint32, count uint32) *[]data.TdxCallAuctionData {
+	if count <= 0 {
+		count = 500
+	}
+	api := data.NewTdxKLineApi()
+	return api.GetCallAuction(stockCode, start, count)
+}
+
+func (a *App) GetTdxCompanyInfo(stockCode string) *data.TdxCompanyInfoBundle {
+	api := data.NewTdxKLineApi()
+	return api.GetF10Data(stockCode)
+}
+
+func (a *App) GetTdxFinanceInfo(stockCode string) *data.TdxFinanceInfo {
+	api := data.NewTdxKLineApi()
+	return api.GetFinanceInfo(stockCode)
+}
+
+func (a *App) GetTdxXDXRInfo(stockCode string) *[]data.TdxXDXRItem {
+	api := data.NewTdxKLineApi()
+	return api.GetXDXRInfo(stockCode)
+}
+
+func (a *App) GetTdxCompanyCategoryList(stockCode string) *[]data.TdxCompanyCategory {
+	api := data.NewTdxKLineApi()
+	return api.GetF10CategoryList(stockCode)
+}
+
+func (a *App) GetTdxCompanyCategoryContent(stockCode string, categoryName string) *data.TdxCompanyInfoSection {
+	api := data.NewTdxKLineApi()
+	return api.GetF10CategoryContent(stockCode, categoryName)
 }
 
 func (a *App) GetTelegraphList(source string) *[]*models.Telegraph {

@@ -53,6 +53,9 @@ var stocksBinHK []byte
 //go:embed build/stock_base_info_us.json
 var stocksBinUS []byte
 
+//go:embed docs/go-stock使用手册.md
+var userManual []byte
+
 //go:generate cp -R ./data ./build/bin
 
 var Version string
@@ -178,7 +181,6 @@ func main() {
 		Fullscreen:               false,
 		Frameless:                false,
 		StartHidden:              false,
-		HideWindowOnClose:        false,
 		EnableDefaultContextMenu: true,
 		BackgroundColour:         backgroundColour,
 		Assets:                   assets,
@@ -192,7 +194,7 @@ func main() {
 		OnShutdown:               app.shutdown,
 		WindowStartState:         options.Normal,
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               "go-stock-dev",
+			UniqueId:               "go-stock",
 			OnSecondInstanceLaunch: OnSecondInstanceLaunch,
 		},
 		Bind: []interface{}{

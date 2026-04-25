@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import {onBeforeMount, onUnmounted, ref} from 'vue'
+import {onBeforeMount, onBeforeUnmount, onUnmounted, ref} from 'vue'
 import {HotStock} from "../services/wails-bridge.js";
+import {HotStock as HotStockDesktop, IsTradingTime} from "../../wailsjs/go/main/App";
 import KLineChart from "./KLineChart.vue";
-import {ArrowBack, ArrowDown, ArrowUp} from "@vicons/ionicons5";
+import {ArrowDown, ArrowUp} from "@vicons/ionicons5";
+
+// 根据运行模式选择使用哪个函数
+const isWebMode = ref(typeof window !== 'undefined' && !window.go)
+const HotStockFunc = isWebMode.value ? HotStock : HotStockDesktop;
 
 const {marketType}=defineProps(
     {
@@ -13,17 +18,69 @@ const {marketType}=defineProps(
     }
 )
 const task =ref()
-
+const checkTask = ref()
 const list  = ref([])
 
+async function fetchHotStock() {
+  list.value = await HotStockFunc(marketType)
+}
+
+// 兼容 web 模式的 IsTradingTime
+const IsTradingTimeFunc = isWebMode.value ? () => Promise.resolve(false) : IsTradingTime;
+
+function startRefresh() {
+  stopRefresh()
+  fetchHotStock()
+  task.value = setInterval(fetchHotStock, 5000)
+  checkTask.value = setInterval(() => {
+    IsTradingTimeFunc().then(trading => {
+      if (!trading) {
+        stopRefresh()
+        startCheckLoop()
+      }
+    }).catch(() => {})
+  }, 60000)
+}
+
+function startCheckLoop() {
+  stopCheck()
+  checkTask.value = setInterval(() => {
+    IsTradingTimeFunc().then(trading => {
+      if (trading) {
+        stopCheck()
+        startRefresh()
+      }
+    }).catch(() => {})
+  }, 60000)
+}
+
+function stopRefresh() {
+  if (task.value) {
+    clearInterval(task.value)
+    task.value = null
+  }
+}
+
+function stopCheck() {
+  if (checkTask.value) {
+    clearInterval(checkTask.value)
+    checkTask.value = null
+  }
+}
+
 onBeforeMount(async () => {
-  list.value = await HotStock(marketType)
-  task.value = setInterval(async () => {
-    list.value = await HotStock(marketType)
-  }, 5000)
+  const trading = await IsTradingTime().catch(() => true)
+  if (trading) {
+    startRefresh()
+  } else {
+    fetchHotStock()
+    startCheckLoop()
+  }
 })
-onUnmounted(()=>{
-  clearInterval(task.value)
+
+onBeforeUnmount(()=>{
+  stopRefresh()
+  stopCheck()
 })
 
 function getMarketCode(item) {

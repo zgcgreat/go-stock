@@ -246,6 +246,10 @@ export function GetChangeTypeDailyStats(arg1) {
   return window['go']['main']['App']['GetChangeTypeDailyStats'](arg1);
 }
 
+export function GetChipDistribution(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetChipDistribution'](arg1, arg2, arg3, arg4);
+}
+
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
@@ -374,6 +378,14 @@ export function GetStockKLine(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetStockKLine'](arg1, arg2, arg3);
 }
 
+export function GetStockKLinePageWithFallback(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetStockKLinePageWithFallback'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function GetStockKLineWithFallback(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetStockKLineWithFallback'](arg1, arg2, arg3, arg4);
+}
+
 export function GetStockList(arg1) {
   return window['go']['main']['App']['GetStockList'](arg1);
 }
@@ -388,6 +400,30 @@ export function GetStockMoneyTrendByDay(arg1, arg2) {
 
 export function GetStockRealTimePrice(arg1) {
   return window['go']['main']['App']['GetStockRealTimePrice'](arg1);
+}
+
+export function GetTdxCallAuction(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetTdxCallAuction'](arg1, arg2, arg3);
+}
+
+export function GetTdxCompanyCategoryContent(arg1, arg2) {
+  return window['go']['main']['App']['GetTdxCompanyCategoryContent'](arg1, arg2);
+}
+
+export function GetTdxCompanyCategoryList(arg1) {
+  return window['go']['main']['App']['GetTdxCompanyCategoryList'](arg1);
+}
+
+export function GetTdxCompanyInfo(arg1) {
+  return window['go']['main']['App']['GetTdxCompanyInfo'](arg1);
+}
+
+export function GetTdxFinanceInfo(arg1) {
+  return window['go']['main']['App']['GetTdxFinanceInfo'](arg1);
+}
+
+export function GetTdxXDXRInfo(arg1) {
+  return window['go']['main']['App']['GetTdxXDXRInfo'](arg1);
 }
 
 export function GetTelegraphList(arg1) {
@@ -422,6 +458,10 @@ export function GetUplimitHot(arg1, arg2) {
   return window['go']['main']['App']['GetUplimitHot'](arg1, arg2);
 }
 
+export function GetUserManual() {
+  return window['go']['main']['App']['GetUserManual']();
+}
+
 export function GetVersionInfo() {
   return window['go']['main']['App']['GetVersionInfo']();
 }
@@ -440,6 +480,10 @@ export function GlobalStockIndexesReadable() {
 
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function HideToTray() {
+  return window['go']['main']['App']['HideToTray']();
 }
 
 export function HotEvent(arg1) {
@@ -470,8 +514,20 @@ export function InvestCalendarTimeLine(arg1) {
   return window['go']['main']['App']['InvestCalendarTimeLine'](arg1);
 }
 
+export function IsHKTradingTime() {
+  return window['go']['main']['App']['IsHKTradingTime']();
+}
+
+export function IsTradingDay(arg1) {
+  return window['go']['main']['App']['IsTradingDay'](arg1);
+}
+
 export function IsTradingTime() {
   return window['go']['main']['App']['IsTradingTime']();
+}
+
+export function IsUSTradingTime() {
+  return window['go']['main']['App']['IsUSTradingTime']();
 }
 
 export function LongTigerRank(arg1) {
@@ -568,6 +624,10 @@ export function ShareAnalysis(arg1, arg2) {
 
 export function ShareText(arg1, arg2) {
   return window['go']['main']['App']['ShareText'](arg1, arg2);
+}
+
+export function ShowFromTray() {
+  return window['go']['main']['App']['ShowFromTray']();
 }
 
 export function StockNotice(arg1) {

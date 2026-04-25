@@ -128,6 +128,8 @@ export function GetChangeRank(arg1:number,arg2:number):Promise<data.ChangeRankRe
 
 export function GetChangeTypeDailyStats(arg1:number):Promise<Array<data.ChangeTypeDailyStats>>;
 
+export function GetChipDistribution(arg1:string,arg2:number,arg3:number,arg4:string):Promise<data.ChipDistributionResult>;
+
 export function GetConfig():Promise<data.SettingConfig>;
 
 export function GetCronTaskByID(arg1:number):Promise<models.CronTask>;
@@ -192,6 +194,10 @@ export function GetStockEastMoneyKLinePage(arg1:string,arg2:string,arg3:string,a
 
 export function GetStockKLine(arg1:string,arg2:string,arg3:number):Promise<any>;
 
+export function GetStockKLinePageWithFallback(arg1:string,arg2:string,arg3:string,arg4:number,arg5:string):Promise<data.KLineSourceResult>;
+
+export function GetStockKLineWithFallback(arg1:string,arg2:string,arg3:string,arg4:number):Promise<data.KLineSourceResult>;
+
 export function GetStockList(arg1:string):Promise<Array<data.StockBasic>>;
 
 export function GetStockMinutePriceLineData(arg1:string,arg2:string):Promise<Record<string, any>>;
@@ -199,6 +205,18 @@ export function GetStockMinutePriceLineData(arg1:string,arg2:string):Promise<Rec
 export function GetStockMoneyTrendByDay(arg1:string,arg2:number):Promise<Array<Record<string, any>>>;
 
 export function GetStockRealTimePrice(arg1:string):Promise<Record<string, any>>;
+
+export function GetTdxCallAuction(arg1:string,arg2:number,arg3:number):Promise<any>;
+
+export function GetTdxCompanyCategoryContent(arg1:string,arg2:string):Promise<data.TdxCompanyInfoSection>;
+
+export function GetTdxCompanyCategoryList(arg1:string):Promise<any>;
+
+export function GetTdxCompanyInfo(arg1:string):Promise<data.TdxCompanyInfoBundle>;
+
+export function GetTdxFinanceInfo(arg1:string):Promise<data.TdxFinanceInfo>;
+
+export function GetTdxXDXRInfo(arg1:string):Promise<any>;
 
 export function GetTelegraphList(arg1:string):Promise<any>;
 
@@ -216,6 +234,8 @@ export function GetTypeStatsByDate(arg1:string):Promise<Array<data.TypeCountStat
 
 export function GetUplimitHot(arg1:string,arg2:number):Promise<Record<string, any>>;
 
+export function GetUserManual():Promise<string>;
+
 export function GetVersionInfo():Promise<models.VersionInfo>;
 
 export function GetfundList(arg1:string):Promise<Array<data.FundBasic>>;
@@ -225,6 +245,8 @@ export function GlobalStockIndexes():Promise<Record<string, any>>;
 export function GlobalStockIndexesReadable():Promise<string>;
 
 export function Greet(arg1:string):Promise<data.StockInfo>;
+
+export function HideToTray():Promise<void>;
 
 export function HotEvent(arg1:number):Promise<any>;
 
@@ -240,7 +262,13 @@ export function InitializeGroupSort():Promise<boolean>;
 
 export function InvestCalendarTimeLine(arg1:string):Promise<Array<any>>;
 
+export function IsHKTradingTime():Promise<boolean>;
+
+export function IsTradingDay(arg1:string):Promise<boolean>;
+
 export function IsTradingTime():Promise<boolean>;
+
+export function IsUSTradingTime():Promise<boolean>;
 
 export function LongTigerRank(arg1:string):Promise<any>;
 
@@ -289,6 +317,8 @@ export function SetTradingPrice(arg1:string,arg2:number,arg3:number,arg4:number,
 export function ShareAnalysis(arg1:string,arg2:string):Promise<string>;
 
 export function ShareText(arg1:string,arg2:string):Promise<string>;
+
+export function ShowFromTray():Promise<void>;
 
 export function StockNotice(arg1:string):Promise<Array<any>>;
 
