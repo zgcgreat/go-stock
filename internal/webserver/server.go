@@ -98,6 +98,10 @@ func (ws *WebServer) initRouter() {
 			protected.DELETE("/ai/recommend-stocks/:id", handlers.DeleteAIRecommendStock)
 			protected.PUT("/ai/recommend-stocks/alert", handlers.UpdateAIRecommendStockAlert)
 
+			// AI助手会话管理
+			protected.GET("/ai/assistant/session", handlers.GetAiAssistantSessionHandler)
+			protected.POST("/ai/assistant/session", handlers.SaveAiAssistantSessionHandler)
+
 			protected.GET("/prompts/templates", handlers.GetPromptTemplates)
 			protected.POST("/prompts/templates", handlers.CreatePromptTemplate)
 			protected.PUT("/prompts/templates/:id", handlers.UpdatePromptTemplate)

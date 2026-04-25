@@ -75,6 +75,11 @@ func (receiver *EastMoneyKLineApi) fetchKLineJSONBytesByHTTP(reqURL string) ([]b
 	// 检查 Content-Encoding 并处理 gzip 压缩
 	contentEncoding := resp.Header().Get("Content-Encoding")
 	if strings.ToLower(contentEncoding) == "gzip" {
+		// 某些情况下 HTTP 客户端已自动解压，但响应头仍保留 gzip。
+		// 仅在响应体具有 gzip 魔数时才执行解压，避免二次解压导致失败。
+		if len(rawBody) < 2 || rawBody[0] != 0x1f || rawBody[1] != 0x8b {
+			return rawBody, nil
+		}
 		reader, err := gzip.NewReader(bytes.NewReader(rawBody))
 		if err != nil {
 			return nil, fmt.Errorf("gzip.NewReader error: %w", err)

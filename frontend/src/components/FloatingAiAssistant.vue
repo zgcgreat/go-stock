@@ -339,6 +339,7 @@ const inputValue = ref('')
 const isStreamLoad = ref(false)
 const sentFromFloating = ref(false)
 const messages = ref([])
+const sessionId = ref('')
 const aiConfigOptions = ref([])
 const aiConfigId = ref(null)
 
@@ -590,7 +591,11 @@ function showMoreHistory() {
 const theme = computed(() => (darkTheme.value ? 'dark' : 'light'))
 async function loadHistory() {
   try {
-    const list = await GetAiAssistantSession()
+    const resp = await GetAiAssistantSession('')
+    if (resp?.sessionId) {
+      sessionId.value = resp.sessionId
+    }
+    const list = resp?.messages
     if (Array.isArray(list) && list.length > 0) {
       messages.value = list.map(m => ({
         role: m.role ?? '',
@@ -622,11 +627,14 @@ function saveHistory() {
     time: m.time ?? '',
     modelName: m.modelName ?? ''
   }))
-  SaveAiAssistantSession(list).catch(() => {})
+  SaveAiAssistantSession(sessionId.value || Date.now().toString(), list).catch(() => {})
 }
 
 function openPanel() {
   panelVisible.value = true
+  if (!sessionId.value) {
+    sessionId.value = Date.now().toString()
+  }
   if (messages.value.length === 0) {
     messages.value = [
       {

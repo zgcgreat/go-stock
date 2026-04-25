@@ -117,26 +117,33 @@ func GetStockKLine(c *gin.Context) {
 	kLineType := c.DefaultQuery("klt", "101") // 默认日K
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "120"))
 	adjustFlag := c.DefaultQuery("fqt", "") // qfq=前复权, hfq=后复权
-
-	config := data.GetSettingConfig()
-	if config == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Config not found",
-			"message": "配置获取失败",
-		})
-		return
+	if days <= 0 {
+		days = 120
 	}
 
-	api := data.NewEastMoneyKLineApi(config)
-	kLines := api.GetKLineDataBefore(stockCode, kLineType, adjustFlag, days, "")
+	// 优先复用桌面端默认日K逻辑，保持 Web 与桌面表现一致。
+	// 桌面端 GetStockKLine 使用腾讯日K接口：GetHK_KLineData(stockCode, "day", days)。
+	var kLines *[]data.KLineData
+	if kLineType == "101" && adjustFlag == "" {
+		kLines = data.NewStockDataApi().GetHK_KLineData(stockCode, "day", int64(days))
+	} else {
+		config := data.GetSettingConfig()
+		if config == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Config not found",
+				"message": "配置获取失败",
+			})
+			return
+		}
+		api := data.NewEastMoneyKLineApi(config)
+		kLines = api.GetKLineDataBefore(stockCode, kLineType, adjustFlag, days, "")
+	}
 
 	// Web端返回格式与桌面端保持一致：直接返回数组
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
-		"data": gin.H{
-			"kline": kLines,
-		},
+		"data":    kLines,
 	})
 }
 

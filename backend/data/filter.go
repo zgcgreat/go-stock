@@ -59,7 +59,7 @@ type StockInfoAdapter interface {
 
 // EastMoneyStockInfoAdapter 东财股票信息适配器
 type EastMoneyStockInfoAdapter struct {
-	Stock *EastMoneyStockInfo
+	Stock *StockInfo
 }
 
 func (emsi *EastMoneyStockInfoAdapter) GetPrice() float64 {
@@ -71,11 +71,7 @@ func (emsi *EastMoneyStockInfoAdapter) GetPrice() float64 {
 }
 
 func (emsi *EastMoneyStockInfoAdapter) GetChangePercent() float64 {
-	change, err := strconv.ParseFloat(emsi.Stock.ChangePercent, 64)
-	if err != nil {
-		return 0.0
-	}
-	return change
+	return emsi.Stock.ChangePercent
 }
 
 func (emsi *EastMoneyStockInfoAdapter) GetVolumeRatio() float64 {
@@ -87,19 +83,13 @@ func (emsi *EastMoneyStockInfoAdapter) GetVolumeRatio() float64 {
 }
 
 func (emsi *EastMoneyStockInfoAdapter) GetTurnoverRate() float64 {
-	turnoverRate, err := strconv.ParseFloat(emsi.Stock.Turnover, 64)
-	if err != nil {
-		return 0.0
-	}
-	return turnoverRate
+	// StockInfo没有Turnover字段，返回0
+	return 0.0
 }
 
 func (emsi *EastMoneyStockInfoAdapter) GetMarketCap() float64 {
-	marketCap, err := strconv.ParseFloat(emsi.Stock.MarketCap, 64)
-	if err != nil {
-		return 0.0
-	}
-	return marketCap
+	// StockInfo没有MarketCap字段，返回0
+	return 0.0
 }
 
 func (emsi *EastMoneyStockInfoAdapter) GetCode() string {
@@ -111,7 +101,7 @@ func (emsi *EastMoneyStockInfoAdapter) GetName() string {
 }
 
 // MatchFilterCondition 检查股票是否符合筛选条件
-func MatchFilterCondition(stockInfo *EastMoneyStockInfo, filterParam *IndicatorFilterParam) bool {
+func MatchFilterCondition(stockInfo *StockInfo, filterParam *IndicatorFilterParam) bool {
 	adapter := &EastMoneyStockInfoAdapter{stockInfo}
 
 	// 价格筛选

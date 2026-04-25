@@ -1,3 +1,4 @@
+
 package handlers
 
 import (
@@ -456,6 +457,55 @@ func UpdateAIRecommendStockAlert(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "更新成功",
+	})
+}
+
+// GetAiAssistantSessionHandler 获取AI助手会话消息列表
+func GetAiAssistantSessionHandler(c *gin.Context) {
+	sessionId := c.Query("sessionId")
+	resp, err := data.GetAiAssistantSession(sessionId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get AI assistant session",
+			"message": "获取会话失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    resp,
+	})
+}
+
+// SaveAiAssistantSessionHandler 保存AI助手会话消息
+func SaveAiAssistantSessionHandler(c *gin.Context) {
+	var req struct {
+		SessionId string                      `json:"sessionId" binding:"required"`
+		Messages  []models.AiAssistantMessage `json:"messages" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request data",
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	err := data.SaveAiAssistantSession(req.SessionId, req.Messages)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to save AI assistant session",
+			"message": "保存会话失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "保存成功",
 	})
 }
 

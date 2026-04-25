@@ -1044,6 +1044,16 @@ export function FetchAiModels(arg1, arg2) {
     .catch(() => []);
 }
 
+export function FetchAiModelInfo(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.FetchAiModelInfo(arg1, arg2, arg3);
+  // Web fallback: backend currently exposes model list only, so return a safe default.
+  return Promise.resolve({
+    modelName: arg3 || '',
+    maxTokens: 0,
+    source: 'fallback',
+  });
+}
+
 export function FetchAndSaveMarketStatistic() {
   if (isWailsMode()) return window.go.main.App.FetchAndSaveMarketStatistic();
   return apiService.client.post('/market/statistic/fetch', {}, { headers: getAuthHeaders() })
@@ -1066,11 +1076,93 @@ export function GetRecentDaysMarketStatistic(arg1) {
     .catch(() => []);
 }
 
+export function GetDailyChangeStats(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetDailyChangeStats(arg1);
+  return Promise.resolve([]);
+}
+
+export function GetChangeTypeDailyStats(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetChangeTypeDailyStats(arg1);
+  return Promise.resolve([]);
+}
+
+export function GetDailyDimensionStats(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.GetDailyDimensionStats(arg1, arg2, arg3);
+  return Promise.resolve([]);
+}
+
+export function GetTypeStatsByDate(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetTypeStatsByDate(arg1);
+  return Promise.resolve([]);
+}
+
+export function GetChangeRank(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetChangeRank(arg1, arg2);
+  return Promise.resolve({
+    topStocks: [],
+    topIndustries: [],
+    topConcepts: [],
+  });
+}
+
 export function GetMarketStatisticByDate(arg1) {
   if (isWailsMode()) return window.go.main.App.GetMarketStatisticByDate(arg1);
   return apiService.client.get('/market/statistic/by-date', { params: { date: arg1 }, headers: getAuthHeaders() })
     .then(res => res.data?.data || [])
     .catch(() => []);
+}
+
+export function CreateMCPServer(arg1) {
+  if (isWailsMode()) return window.go.main.App.CreateMCPServer(arg1);
+  return Promise.resolve({ id: 0 });
+}
+
+export function UpdateMCPServer(arg1) {
+  if (isWailsMode()) return window.go.main.App.UpdateMCPServer(arg1);
+  return Promise.resolve();
+}
+
+export function DeleteMCPServer(arg1) {
+  if (isWailsMode()) return window.go.main.App.DeleteMCPServer(arg1);
+  return Promise.resolve();
+}
+
+export function GetMCPServerByID(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetMCPServerByID(arg1);
+  return Promise.resolve(null);
+}
+
+export function GetMCPServerList(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetMCPServerList(arg1);
+  return Promise.resolve({
+    list: [],
+    total: 0,
+    page: 1,
+    pageSize: arg1?.pageSize || 10,
+  });
+}
+
+export function EnableMCPServer(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.EnableMCPServer(arg1, arg2);
+  return Promise.resolve();
+}
+
+export function TestMCPServer(arg1) {
+  if (isWailsMode()) return window.go.main.App.TestMCPServer(arg1);
+  return Promise.resolve({
+    success: false,
+    message: 'Web mode does not support MCP server test yet',
+  });
+}
+
+export function GetMCPToolsByServerID(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetMCPToolsByServerID(arg1);
+  return Promise.resolve([]);
+}
+
+export function GetAllMCPTools() {
+  if (isWailsMode()) return window.go.main.App.GetAllMCPTools();
+  return Promise.resolve([]);
 }
 
 export function FollowFund(arg1) {
@@ -1089,7 +1181,14 @@ export function GlobalStockIndexes() {
 
 export function GetAiAssistantSession(arg1) {
   if (isWailsMode()) return window.go.main.App.GetAiAssistantSession(arg1);
-  return Promise.resolve([]);
+  // Web 模式：调用后端 API
+  const sessionId = arg1 || '';
+  return apiService.client.get('/ai/assistant/session', { 
+    params: sessionId ? { sessionId } : {},
+    headers: getAuthHeaders() 
+  })
+    .then(res => res.data?.data || { messages: [], sessionId: '' })
+    .catch(() => ({ messages: [], sessionId: '' }));
 }
 
 export function GetAiRecommendStocksList(arg1) {
@@ -1422,7 +1521,15 @@ export function ReFleshTelegraphList(arg1) {
 
 export function SaveAiAssistantSession(arg1, arg2) {
   if (isWailsMode()) return window.go.main.App.SaveAiAssistantSession(arg1, arg2);
-  return Promise.resolve(true);
+  // Web 模式：调用后端 API
+  const sessionId = arg1;
+  const messages = arg2;
+  return apiService.client.post('/ai/assistant/session', 
+    { sessionId, messages }, 
+    { headers: getAuthHeaders() }
+  )
+    .then(res => res.data?.message || '保存成功')
+    .catch(err => err.message || '保存失败');
 }
 
 export function SaveStockChangesToHistory(arg1) {
@@ -1611,4 +1718,122 @@ export function ValidateCronExpr(arg1) {
 export function BrowserOpenURL(url) {
   if (isWailsMode()) return window.runtime.BrowserOpenURL(url);
   window.open(url, '_blank');
+}
+
+export function AddAllStockInfo(arg1) {
+  if (isWailsMode()) return window.go.main.App.AddAllStockInfo(arg1);
+  return Promise.resolve(false);
+}
+
+export function AddCronTask(arg1) {
+  if (isWailsMode()) return window.go.main.App.AddCronTask(arg1);
+  return Promise.resolve('Web mode not supported');
+}
+
+export function AnalyzeSentiment(arg1) {
+  if (isWailsMode()) return window.go.main.App.AnalyzeSentiment(arg1);
+  return Promise.resolve(null);
+}
+
+export function BatchDeleteAIResponseResult(arg1) {
+  if (isWailsMode()) return window.go.main.App.BatchDeleteAIResponseResult(arg1);
+  return Promise.resolve('Web mode not supported');
+}
+
+export function BatchDeleteAllStockInfo(arg1) {
+  if (isWailsMode()) return window.go.main.App.BatchDeleteAllStockInfo(arg1);
+  return Promise.resolve('Web mode not supported');
+}
+
+export function CheckStockBaseInfo() {
+  if (isWailsMode()) return window.go.main.App.CheckStockBaseInfo();
+  return Promise.resolve(false);
+}
+
+export function CreateSkill(arg1) {
+  if (isWailsMode()) return window.go.main.App.CreateSkill(arg1);
+  return Promise.resolve({ id: 0 });
+}
+
+export function DeleteAllStockInfo(arg1) {
+  if (isWailsMode()) return window.go.main.App.DeleteAllStockInfo(arg1);
+  return Promise.resolve(false);
+}
+
+export function DeleteSkill(arg1) {
+  if (isWailsMode()) return window.go.main.App.DeleteSkill(arg1);
+  return Promise.resolve();
+}
+
+export function DeleteStockChangeHistory() {
+  if (isWailsMode()) return window.go.main.App.DeleteStockChangeHistory();
+  return Promise.resolve();
+}
+
+export function EnableSkill(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.EnableSkill(arg1, arg2);
+  return Promise.resolve();
+}
+
+export function GetAllSkills() {
+  if (isWailsMode()) return window.go.main.App.GetAllSkills();
+  return Promise.resolve([]);
+}
+
+export function GetLatestTradingDay() {
+  if (isWailsMode()) return window.go.main.App.GetLatestTradingDay();
+  return Promise.resolve('');
+}
+
+export function GetSkillByID(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetSkillByID(arg1);
+  return Promise.resolve(null);
+}
+
+export function GetSkillList(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetSkillList(arg1);
+  return Promise.resolve({
+    list: [],
+    total: 0,
+  });
+}
+
+export function GetStockCommonKLine(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.GetStockCommonKLine(arg1, arg2, arg3);
+  return Promise.resolve([]);
+}
+
+export function GetTimezone() {
+  if (isWailsMode()) return window.go.main.App.GetTimezone();
+  return Promise.resolve('Asia/Shanghai');
+}
+
+export function GetTradingRecordById(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetTradingRecordById(arg1);
+  return Promise.resolve(null);
+}
+
+export function GetUplimitHot(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetUplimitHot(arg1);
+  return Promise.resolve([]);
+}
+
+export function InitCronTasks() {
+  if (isWailsMode()) return window.go.main.App.InitCronTasks();
+  return Promise.resolve();
+}
+
+export function IsTradingTime() {
+  if (isWailsMode()) return window.go.main.App.IsTradingTime();
+  return Promise.resolve(false);
+}
+
+export function NewsPush(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.NewsPush(arg1, arg2);
+  return Promise.resolve();
+}
+
+export function UpdateSkill(arg1) {
+  if (isWailsMode()) return window.go.main.App.UpdateSkill(arg1);
+  return Promise.resolve();
 }

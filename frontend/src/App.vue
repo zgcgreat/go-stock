@@ -28,6 +28,7 @@ import {LocalFireDepartmentRound} from "@vicons/material";
 import {AppsList20Regular, BoxSearch20Regular, CommentNote20Filled} from "@vicons/fluent";
 import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} from "@vicons/antd";
 import apiService from './services/api.js'
+import {EventsEmit} from './services/wails-bridge.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -711,6 +712,17 @@ const menuOptions = ref([
     icon: renderIcon(SettingsOutline),
   },
   {
+    label: () => h(RouterLink, {
+      to: {name: 'userManagement'},
+      onClick: () => {
+        activeKey.value = 'admin'
+      }
+    }, {default: () => '用户管理'}),
+    key: 'admin',
+    show: false,
+    icon: renderIcon(PeopleOutline),
+  },
+  {
     label: () =>
         h(
             RouterLink,
@@ -761,13 +773,20 @@ const menuOptions = ref([
   {
     label: () => h("a", {
       href: '#',
+      onClick: handleLogout,
+    }, {default: () => '退出登录'}),
+    key: 'logout',
+    icon: renderIcon(LogOutOutline),
+  },
+  {
+    label: () => h("a", {
+      href: '#',
       onClick: Quit,
     }, {default: () => '退出程序'}),
     key: 'exit',
     icon: renderIcon(PowerOutline),
   },
 ])
->>>>>>> origin/dev
 
 function renderIcon(icon) {
   return () => h(NIcon, null, {default: () => h(icon)})
@@ -925,114 +944,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   // Clean up any event listeners
 })
-
-const menuOptions = ref([
-  {
-    label: () => h(RouterLink, {
-      to: {name: 'stock', query: {groupName: '全部', groupId: 0}},
-      onClick: () => { activeKey.value = 'stock' }
-    }, {default: () => '股票自选'}),
-    key: 'stock',
-    icon: renderIcon(StarOutline),
-    children: [
-      {
-        label: () => h('a', {
-          href: '#',
-          onClick: () => {
-            activeKey.value = 'stock'
-            router.push({name: 'stock', query: {groupName: '全部', groupId: 0}})
-            window.dispatchEvent(new CustomEvent('changeTab', {detail: {ID: 0, name: '全部'}}))
-          },
-        }, {default: () => '全部'}),
-        key: 0,
-      }
-    ],
-  },
-  {
-    label: () => h(RouterLink, {
-      to: {name: 'market'},
-      onClick: () => { activeKey.value = 'market' }
-    }, {default: () => '市场行情'}),
-    key: 'market',
-    icon: renderIcon(NewspaperOutline),
-    children: [
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "市场快讯"}}}, {default: () => '市场快讯'}), key: 'market1', icon: renderIcon(NewspaperSharp)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "全球股指"}}}, {default: () => '全球股指'}), key: 'market2', icon: renderIcon(BarChartSharp)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "重大指数"}}}, {default: () => '重大指数'}), key: 'market3', icon: renderIcon(AnalyticsOutline)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "行业排名"}}}, {default: () => '行业排名'}), key: 'market4', icon: renderIcon(Flag)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "个股资金流向"}}}, {default: () => '个股资金流向'}), key: 'market5', icon: renderIcon(Pulse)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "龙虎榜"}}}, {default: () => '龙虎榜'}), key: 'market6', icon: renderIcon(Dragon)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "个股研报"}}}, {default: () => '个股研报'}), key: 'market7', icon: renderIcon(StockOutlined)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "公司公告"}}}, {default: () => '公司公告'}), key: 'market8', icon: renderIcon(NotificationFilled)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "行业研究"}}}, {default: () => '行业研究'}), key: 'market9', icon: renderIcon(ReportSearch)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "当前热门"}}}, {default: () => '当前热门'}), key: 'market10', icon: renderIcon(Gripfire)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "指标选股"}}}, {default: () => '指标选股'}), key: 'market11', icon: renderIcon(BoxSearch20Regular)},
-      {label: () => h(RouterLink, {to: {name: 'market', query: {name: "名站优选"}}}, {default: () => '名站优选'}), key: 'market12', icon: renderIcon(FirefoxBrowser)},
-    ]
-  },
-  {
-    label: () => h(RouterLink, {to: {name: 'fund', query: {name: '基金自选'}}, onClick: () => { activeKey.value = 'fund' }}, {default: () => '基金自选'}),
-    show: enableFund.value,
-    key: 'fund',
-    icon: renderIcon(SparklesOutline),
-    children: [
-      {label: () => h(NText, {type: realtimeProfit.value > 0 ? 'error' : 'success'}, {default: () => '功能完善中！'}), key: 'realtimeProfit', show: realtimeProfit.value, icon: renderIcon(AlarmOutline)},
-    ]
-  },
-  {
-    label: () => h(RouterLink, {to: {name: 'agent', query: {name: "Ai智能体"}}}, {default: () => 'Ai智能体'}),
-    key: 'agent',
-    show: enableAgent.value,
-    icon: renderIcon(Robot),
-  },
-  {
-    label: () => h(RouterLink, {
-      to: {name: 'research'},
-      onClick: () => {
-        activeKey.value = 'research'
-        setTimeout(() => { window.dispatchEvent(new CustomEvent('changeResearchTab', {detail: {ID: 0, name: 'AI分析报告'}})) }, 100)
-      }
-    }, {default: () => '研究中心'}),
-    key: 'research',
-    icon: renderIcon(FlaskOutline),
-    children: [
-      {label: () => h(RouterLink, {to: {name: 'research', query: {name: "AI分析报告"}}}, {default: () => 'AI分析报告'}), key: 'research1', icon: renderIcon(ReportAnalytics)},
-      {label: () => h(RouterLink, {to: {name: 'research', query: {name: "股票推荐记录"}}}, {default: () => '股票推荐记录'}), key: 'research2', icon: renderIcon(DiamondOutline)},
-      {label: () => h(RouterLink, {to: {name: 'research', query: {name: "异动监控"}}}, {default: () => '异动监控'}), key: 'stockChanges', icon: renderIcon(TrendingUp)},
-      {label: () => h(RouterLink, {to: {name: 'research', query: {name: "提示词模板"}}}, {default: () => '提示词模板'}), key: 'research3', icon: renderIcon(Prompt)},
-      {label: () => h(RouterLink, {to: {name: 'research', query: {name: "股票信息筛选"}}}, {default: () => '股票信息筛选'}), key: 'research4', icon: renderIcon(AppsList20Regular)},
-      {label: () => h(RouterLink, {to: {name: 'research', query: {name: "定时任务"}}}, {default: () => '定时任务'}), key: 'research5', icon: renderIcon(TimeOutline)},
-      {label: () => h(RouterLink, {to: {name: 'research', query: {name: "交易日志"}}}, {default: () => '交易日志(beta)'}), key: 'research6', icon: renderIcon(MoneyCollectOutlined)},
-    ],
-  },
-  {
-    label: () => h(RouterLink, {to: {name: 'settings', query: {name: "设置"}}, onClick: () => { activeKey.value = 'settings' }}, {default: () => '设置'}),
-    key: 'settings',
-    icon: renderIcon(SettingsOutline),
-  },
-  {
-    label: () => h(RouterLink, {to: {name: 'userManagement'}, onClick: () => { activeKey.value = 'admin' }}, {default: () => '用户管理'}),
-    key: 'admin',
-    show: false, // 默认隐藏，将在挂载后根据用户权限动态更新
-    icon: renderIcon(PeopleOutline),
-  },
-  {
-    label: () => h(RouterLink, {to: {name: 'about', query: {name: "关于"}}}, {default: () => '关于'}),
-    key: 'about',
-    icon: renderIcon(LogoGithub),
-  },
-  {
-    show: false,
-    label: () => h("a", {href: '#', onClick: toggleFullscreen, title: '全屏/退出全屏'}, {default: () => isFullscreen.value ? '取消全屏' : '全屏'}),
-    key: 'full',
-    icon: renderIcon(ExpandOutline),
-  },
-  {
-    label: () => h("a", {href: '#', onClick: handleLogout}, {default: () => '退出登录'}),
-    key: 'logout',
-    icon: renderIcon(LogOutOutline),
-  },
-])
 </script>
 
 <template>
