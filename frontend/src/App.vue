@@ -29,7 +29,7 @@ import {
   Wallet, WarningOutline, TimeOutline,
   LogOutOutline
 } from '@vicons/ionicons5'
-import {AnalyzeSentiment, GetConfig, GetGroupList, GetVersionInfo, IsTradingTime, IsHKTradingTime, IsUSTradingTime} from "../wailsjs/go/main/App";
+import {AnalyzeSentiment, GetConfig, GetGroupList, GetVersionInfo} from "../wailsjs/go/main/App";
 import FloatingAiAssistant from "./components/FloatingAiAssistant.vue";
 import FloatingAgentAssistant from "./components/FloatingAgentAssistant.vue";
 import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
@@ -38,7 +38,7 @@ import {LocalFireDepartmentRound} from "@vicons/material";
 import {AppsList20Regular, BoxSearch20Regular,SlideHide24Filled, CommentNote20Filled} from "@vicons/fluent";
 import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} from "@vicons/antd";
 import apiService from './services/api.js'
-import {EventsEmit as WailsBridgeEventsEmit} from './services/wails-bridge.js'
+import {EventsEmit as WailsBridgeEventsEmit, IsTradingTime as WebIsTradingTime} from './services/wails-bridge.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -91,15 +91,26 @@ function refreshMotto() {
 }
 
 function updateMarketStatus() {
-  Promise.all([
-    IsTradingTime().catch(() => false),
-    IsHKTradingTime().catch(() => false),
-    IsUSTradingTime().catch(() => false)
-  ]).then(([cn, hk, us]) => {
-    const parts = []
-    parts.push(cn ? 'A股交易中' : 'A股休市')
-    parts.push(hk ? '港股交易中' : '港股休市')
-    parts.push(us ? '美股交易中' : '美股休市')
+  // Web 模式下显示休市，桌面端检查交易时间
+  const getMarketStatus = async () => {
+    if (!window.go) return ['A股休市', '港股休市', '美股休市']
+    try {
+      const app = await import("../wailsjs/go/main/App")
+      const [cn, hk, us] = await Promise.all([
+        app.IsTradingTime().catch(() => false),
+        app.IsHKTradingTime().catch(() => false),
+        app.IsUSTradingTime().catch(() => false)
+      ])
+      return [
+        cn ? 'A股交易中' : 'A股休市',
+        hk ? '港股交易中' : '港股休市',
+        us ? '美股交易中' : '美股休市'
+      ]
+    } catch {
+      return ['A股休市', '港股休市', '美股休市']
+    }
+  }
+  getMarketStatus().then(parts => {
     marketStatus.value = parts.join(' | ')
     WindowSetTitle("go-stock " + marketStatus.value + " " + officialStatement.value + "  「" + currentMotto.value + "」  [数据来源于网络，仅供参考；投资有风险，入市需谨慎]")
   })
