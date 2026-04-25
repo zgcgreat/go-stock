@@ -1,6 +1,12 @@
 <script setup>
 import {onBeforeMount, onBeforeUnmount, ref, computed, h} from 'vue'
-import {GetConfig, GetUplimitHot, IsTradingTime, IsTradingDay, GetLatestTradingDay} from "../../wailsjs/go/main/App";
+import {
+  GetConfig,
+  GetUplimitHot,
+  IsTradingTime,
+  IsTradingDay,
+  GetLatestTradingDay
+} from "../services/wails-bridge.js";
 import {NButton, NText, NTag, NTooltip, NProgress, useMessage} from "naive-ui";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
 

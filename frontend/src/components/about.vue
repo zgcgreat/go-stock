@@ -2,19 +2,27 @@
 import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
 import {h, computed, nextTick, onBeforeUnmount, onMounted, ref} from 'vue';
-import {CheckUpdate, GetVersionInfo,GetSponsorInfo,OpenURL,EventsOff, EventsOn,Environment} from "../services/wails-bridge.js";
-import {CheckUpdate as CheckUpdateDesktop, GetConfig, GetVersionInfo as GetVersionInfoDesktop,GetSponsorInfo as GetSponsorInfoDesktop,GetUserManual,OpenURL as OpenURLDesktop} from "../../wailsjs/go/main/App";
-import {EventsOff as EventsOffRuntime, EventsOn as EventsOnRuntime} from "../../wailsjs/runtime";
+import {
+  CheckUpdate,
+  GetVersionInfo,
+  GetSponsorInfo,
+  OpenURL,
+  EventsOff,
+  EventsOn,
+  Environment,
+  GetUserManual,
+  GetConfig
+} from "../services/wails-bridge.js";
 import {NAvatar, NButton, NTree, useNotification,NText} from "naive-ui";
 import { addMonths, format ,parse} from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
-// 根据运行模式选择使用哪个函数
+// 根据运行模式选择使用哪个函数（保留兼容性）
 const isWebMode = ref(typeof window !== 'undefined' && !window.go)
-const CheckUpdateFunc = isWebMode.value ? CheckUpdate : CheckUpdateDesktop
-const GetVersionInfoFunc = isWebMode.value ? GetVersionInfo : GetVersionInfoDesktop
-const GetSponsorInfoFunc = isWebMode.value ? GetSponsorInfo : GetSponsorInfoDesktop
-const OpenURLFunc = isWebMode.value ? OpenURL : OpenURLDesktop
+const CheckUpdateFunc = CheckUpdate
+const GetVersionInfoFunc = GetVersionInfo
+const GetSponsorInfoFunc = GetSponsorInfo
+const OpenURLFunc = OpenURL
 const updateLog = ref('');
 const versionInfo = ref('');
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');

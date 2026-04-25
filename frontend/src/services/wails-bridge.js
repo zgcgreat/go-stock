@@ -356,6 +356,44 @@ export function GetStockKLine(code, name, days) {
     });
 }
 
+export function GetStockKLineWithFallback(stockCode, stockName, klt, limit) {
+  if (isWailsMode()) {
+    return window.go.main.App.GetStockKLineWithFallback(stockCode, stockName, klt, limit);
+  }
+  // Web 模式：调用 K 线 API，返回带 source 的结果
+  return apiService.client.get(`/stocks/${stockCode}/kline`, {
+    params: { name: stockName, klt, limit },
+    headers: getAuthHeaders()
+  })
+    .then(res => {
+      const data = res.data?.data || [];
+      return { data, source: 'web' };
+    })
+    .catch(err => {
+      console.warn('GetStockKLineWithFallback web fallback failed:', err.message);
+      return { data: [], source: 'web' };
+    });
+}
+
+export function GetStockKLinePageWithFallback(stockCode, stockName, klt, limit, end) {
+  if (isWailsMode()) {
+    return window.go.main.App.GetStockKLinePageWithFallback(stockCode, stockName, klt, limit, end);
+  }
+  // Web 模式：分页获取 K 线数据
+  return apiService.client.get(`/stocks/${stockCode}/kline/page`, {
+    params: { name: stockName, klt, limit, end },
+    headers: getAuthHeaders()
+  })
+    .then(res => {
+      const data = res.data?.data || [];
+      return { data, source: 'web' };
+    })
+    .catch(err => {
+      console.warn('GetStockKLinePageWithFallback web fallback failed:', err.message);
+      return { data: [], source: 'web' };
+    });
+}
+
 export function GetStockMinutePriceLineData(code, name) {
   if (isWailsMode()) {
     return window.go.main.App.GetStockMinutePriceLineData(code, name);
@@ -494,6 +532,19 @@ export function GetGroupStockList(groupId) {
     .catch(err => {
       console.warn('GetGroupStockList web fallback failed:', err.message);
       return [];
+    });
+}
+
+export function GetUserManual() {
+  if (isWailsMode()) {
+    return window.go.main.App.GetUserManual();
+  }
+  // Web 模式：从后端 API 获取用户手册
+  return apiService.client.get('/manual', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || '')
+    .catch(err => {
+      console.warn('GetUserManual web fallback failed:', err.message);
+      return '';
     });
 }
 
@@ -779,6 +830,32 @@ export function Environment() {
     return window.runtime.Environment();
   }
   return Promise.resolve({ platform: 'web', buildType: 'web' });
+}
+
+export function WindowSetTitle(title) {
+  if (isWailsMode()) {
+    return window.runtime.WindowSetTitle(title);
+  }
+  // Web 模式下设置文档标题
+  document.title = title;
+}
+
+export function Quit() {
+  if (isWailsMode()) {
+    return window.runtime.Quit();
+  }
+  // Web 模式下无法直接退出，提示用户关闭浏览器窗口
+  if (confirm('确定要退出应用吗？')) {
+    window.close();
+  }
+}
+
+export function Hide() {
+  if (isWailsMode()) {
+    return window.runtime.Hide();
+  }
+  // Web 模式下隐藏应用（最小化到系统托盘不可用）
+  console.log('Web 模式下不支持隐藏功能');
 }
 
 // ========== 额外函数 (按字母顺序) ==========
@@ -1785,6 +1862,11 @@ export function GetLatestTradingDay() {
   return Promise.resolve('');
 }
 
+export function IsTradingDay(date) {
+  if (isWailsMode()) return window.go.main.App.IsTradingDay(date);
+  return Promise.resolve(false);
+}
+
 export function GetSkillByID(arg1) {
   if (isWailsMode()) return window.go.main.App.GetSkillByID(arg1);
   return Promise.resolve(null);
@@ -1825,6 +1907,16 @@ export function InitCronTasks() {
 
 export function IsTradingTime() {
   if (isWailsMode()) return window.go.main.App.IsTradingTime();
+  return Promise.resolve(false);
+}
+
+export function IsHKTradingTime() {
+  if (isWailsMode()) return window.go.main.App.IsHKTradingTime();
+  return Promise.resolve(false);
+}
+
+export function IsUSTradingTime() {
+  if (isWailsMode()) return window.go.main.App.IsUSTradingTime();
   return Promise.resolve(false);
 }
 

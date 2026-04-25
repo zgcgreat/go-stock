@@ -1,13 +1,4 @@
 <script setup>
-import {
-  EventsEmit,
-  EventsOff,
-  EventsOn,
-  Quit, Hide,
-  WindowFullscreen,
-  WindowUnfullscreen,
-  WindowSetTitle
-} from '../wailsjs/runtime'
 import {h, onBeforeMount, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {RouterLink, useRouter, useRoute} from 'vue-router'
 import {createDiscreteApi, darkTheme, lightTheme, NIcon, NText, NButton, dateZhCN, zhCN} from 'naive-ui'
@@ -38,7 +29,17 @@ import {LocalFireDepartmentRound} from "@vicons/material";
 import {AppsList20Regular, BoxSearch20Regular,SlideHide24Filled, CommentNote20Filled} from "@vicons/fluent";
 import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} from "@vicons/antd";
 import apiService from './services/api.js'
-import {EventsEmit as WailsBridgeEventsEmit, IsTradingTime as WebIsTradingTime} from './services/wails-bridge.js'
+import {
+  EventsEmit as WailsBridgeEventsEmit,
+  EventsOn as WailsBridgeEventsOn,
+  EventsOff as WailsBridgeEventsOff,
+  IsTradingTime as WebIsTradingTime,
+  WindowFullscreen,
+  WindowUnfullscreen,
+  WindowSetTitle,
+  Quit,
+  Hide
+} from './services/wails-bridge.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -155,7 +156,7 @@ const menuOptions = ref([
                         groupId: 0,
                       },
                     })
-                    EventsEmit("changeTab", {ID: 0, name: '全部'})
+                    WailsBridgeEventsEmit("changeTab", {ID: 0, name: '全部'})
                   },
                   to: {
                     name: 'stock',
@@ -183,7 +184,7 @@ const menuOptions = ref([
               },
               onClick: () => {
                 activeKey.value = 'market'
-                EventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
+                WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
               },
             },
             {default: () => '市场行情'}
@@ -205,7 +206,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
                   },
                 },
                 {default: () => '市场快讯',}
@@ -227,7 +228,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '全球股指'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '全球股指'})
                   },
                 },
                 {default: () => '全球股指',}
@@ -249,7 +250,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '重大指数'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '重大指数'})
                   },
                 },
                 {default: () => '重大指数',}
@@ -271,7 +272,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '行业排名'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '行业排名'})
                   },
                 },
                 {default: () => '行业排名',}
@@ -293,7 +294,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '个股资金流向'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '个股资金流向'})
                   },
                 },
                 {default: () => '个股资金流向',}
@@ -315,7 +316,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '龙虎榜'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '龙虎榜'})
                   },
                 },
                 {default: () => '龙虎榜',}
@@ -337,7 +338,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '个股研报'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '个股研报'})
                   },
                 },
                 {default: () => '个股研报',}
@@ -359,7 +360,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '公司公告'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '公司公告'})
                   },
                 },
                 {default: () => '公司公告',}
@@ -381,7 +382,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '行业研究'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '行业研究'})
                   },
                 },
                 {default: () => '行业研究',}
@@ -403,7 +404,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '当前热门'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '当前热门'})
                   },
                 },
                 {default: () => '当前热门',}
@@ -425,7 +426,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '指标选股'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '指标选股'})
                   },
                 },
                 {default: () => '指标选股',}
@@ -447,7 +448,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    EventsEmit("changeMarketTab", {ID: 0, name: '名站优选'})
+                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '名站优选'})
                   },
                 },
                 {default: () => '名站优选',}
@@ -521,7 +522,7 @@ const menuOptions = ref([
                 onClick: () => {
                   activeKey.value = 'research'
                   setTimeout(() => {
-                    EventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
+                    WailsBridgeEventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
                   }, 100)
                 },
               },
@@ -544,7 +545,7 @@ const menuOptions = ref([
                       onClick: () => {
                         activeKey.value = 'research'
                         setTimeout(() => {
-                          EventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
+                          WailsBridgeEventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
                         }, 100)
                       },
                     },
@@ -567,7 +568,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 1, name: '股票推荐记录'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 1, name: '股票推荐记录'})
                       }, 100)
                     },
                   },
@@ -590,7 +591,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 2, name: '异动监控'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 2, name: '异动监控'})
                       }, 100)
                     },
                   },
@@ -613,7 +614,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 9, name: '涨停梯队'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 9, name: '涨停梯队'})
                       }, 100)
                     },
                   },
@@ -636,7 +637,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 3, name: '提示词模板'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 3, name: '提示词模板'})
                       }, 100)
                     },
                   },
@@ -659,7 +660,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 3, name: '股票信息筛选'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 3, name: '股票信息筛选'})
                       }, 100)
                     },
                   },
@@ -682,7 +683,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 5, name: '定时任务'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 5, name: '定时任务'})
                       }, 100)
                     },
                   },
@@ -705,7 +706,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 6, name: '交易日志'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 6, name: '交易日志'})
                       }, 100)
                     },
                   },
@@ -725,7 +726,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 7, name: 'MCP服务'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 7, name: 'MCP服务'})
                       }, 100)
                     },
                   },
@@ -745,7 +746,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 8, name: '技能管理'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 8, name: '技能管理'})
                       }, 100)
                     },
                   },
@@ -780,9 +781,6 @@ const menuOptions = ref([
   {
     label: () => h(RouterLink, {
       to: {name: 'userManagement'},
-      onClick: () => {
-        activeKey.value = 'admin'
-      }
     }, {default: () => '用户管理'}),
     key: 'admin',
     show: false,
@@ -836,6 +834,7 @@ const menuOptions = ref([
     icon: renderIcon(isWebMode.value ? LogOutOutline : SlideHide24Filled),
   },
   {
+    show: !isWebMode.value,
     label: () => h("a", {
       href: '#',
       onClick: Quit,
@@ -899,10 +898,10 @@ onBeforeUnmount(() => {
     clearInterval(marketStatusTimer)
     marketStatusTimer = null
   }
-  EventsOff("realtime_profit")
-  EventsOff("loadingMsg")
-  EventsOff("telegraph")
-  EventsOff("newsPush")
+  WailsBridgeEventsOff("realtime_profit")
+  WailsBridgeEventsOff("loadingMsg")
+  WailsBridgeEventsOff("telegraph")
+  WailsBridgeEventsOff("newsPush")
 })
 
 // 加载分组列表

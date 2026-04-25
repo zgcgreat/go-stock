@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import {onBeforeMount, onBeforeUnmount, onUnmounted, ref} from 'vue'
-import {HotStock} from "../services/wails-bridge.js";
-import {HotStock as HotStockDesktop, IsTradingTime} from "../../wailsjs/go/main/App";
+import {HotStock, IsTradingTime} from "../services/wails-bridge.js";
 import KLineChart from "./KLineChart.vue";
 import {ArrowDown, ArrowUp} from "@vicons/ionicons5";
-
-// 根据运行模式选择使用哪个函数
-const isWebMode = ref(typeof window !== 'undefined' && !window.go)
-const HotStockFunc = isWebMode.value ? HotStock : HotStockDesktop;
 
 const {marketType}=defineProps(
     {
@@ -22,18 +17,15 @@ const checkTask = ref()
 const list  = ref([])
 
 async function fetchHotStock() {
-  list.value = await HotStockFunc(marketType)
+  list.value = await HotStock(marketType)
 }
-
-// 兼容 web 模式的 IsTradingTime
-const IsTradingTimeFunc = isWebMode.value ? () => Promise.resolve(false) : IsTradingTime;
 
 function startRefresh() {
   stopRefresh()
   fetchHotStock()
   task.value = setInterval(fetchHotStock, 5000)
   checkTask.value = setInterval(() => {
-    IsTradingTimeFunc().then(trading => {
+    IsTradingTime().then(trading => {
       if (!trading) {
         stopRefresh()
         startCheckLoop()
@@ -45,7 +37,7 @@ function startRefresh() {
 function startCheckLoop() {
   stopCheck()
   checkTask.value = setInterval(() => {
-    IsTradingTimeFunc().then(trading => {
+    IsTradingTime().then(trading => {
       if (trading) {
         stopCheck()
         startRefresh()

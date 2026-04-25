@@ -1,6 +1,10 @@
 <script setup>
-import { GetStockEastMoneyKLine, GetStockEastMoneyKLinePage } from '../services/wails-bridge.js'
-import { GetStockEastMoneyKLine as GetStockEastMoneyKLineDesktop, GetStockEastMoneyKLinePage as GetStockEastMoneyKLinePageDesktop, GetStockKLineWithFallback, GetStockKLinePageWithFallback } from '../../wailsjs/go/main/App'
+import { 
+  GetStockEastMoneyKLine, 
+  GetStockEastMoneyKLinePage,
+  GetStockKLineWithFallback,
+  GetStockKLinePageWithFallback
+} from '../services/wails-bridge.js'
 import {
   CandlestickSeries,
   createChart,
@@ -12,10 +16,10 @@ import {
 import { NButton, NFlex, NInput, NSpin, NText } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-// 根据运行模式选择使用哪个函数
+// 根据运行模式选择使用哪个函数（保留兼容性）
 const isWebMode = ref(typeof window !== 'undefined' && !window.go)
-const GetStockEastMoneyKLineFunc = isWebMode.value ? GetStockEastMoneyKLine : GetStockEastMoneyKLineDesktop
-const GetStockEastMoneyKLinePageFunc = isWebMode.value ? GetStockEastMoneyKLinePage : GetStockEastMoneyKLinePageDesktop
+const GetStockEastMoneyKLineFunc = GetStockEastMoneyKLine
+const GetStockEastMoneyKLinePageFunc = GetStockEastMoneyKLinePage
 
 /** A 股配色：涨红跌绿 */
 const CLR_RISE = '#ef5350'

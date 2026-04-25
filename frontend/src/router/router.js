@@ -11,6 +11,7 @@ import cronTaskManager from "../components/cron-task-manager.vue"
 import mcpServerManager from "../components/mcp-server-manager.vue"
 import loginView from "../components/Login.vue"
 import registerView from "../components/Register.vue"
+import userManagementView from "../components/UserManager.vue"
 
 const routes = [
     { path: '/login', component: loginView, name: 'login', meta: { public: true } },
@@ -24,6 +25,7 @@ const routes = [
     { path: '/research', component: research,name: 'research' },
     { path: '/cron-tasks', component: cronTaskManager,name: 'cronTasks' },
     { path: '/mcp-servers', component: mcpServerManager,name: 'mcpServers' },
+    { path: '/user-management', component: userManagementView,name: 'userManagement' },
 ]
 
 const router = createRouter({
