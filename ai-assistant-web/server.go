@@ -198,10 +198,17 @@ func (a *app) getPrompts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) session(w http.ResponseWriter, r *http.Request) {
+	// 从请求头中获取用户ID（session 接口需要用户隔离）
+	userID, ok := middleware.GetUserIDFromHTTPContext(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "未登录"})
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		sessionId := r.URL.Query().Get("sessionId")
-		res, err := data.GetAiAssistantSession(sessionId)
+		res, err := data.GetAiAssistantSession(sessionId, userID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -213,7 +220,7 @@ func (a *app) session(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-		if err := data.SaveAiAssistantSession(req.SessionId, req.Messages); err != nil {
+		if err := data.SaveAiAssistantSession(req.SessionId, userID, req.Messages); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}

@@ -27,6 +27,17 @@
   - 前端多处 .map/.filter 增加 Array.isArray 防御性处理
 - 剩余低优先级：定时任务 Web 端 stub、ai-assistant-web 未集成
 
+## Web 端用户隔离修复（2026-04-26）
+- `stock_follow_handler.go`：`UnfollowStock`/`GetFollowList`/`SetCostPriceAndVolume`/`SetAlarmChangePercent`/`SetStockSort` 加用户验证
+- `stock_handler.go`：`GetStockRealTime` 持仓填充加用户过滤
+- `data.TradingRecord`/`trading_service.go`/`trade_handler.go`：交易记录加用户隔离
+- `models.CronTask`/`cron_task_api.go`/`web_handler.go`/`app.go`：定时任务加用户隔离
+- `AiRecommendStocksQuery`/`AiRecommendStocksService`/`ai_handler.go`/`app_common.go`：AI 推荐加用户隔离
+- `AiAssistantSession`/`ai_assistant_api.go`/`ai_handler.go`/`app.go`/`ai-assistant-web/server.go`：AI 会话加用户隔离
+- `AIAnalyzeRequest`/`DeleteAIResponse`（ai_handler.go）：AI 分析结果加用户隔离
+- 设计原则：`userID=0` 桌面端不过滤，`userID>0` Web 端过滤；所有修改均为扩展式，不改桌面端逻辑
+- 全部编译通过 ✅；`StockChangeHistory` 加用户隔离未完成（低优先级）
+
 ## Web 端 Bug 修复记录（2026-04-05 晚）
 - **Unfollow 400 修复**：前端 DELETE /stocks/unfollow 从 params 改为 JSON body {stockCode}
 - **K线 404 修复**：protected 路由组补注册 GET /stocks/:code/kline
@@ -51,3 +62,43 @@
 - internal/webserver/server.go：AutoMigrate 删除不存在的 models.StockTradeRecord/StockPool/AIRecommendStocksHistory/AIRecommendStocksSummary
 - app.go：添加 go-stock/backend/services import
 - 注意：go build ./...（根包）仍报错（BuildKey/Version/PanicHandler 未定义），这是 Wails 桌面端问题，需 Wails toolchain，属正常现象
+
+## K线接口修复（2026-04-26 傍晚）
+- **问题**：`GET /api/v1/stocks/600522.SH/kline` 返回空数据 `{"code":0,"data":[]}`
+- **根因**：
+  1. 腾讯日K接口（`web.ifzq.gtimg.cn`）只支持港股代码，不支持A股格式
+  2. 东方财富接口调用时 config 可能有问题，导致空数据
+  3. 前端用 `limit=800` 参数但 handler 只识别 `days`
+- **修复**：`GetStockKLine` 完全复用桌面端 `FetchKLineWithFallback` 函数，自动多数据源切换；同时支持 `days` 和 `limit` 参数
+- **编译**：`go build ./web/...` ✅
+
+## Web端 /config 用户隔离修复（2026-04-26 傍晚）
+- **问题**：`/config` 接口没有用户隔离，所有用户共享同一配置
+- **根因**：`Settings` 和 `AIConfig` 表没有 `user_id` 字段
+- **修复**：
+  - `Settings`/`AIConfig` 结构体添加 `UserID` 字段
+  - 新增 `GetSettingConfigByUserID(userID uint)` 和 `UpdateConfigByUserID(userID uint, s *SettingConfig)`
+  - 修改 `GetAppConfig`/`UpdateAppConfig`/`AITradeAnalyze` 使用用户隔离配置
+- **编译**：`go build ./web/...` ✅
+
+## SQLite user_id 列迁移修复（2026-04-26 傍晚）
+- **问题**：GORM AutoMigrate 对 SQLite 添加列支持不完善，首次部署时 `user_id` 列缺失
+- **修复**：`MigrateAllTables` 中添加 `migrateUserIDColumn()` 函数，显式检查并添加缺失列
+- **涉及的表**（共11个用户隔离表）：
+  - settings, ai_config, followed_stock, trading_records
+  - cron_tasks, ai_assistant_sessions, ai_recommend_stocks
+  - followed_fund, stock_groups, group_stock_info, ai_response_result
+- **编译**：`go build ./web/...` ✅
+
+## AI Agent 模型选择为空修复（2026-04-26 晚）
+- **问题1**：新用户首次登录时，AI Agent 助手选择模型为空
+- **修复1**：`GetSettingConfigByUserID` 增加逻辑，当用户无配置时从系统默认配置（user_id=0）复制模板
+- **问题2**：`/public/ai/configs` 路由没有 AuthOptional 中间件，无法获取当前用户 ID
+- **修复2**：
+  - public 组添加 `middleware.AuthOptional()` 中间件
+  - `GetAIConfigs` 使用 `middleware.GetUserIDFromContext(c)` 获取用户 ID
+- **涨停梯队修复**：
+  - 新增 `GetUplimitHot` Web Handler（复用 `data.NewMarketNewsApi().GetUplimitHot()`）
+  - 注册路由 `GET /market/uplimit-hot`
+  - 前端 `wails-bridge.js` Web 模式调用后端 API
+- **编译**：`go build ./web/...` ✅
