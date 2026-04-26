@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -21,6 +22,9 @@ func GetGroupList(c *gin.Context) {
 		})
 		return
 	}
+
+	// DEBUG: 打印当前用户ID
+	fmt.Printf("[DEBUG] GetGroupList userID=%d\n", userID)
 
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
