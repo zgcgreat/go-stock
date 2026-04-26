@@ -106,7 +106,10 @@ dist
 .DS_Store
 
 .idea/
+data/
+logs/
 /data/*.db*
+dist/
 ai-assistant-web/data/*.db*
 *.exe
 /build/bin/*
