@@ -140,8 +140,9 @@ type TushareResponse struct {
 	act_ent_type	str	实控人企业性质*/
 
 type FollowedStock struct {
-	StockCode          string                `gorm:"column:stock_code;index"`
-	Name               string                `gorm:"column:name"`
+	UserID              uint                  `gorm:"column:user_id;index"`
+	StockCode           string                `gorm:"column:stock_code;index"`
+	Name                string                `gorm:"column:name"`
 	Volume             int64                 `gorm:"column:volume"`
 	CostPrice          float64               `gorm:"column:cost_price"`
 	Price              float64               `gorm:"column:price"`
