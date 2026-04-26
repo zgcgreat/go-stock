@@ -17,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # 构建应用
-RUN CGO_ENABLED=0 GOOS=linux go build -o go-stock-web .
+RUN CGO_ENABLED=0 GOOS=linux go build -o go-stock-web ./cmd/web
 
 # 使用轻量级基础镜像运行应用
 FROM alpine:latest
@@ -29,14 +29,11 @@ WORKDIR /root/
 
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/go-stock-web .
-COPY --from=builder /app/frontend/dist ./frontend/dist
 
 # 创建必要的目录
 RUN mkdir -p logs
 RUN mkdir -p data
 
-# 暴露端口
 EXPOSE 8080
 
-# 启动命令
 CMD ["./go-stock-web"]
