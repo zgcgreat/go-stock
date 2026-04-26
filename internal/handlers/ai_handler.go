@@ -63,7 +63,7 @@ func AITradeAnalyze(c *gin.Context) {
 		question = "请分析当前市场行情"
 	}
 
-	settingConfig := data.GetSettingConfig()
+	settingConfig := data.GetSettingConfigByUserID(userID)
 	if settingConfig == nil || len(settingConfig.AiConfigs) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "AI config not found",
@@ -121,6 +121,7 @@ func AITradeAnalyze(c *gin.Context) {
 			StockName: req.StockName,
 			Question:  req.Question,
 			Content:   fullContent.String(),
+			UserID:    userID,
 		}
 		db.Dao.Create(aiResult)
 	}()
@@ -205,8 +206,17 @@ func GetAIResponses(c *gin.Context) {
 	})
 }
 
-// DeleteAIResponse 删除AI分析结果
+// DeleteAIResponse 删除AI分析结果（用户隔离：禁止删除他人记录）
 func DeleteAIResponse(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -217,8 +227,9 @@ func DeleteAIResponse(c *gin.Context) {
 		return
 	}
 
+	// 用户隔离：必须验证记录属于当前用户
 	var aiResponse models.AIResponseResult
-	result := db.Dao.Where("id = ?", uint(id)).First(&aiResponse)
+	result := db.Dao.Where("id = ? AND user_id = ?", uint(id), userID).First(&aiResponse)
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "AI response not found",
@@ -241,9 +252,11 @@ func DeleteAIResponse(c *gin.Context) {
 	})
 }
 
-// GetAIConfigs 获取AI配置列表
+// GetAIConfigs 获取AI配置列表（public接口，返回当前用户的AI配置）
+// 支持可选认证：登录用户获取自己的配置，未登录用户获取默认配置
 func GetAIConfigs(c *gin.Context) {
-	settingConfig := data.GetSettingConfig()
+	userID, _ := middleware.GetUserIDFromContext(c)
+	settingConfig := data.GetSettingConfigByUserID(userID)
 	if settingConfig == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
@@ -356,8 +369,10 @@ func AgentChat(c *gin.Context) {
 	flusher.Flush()
 }
 
-// GetAIRecommendStocksList 获取AI推荐股票列表
+// GetAIRecommendStocksList 获取AI推荐股票列表（用户隔离）
 func GetAIRecommendStocksList(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
 		page = 1
@@ -369,14 +384,15 @@ func GetAIRecommendStocksList(c *gin.Context) {
 	}
 
 	query := &models.AiRecommendStocksQuery{
-		Page:        page,
-		PageSize:    pageSize,
-		ModelName:   c.Query("modelName"),
-		StockName:   c.Query("stockName"),
-		StockCode:   c.Query("stockCode"),
-		BkName:      c.Query("bkName"),
-		StartDate:   c.Query("startDate"),
-		EndDate:     c.Query("endDate"),
+		UserID:    userID,
+		Page:      page,
+		PageSize:  pageSize,
+		ModelName: c.Query("modelName"),
+		StockName: c.Query("stockName"),
+		StockCode: c.Query("stockCode"),
+		BkName:    c.Query("bkName"),
+		StartDate: c.Query("startDate"),
+		EndDate:   c.Query("endDate"),
 		EnableAlert: nil,
 	}
 
@@ -413,8 +429,9 @@ func GetAIRecommendStocksList(c *gin.Context) {
 	})
 }
 
-// DeleteAIRecommendStock 删除AI推荐股票记录
+// DeleteAIRecommendStock 删除AI推荐股票记录（用户隔离）
 func DeleteAIRecommendStock(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -425,7 +442,7 @@ func DeleteAIRecommendStock(c *gin.Context) {
 		return
 	}
 
-	err = data.NewAiRecommendStocksService().DeleteAiRecommendStocks(uint(id))
+	err = data.NewAiRecommendStocksService().DeleteAiRecommendStocks(uint(id), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to delete AI recommend stock",
@@ -440,8 +457,10 @@ func DeleteAIRecommendStock(c *gin.Context) {
 	})
 }
 
-// UpdateAIRecommendStockAlert 更新AI推荐股票预警状态
+// UpdateAIRecommendStockAlert 更新AI推荐股票预警状态（用户隔离）
 func UpdateAIRecommendStockAlert(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+
 	var req struct {
 		ID          uint `json:"id" binding:"required"`
 		EnableAlert bool `json:"enableAlert"`
@@ -455,7 +474,7 @@ func UpdateAIRecommendStockAlert(c *gin.Context) {
 		return
 	}
 
-	err := data.NewAiRecommendStocksService().UpdateAiRecommendStocksAlert(req.ID, req.EnableAlert)
+	err := data.NewAiRecommendStocksService().UpdateAiRecommendStocksAlert(req.ID, userID, req.EnableAlert)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to update alert status",
@@ -470,10 +489,11 @@ func UpdateAIRecommendStockAlert(c *gin.Context) {
 	})
 }
 
-// GetAiAssistantSessionHandler 获取AI助手会话消息列表
+// GetAiAssistantSessionHandler 获取AI助手会话消息列表（用户隔离）
 func GetAiAssistantSessionHandler(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	sessionId := c.Query("sessionId")
-	resp, err := data.GetAiAssistantSession(sessionId)
+	resp, err := data.GetAiAssistantSession(sessionId, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to get AI assistant session",
@@ -489,8 +509,10 @@ func GetAiAssistantSessionHandler(c *gin.Context) {
 	})
 }
 
-// SaveAiAssistantSessionHandler 保存AI助手会话消息
+// SaveAiAssistantSessionHandler 保存AI助手会话消息（用户隔离）
 func SaveAiAssistantSessionHandler(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+
 	var req struct {
 		SessionId string                      `json:"sessionId" binding:"required"`
 		Messages  []models.AiAssistantMessage `json:"messages" binding:"required"`
@@ -504,7 +526,7 @@ func SaveAiAssistantSessionHandler(c *gin.Context) {
 		return
 	}
 
-	err := data.SaveAiAssistantSession(req.SessionId, req.Messages)
+	err := data.SaveAiAssistantSession(req.SessionId, userID, req.Messages)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to save AI assistant session",

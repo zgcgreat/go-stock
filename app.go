@@ -2343,12 +2343,12 @@ func (a *App) GetAiConfigs() []*data.AIConfig {
 
 // GetAiAssistantSession 获取 AI 助手会话消息列表，sessionId 为空时获取最新的
 func (a *App) GetAiAssistantSession(sessionId string) (*models.AiAssistantSessionResp, error) {
-	return data.GetAiAssistantSession(sessionId)
+	return data.GetAiAssistantSession(sessionId, 0) // 桌面端 userID=0，不过滤
 }
 
 // SaveAiAssistantSession 保存 AI 助手会话消息到数据库
 func (a *App) SaveAiAssistantSession(sessionId string, messages []models.AiAssistantMessage) error {
-	return data.SaveAiAssistantSession(sessionId, messages)
+	return data.SaveAiAssistantSession(sessionId, 0, messages) // 桌面端 userID=0
 }
 
 // FetchAiModels
@@ -2671,8 +2671,8 @@ func (a *App) UpdateCronTask(task *models.CronTask) string {
 //	@param id 任务 ID
 //	@return string 操作结果
 func (a *App) DeleteCronTask(id uint) string {
-	err := agent.NewCronTaskApi().Delete(id)
-	task, err := agent.NewCronTaskApi().GetByID(id)
+	err := agent.NewCronTaskApi().Delete(id, 0) // 桌面端 userID=0，不过滤
+	task, err := agent.NewCronTaskApi().GetByID(id, 0)
 	if err == nil {
 		if entryID, exists := a.getCronEntry(convertor.ToString(id) + "_" + task.Name); exists {
 			a.cron.Remove(entryID)
@@ -2691,7 +2691,7 @@ func (a *App) DeleteCronTask(id uint) string {
 //	@param id 任务 ID
 //	@return *models.CronTask 任务信息
 func (a *App) GetCronTaskByID(id uint) *models.CronTask {
-	task, err := agent.NewCronTaskApi().GetByID(id)
+	task, err := agent.NewCronTaskApi().GetByID(id, 0) // 桌面端 userID=0，不过滤
 	if err != nil {
 		return nil
 	}
@@ -2713,8 +2713,8 @@ func (a *App) GetCronTaskList(query *models.CronTaskQuery) *models.CronTaskPageR
 //	@Description: 启用/禁用定时任务
 //	@receiver a
 func (a *App) EnableCronTask(id uint, enable bool) string {
-	err := agent.NewCronTaskApi().EnableTask(id, enable)
-	task, err := agent.NewCronTaskApi().GetByID(id)
+	err := agent.NewCronTaskApi().EnableTask(id, enable, 0) // 桌面端 userID=0，不过滤
+	task, err := agent.NewCronTaskApi().GetByID(id, 0)
 	if err == nil {
 		if entryID, exists := a.getCronEntry(convertor.ToString(id) + "_" + task.Name); exists {
 			a.cron.Remove(entryID)
@@ -2748,7 +2748,7 @@ func (a *App) EnableCronTask(id uint, enable bool) string {
 //	@param id 任务 ID
 //	@return string 操作结果
 func (a *App) ExecuteCronTaskNow(id uint) string {
-	task, err := agent.NewCronTaskApi().GetByID(id)
+	task, err := agent.NewCronTaskApi().GetByID(id, 0) // 桌面端 userID=0，不过滤
 	if err != nil {
 		return fmt.Sprintf("任务不存在：%v", err)
 	}
@@ -2793,7 +2793,7 @@ func (a *App) ValidateCronExpr(expr string) string {
 //	@param keyword 搜索关键词
 //	@return []models.CronTask 搜索结果
 func (a *App) SearchCronTasks(keyword string) []models.CronTask {
-	return agent.NewCronTaskApi().SearchTasks(keyword)
+	return agent.NewCronTaskApi().SearchTasks(keyword, 0) // 桌面端 userID=0，不过滤
 }
 
 // CalculateNextRunTime 根据 Cron 表达式计算下一次运行时间

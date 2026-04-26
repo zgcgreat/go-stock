@@ -306,7 +306,8 @@ func DeleteUserSetting(c *gin.Context) {
 
 // GetAppConfig 获取应用配置（对应 Wails 的 GetConfig）
 func GetAppConfig(c *gin.Context) {
-	config := data.GetSettingConfig()
+	userID, _ := middleware.GetUserIDFromContext(c)
+	config := data.GetSettingConfigByUserID(userID)
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "success",
@@ -316,7 +317,10 @@ func GetAppConfig(c *gin.Context) {
 
 // UpdateAppConfig 更新应用配置（对应 Wails 的 UpdateConfig）
 func UpdateAppConfig(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	var config data.SettingConfig
+	// 确保 Settings 指针被初始化，否则 ShouldBindJSON 无法反序列化嵌入指针结构体
+	config.Settings = &data.Settings{}
 	if err := c.ShouldBindJSON(&config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid request data",
@@ -325,8 +329,14 @@ func UpdateAppConfig(c *gin.Context) {
 		return
 	}
 
-	result := data.UpdateConfig(&config)
-	_ = result // result 为 "保存成功！" 等提示文字，非错误信息
+	result := data.UpdateConfigByUserID(userID, &config)
+	if result != "保存成功！" {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    1,
+			"message": result,
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,

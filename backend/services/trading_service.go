@@ -125,9 +125,9 @@ func (s *TradingService) getStockCodeHistoricalData(stockCode string, date strin
 func (s *TradingService) AddTradingRecord(record data.TradingRecord) (uint, error) {
 	record.TradingTime = record.TradingTime.In(time.Local)
 
-	// 检查频繁交易
+	// 检查频繁交易（限定当前用户）
 	if record.Direction == "买入" {
-		canTrade, msg := s.CheckFrequentTrading(record.StockCode)
+		canTrade, msg := s.CheckFrequentTradingWithUser(record.StockCode, record.UserID)
 		if !canTrade {
 			return 0, errors.New(msg)
 		}
@@ -165,6 +165,11 @@ func (s *TradingService) GetTradingRecordList(query data.TradingRecordListQuery)
 	}
 	if pageSize <= 0 {
 		pageSize = 20
+	}
+
+	// 用户隔离：桌面端 user_id=0 不过滤，Web 端传入实际 userID
+	if query.UserID > 0 {
+		q = q.Where("user_id = ?", query.UserID)
 	}
 
 	// 构建查询条件
@@ -208,7 +213,11 @@ func (s *TradingService) GetTradingRecordList(query data.TradingRecordListQuery)
 	}
 
 	var allGlobal []data.TradingRecord
-	if err := db.Dao.Model(&data.TradingRecord{}).Order("trading_time ASC, id ASC").Find(&allGlobal).Error; err != nil {
+	allQ := db.Dao.Model(&data.TradingRecord{})
+	if query.UserID > 0 {
+		allQ = allQ.Where("user_id = ?", query.UserID)
+	}
+	if err := allQ.Order("trading_time ASC, id ASC").Find(&allGlobal).Error; err != nil {
 		logger.SugaredLogger.Errorf("获取交易日志全局序失败: %s", err.Error())
 		return nil, err
 	}
@@ -392,15 +401,19 @@ func (s *TradingService) GetTradingRecordList(query data.TradingRecordListQuery)
 	}, nil
 }
 
-// GetTradingRecordStatistics 获取交易日志统计数据
-func (s *TradingService) GetTradingRecordStatistics() (*data.TradingRecordStatistics, error) {
+// GetTradingRecordStatistics 获取交易日志统计数据（按用户隔离）
+func (s *TradingService) GetTradingRecordStatistics(userID uint) (*data.TradingRecordStatistics, error) {
 	type BuyRecord struct {
 		Volume int64
 		Price  float64
 	}
 
 	var records []data.TradingRecord
-	err := db.Dao.Model(&data.TradingRecord{}).Order("trading_time ASC, id ASC").Find(&records).Error
+	q := db.Dao.Model(&data.TradingRecord{})
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.Order("trading_time ASC, id ASC").Find(&records).Error
 	if err != nil {
 		logger.SugaredLogger.Errorf("获取交易日志统计失败: %s", err.Error())
 		return nil, err
@@ -528,10 +541,14 @@ func (s *TradingService) GetTradingRecordStatistics() (*data.TradingRecordStatis
 	}, nil
 }
 
-// GetTradingRecordById 根据ID获取单个交易日志
-func (s *TradingService) GetTradingRecordById(id uint) (*data.TradingRecord, error) {
+// GetTradingRecordById 根据ID获取单个交易日志（用户隔离）
+func (s *TradingService) GetTradingRecordById(id uint, userID uint) (*data.TradingRecord, error) {
 	var record data.TradingRecord
-	err := db.Dao.Model(&data.TradingRecord{}).Where("id = ?", id).First(&record).Error
+	q := db.Dao.Model(&data.TradingRecord{}).Where("id = ?", id)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.First(&record).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -542,7 +559,7 @@ func (s *TradingService) GetTradingRecordById(id uint) (*data.TradingRecord, err
 	return &record, nil
 }
 
-// UpdateTradingRecord 更新交易日志
+// UpdateTradingRecord 更新交易日志（用户隔离：禁止修改他人的记录）
 func (s *TradingService) UpdateTradingRecord(record data.TradingRecord) error {
 	logger.SugaredLogger.Infof("UpdateTradingRecord: %v", record)
 	// 自动计算金额（价格 * 数量）
@@ -552,7 +569,12 @@ func (s *TradingService) UpdateTradingRecord(record data.TradingRecord) error {
 
 	s.fillTradingRecordCloseSnapshot(&record)
 
-	err := db.Dao.Model(&data.TradingRecord{}).Where("id = ?", record.ID).Updates(&record).Error
+	// 用户隔离：禁止修改他人的记录
+	q := db.Dao.Model(&data.TradingRecord{}).Where("id = ?", record.ID)
+	if record.UserID > 0 {
+		q = q.Where("user_id = ?", record.UserID)
+	}
+	err := q.Updates(&record).Error
 	if err != nil {
 		logger.SugaredLogger.Errorf("更新交易日志失败: %s", err.Error())
 		return err
@@ -566,9 +588,13 @@ func (s *TradingService) UpdateTradingRecord(record data.TradingRecord) error {
 	return nil
 }
 
-// DeleteTradingRecord 删除交易日志
-func (s *TradingService) DeleteTradingRecord(id uint) error {
-	err := db.Dao.Model(&data.TradingRecord{}).Where("id = ?", id).Delete(&data.TradingRecord{}).Error
+// DeleteTradingRecord 删除交易日志（用户隔离）
+func (s *TradingService) DeleteTradingRecord(id uint, userID uint) error {
+	q := db.Dao.Model(&data.TradingRecord{}).Where("id = ?", id)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.Delete(&data.TradingRecord{}).Error
 	if err != nil {
 		logger.SugaredLogger.Errorf("删除交易日志失败: %s", err.Error())
 		return err
@@ -576,14 +602,24 @@ func (s *TradingService) DeleteTradingRecord(id uint) error {
 	return nil
 }
 
-// CheckFrequentTrading 检查是否频繁交易
+// CheckFrequentTrading 检查是否频繁交易（桌面端兼容版，不过滤用户）
 // 返回值：(是否可以交易, 提示消息)
 func (s *TradingService) CheckFrequentTrading(stockCode string) (bool, string) {
+	return s.CheckFrequentTradingWithUser(stockCode, 0)
+}
+
+// CheckFrequentTradingWithUser 检查是否频繁交易（Web端用户隔离版）
+// 返回值：(是否可以交易, 提示消息)
+func (s *TradingService) CheckFrequentTradingWithUser(stockCode string, userID uint) (bool, string) {
 	// 检查最近24小时内是否有同一只股票的交易日志
 	var count int64
 	cutoffTime := time.Now().Add(-24 * time.Hour)
 
-	err := db.Dao.Model(&data.TradingRecord{}).Where("stock_code = ? AND direction = ? AND trading_time > ?", stockCode, "买入", cutoffTime).Count(&count).Error
+	q := db.Dao.Model(&data.TradingRecord{}).Where("stock_code = ? AND direction = ? AND trading_time > ?", stockCode, "买入", cutoffTime)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.Count(&count).Error
 	if err != nil {
 		logger.SugaredLogger.Errorf("检查频繁交易失败: %s", err.Error())
 		return true, "检查频繁交易失败，默认允许交易"

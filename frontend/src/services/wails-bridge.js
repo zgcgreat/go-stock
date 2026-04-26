@@ -1895,9 +1895,11 @@ export function GetTradingRecordById(arg1) {
   return Promise.resolve(null);
 }
 
-export function GetUplimitHot(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetUplimitHot(arg1);
-  return Promise.resolve([]);
+export function GetUplimitHot(date, limit = 20) {
+  if (isWailsMode()) return window.go.main.App.GetUplimitHot(date, limit);
+  // Web 模式：调用后端 API
+  return fetch(`/api/v1/market/uplimit-hot?date=${encodeURIComponent(date || '')}&limit=${limit}`)
+    .then(res => res.json());
 }
 
 export function InitCronTasks() {

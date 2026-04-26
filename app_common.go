@@ -333,7 +333,7 @@ func (a *App) GetAiRecommendStocksList(query models.AiRecommendStocksQuery) *mod
 	return page
 }
 func (a *App) DeleteAiRecommendStocks(id uint) string {
-	err := data.NewAiRecommendStocksService().DeleteAiRecommendStocks(id)
+	err := data.NewAiRecommendStocksService().DeleteAiRecommendStocks(id, 0) // 桌面端 userID=0，不过滤
 	if err != nil {
 		return "删除失败"
 	}
@@ -341,7 +341,7 @@ func (a *App) DeleteAiRecommendStocks(id uint) string {
 }
 
 func (a *App) UpdateAiRecommendStocksAlert(id uint, enableAlert bool) string {
-	err := data.NewAiRecommendStocksService().UpdateAiRecommendStocksAlert(id, enableAlert)
+	err := data.NewAiRecommendStocksService().UpdateAiRecommendStocksAlert(id, 0, enableAlert) // 桌面端 userID=0，不过滤
 	if err != nil {
 		return "更新预警状态失败"
 	}

@@ -35,6 +35,11 @@ func (s *AiRecommendStocksService) GetAiRecommendStocksList(query *models.AiReco
 
 	q := db.Dao.Model(&models.AiRecommendStocks{})
 
+	// 用户隔离：桌面端 user_id=0 不过滤，Web 端传入实际 userID
+	if query.UserID > 0 {
+		q = q.Where("user_id = ?", query.UserID)
+	}
+
 	// 构建关键词搜索条件（股票代码、股票名称、板块名称使用 OR 关系）
 	keyword := query.StockCode
 	if keyword == "" {
@@ -138,38 +143,58 @@ func (s *AiRecommendStocksService) GetAiRecommendStocksList(query *models.AiReco
 	}, nil
 }
 
-// GetAiRecommendStocksByID 根据ID获取AI推荐股票记录
-func (s *AiRecommendStocksService) GetAiRecommendStocksByID(id uint) (*models.AiRecommendStocks, error) {
+// GetAiRecommendStocksByID 根据ID获取AI推荐股票记录（用户隔离）
+func (s *AiRecommendStocksService) GetAiRecommendStocksByID(id uint, userID uint) (*models.AiRecommendStocks, error) {
 	var recommend models.AiRecommendStocks
-	err := db.Dao.First(&recommend, id).Error
+	q := db.Dao.Where("id = ?", id)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.First(&recommend).Error
 	if err != nil {
 		return nil, err
 	}
 	return &recommend, nil
 }
 
-// UpdateAiRecommendStocks 更新AI推荐股票记录
-func (s *AiRecommendStocksService) UpdateAiRecommendStocks(id uint, recommend *models.AiRecommendStocks) error {
-	result := db.Dao.Model(&models.AiRecommendStocks{}).Where("id = ?", id).Updates(recommend)
+// UpdateAiRecommendStocks 更新AI推荐股票记录（用户隔离）
+func (s *AiRecommendStocksService) UpdateAiRecommendStocks(id uint, userID uint, recommend *models.AiRecommendStocks) error {
+	q := db.Dao.Model(&models.AiRecommendStocks{}).Where("id = ?", id)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	result := q.Updates(recommend)
 	return result.Error
 }
 
-// DeleteAiRecommendStocks 根据ID删除AI推荐股票记录
-func (s *AiRecommendStocksService) DeleteAiRecommendStocks(id uint) error {
+// DeleteAiRecommendStocks 根据ID删除AI推荐股票记录（用户隔离）
+func (s *AiRecommendStocksService) DeleteAiRecommendStocks(id uint, userID uint) error {
 	// 使用软删除
-	result := db.Dao.Where("id = ?", id).Delete(&models.AiRecommendStocks{})
+	q := db.Dao.Where("id = ?", id)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	result := q.Delete(&models.AiRecommendStocks{})
 	return result.Error
 }
 
-// UpdateAiRecommendStocksAlert 更新AI推荐股票的预警状态
-func (s *AiRecommendStocksService) UpdateAiRecommendStocksAlert(id uint, enableAlert bool) error {
-	result := db.Dao.Model(&models.AiRecommendStocks{}).Where("id = ?", id).Update("enable_alert", enableAlert)
+// UpdateAiRecommendStocksAlert 更新AI推荐股票的预警状态（用户隔离）
+func (s *AiRecommendStocksService) UpdateAiRecommendStocksAlert(id uint, userID uint, enableAlert bool) error {
+	q := db.Dao.Model(&models.AiRecommendStocks{}).Where("id = ?", id)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	result := q.Update("enable_alert", enableAlert)
 	return result.Error
 }
 
-// BatchDeleteAiRecommendStocks 批量删除AI推荐股票记录
-func (s *AiRecommendStocksService) BatchDeleteAiRecommendStocks(ids []uint) error {
+// BatchDeleteAiRecommendStocks 批量删除AI推荐股票记录（用户隔离）
+func (s *AiRecommendStocksService) BatchDeleteAiRecommendStocks(ids []uint, userID uint) error {
 	// 使用软删除
-	result := db.Dao.Where("id IN ?", ids).Delete(&models.AiRecommendStocks{})
+	q := db.Dao.Where("id IN ?", ids)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	result := q.Delete(&models.AiRecommendStocks{})
 	return result.Error
 }

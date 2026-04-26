@@ -69,6 +69,15 @@ func FollowStock(c *gin.Context) {
 }
 
 func UnfollowStock(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
 	var stockCode string
 
 	// First, try getting stockCode from JSON body
@@ -96,10 +105,11 @@ func UnfollowStock(c *gin.Context) {
 		return
 	}
 
+	// 检查当前用户是否关注了该股票
 	var existingFollow data.FollowedStock
-	result := db.Dao.Unscoped().Where("stock_code = ?", stockCode).First(&existingFollow)
+	result := db.Dao.Where("stock_code = ? AND user_id = ?", stockCode, userID).First(&existingFollow)
 	if result.Error != nil {
-		fmt.Printf("UnfollowStock: stockCode=%s, error=%v\n", stockCode, result.Error)
+		fmt.Printf("UnfollowStock: userID=%d, stockCode=%s, error=%v\n", userID, stockCode, result.Error)
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "Stock not found in follow list",
 			"message": "未关注该股票",
@@ -107,7 +117,8 @@ func UnfollowStock(c *gin.Context) {
 		return
 	}
 
-	if err := db.Dao.Unscoped().Where("stock_code = ?", stockCode).Delete(&data.FollowedStock{}).Error; err != nil {
+	// 只删除当前用户关注的记录
+	if err := db.Dao.Where("stock_code = ? AND user_id = ?", stockCode, userID).Delete(&data.FollowedStock{}).Error; err != nil {
 		fmt.Printf("UnfollowStock delete error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to unfollow stock",
@@ -149,7 +160,7 @@ func GetFollowList(c *gin.Context) {
 			return
 		}
 	} else {
-		// 根据分组ID获取该分组下的股票
+		// 根据分组ID获取该分组下的股票（仅当前用户的分组）
 		groupApi := data.NewStockGroupApi(db.Dao)
 		groupStocks := groupApi.GetGroupStockByGroupId(groupId)
 		if len(groupStocks) == 0 {
@@ -167,9 +178,9 @@ func GetFollowList(c *gin.Context) {
 			stockCodes = append(stockCodes, gs.StockCode)
 		}
 
-		// 查询这些股票的详细信息
+		// 查询这些股票的详细信息（仅当前用户关注的）
 		err := db.Dao.Model(&data.FollowedStock{}).
-			Where("stock_code IN ?", stockCodes).
+			Where("stock_code IN ? AND user_id = ?", stockCodes, userID).
 			Order("sort ASC, time DESC").
 			Find(&followedStocks).Error
 		if err != nil {
@@ -189,6 +200,15 @@ func GetFollowList(c *gin.Context) {
 }
 
 func SetCostPriceAndVolume(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
 	var costReq struct {
 		StockCode string  `json:"stockCode" binding:"required"`
 		CostPrice float64 `json:"costPrice"`
@@ -203,8 +223,9 @@ func SetCostPriceAndVolume(c *gin.Context) {
 		return
 	}
 
+	// 必须验证股票属于当前用户，防止越权修改
 	var follow data.FollowedStock
-	result := db.Dao.Where("stock_code = ?", costReq.StockCode).First(&follow)
+	result := db.Dao.Where("stock_code = ? AND user_id = ?", costReq.StockCode, userID).First(&follow)
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "Stock not followed",
@@ -225,6 +246,15 @@ func SetCostPriceAndVolume(c *gin.Context) {
 }
 
 func SetAlarmChangePercent(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
 	var alarmReq struct {
 		StockCode          string  `json:"stockCode" binding:"required"`
 		AlarmChangePercent float64 `json:"alarmChangePercent"`
@@ -238,8 +268,9 @@ func SetAlarmChangePercent(c *gin.Context) {
 		return
 	}
 
+	// 必须验证股票属于当前用户，防止越权修改
 	var follow data.FollowedStock
-	result := db.Dao.Where("stock_code = ?", alarmReq.StockCode).First(&follow)
+	result := db.Dao.Where("stock_code = ? AND user_id = ?", alarmReq.StockCode, userID).First(&follow)
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "Stock not followed",
@@ -257,6 +288,15 @@ func SetAlarmChangePercent(c *gin.Context) {
 }
 
 func SetStockSort(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
 	var sortReq struct {
 		StockCode string `json:"stockCode" binding:"required"`
 		Sort      int64  `json:"sort"`
@@ -270,9 +310,17 @@ func SetStockSort(c *gin.Context) {
 		return
 	}
 
-	db.Dao.Model(&data.FollowedStock{}).
-		Where("stock_code = ?", sortReq.StockCode).
+	// 必须验证股票属于当前用户，防止越权修改
+	result := db.Dao.Model(&data.FollowedStock{}).
+		Where("stock_code = ? AND user_id = ?", sortReq.StockCode, userID).
 		Update("sort", sortReq.Sort)
+	if result.Error != nil || result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Stock not followed",
+			"message": "请先关注该股票",
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,

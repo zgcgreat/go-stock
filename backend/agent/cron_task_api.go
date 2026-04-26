@@ -42,18 +42,31 @@ func (a *CronTaskApi) Update(task *models.CronTask) error {
 		"description": task.Description,
 	}
 
-	return db.Dao.Model(&models.CronTask{}).
-		Where("id = ?", task.ID).
-		Updates(updates).Error
+	q := db.Dao.Model(&models.CronTask{}).Where("id = ?", task.ID)
+	// 用户隔离：禁止修改他人创建的任务
+	if task.UserID > 0 {
+		q = q.Where("user_id = ?", task.UserID)
+	}
+	return q.Updates(updates).Error
 }
 
-func (a *CronTaskApi) Delete(id uint) error {
-	return db.Dao.Delete(&models.CronTask{}, id).Error
+func (a *CronTaskApi) Delete(id uint, userID uint) error {
+	q := db.Dao.Model(&models.CronTask{}).Where("id = ?", id)
+	// 用户隔离：禁止删除他人创建的任务
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	return q.Delete(&models.CronTask{}).Error
 }
 
-func (a *CronTaskApi) GetByID(id uint) (*models.CronTask, error) {
+func (a *CronTaskApi) GetByID(id uint, userID uint) (*models.CronTask, error) {
 	var task models.CronTask
-	err := db.Dao.First(&task, id).Error
+	q := db.Dao.Where("id = ?", id)
+	// 用户隔离：禁止查看他人创建的任务详情
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.First(&task).Error
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +78,11 @@ func (a *CronTaskApi) List(query *models.CronTaskQuery) *models.CronTaskPageResp
 	var total int64
 
 	dbQuery := db.Dao.Model(&models.CronTask{})
+
+	// 用户隔离：桌面端 user_id=0 不过滤，Web 端传入实际 userID
+	if query.UserID > 0 {
+		dbQuery = dbQuery.Where("user_id = ?", query.UserID)
+	}
 
 	if query.Name != "" {
 		dbQuery = dbQuery.Where("name LIKE ?", "%"+query.Name+"%")
@@ -108,8 +126,13 @@ func (a *CronTaskApi) GetAll() []models.CronTask {
 	return tasks
 }
 
-func (a *CronTaskApi) EnableTask(id uint, enable bool) error {
-	return db.Dao.Model(&models.CronTask{}).Where("id = ?", id).Updates(map[string]any{
+func (a *CronTaskApi) EnableTask(id uint, enable bool, userID uint) error {
+	q := db.Dao.Model(&models.CronTask{}).Where("id = ?", id)
+	// 用户隔离：禁止启用/禁用他人创建的任务
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	return q.Updates(map[string]any{
 		"enable": enable,
 	}).Error
 }
@@ -157,9 +180,13 @@ func (a *CronTaskApi) CalculateNextRunTimes(cronExpr string, count int) []time.T
 	return times
 }
 
-func (a *CronTaskApi) SearchTasks(keyword string) []models.CronTask {
+func (a *CronTaskApi) SearchTasks(keyword string, userID uint) []models.CronTask {
 	var tasks []models.CronTask
 	query := db.Dao.Model(&models.CronTask{})
+	// 用户隔离：Web 端搜索只返回当前用户的任务
+	if userID > 0 {
+		query = query.Where("user_id = ?", userID)
+	}
 	if keyword != "" {
 		keyword = strings.TrimSpace(keyword)
 		query = query.Where("name LIKE ? OR target LIKE ? OR description LIKE ?",

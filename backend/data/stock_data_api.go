@@ -168,6 +168,7 @@ func (receiver FollowedStock) TableName() string {
 // TradingRecord 交易日志结构体
 type TradingRecord struct {
 	ID              uint   `gorm:"primaryKey"`
+	UserID          uint   `gorm:"index"` // 用户隔离字段，0表示桌面端（不限制用户）
 	StockCode       string `gorm:"index"`
 	StockName       string
 	Direction       string `gorm:"index"` // 买入/卖出
@@ -193,6 +194,7 @@ func (receiver TradingRecord) TableName() string {
 
 // TradingRecordListQuery 交易日志列表查询（与前端分页、筛选参数一致）
 type TradingRecordListQuery struct {
+	UserID    uint   `json:"userId"`   // 用户隔离，0表示桌面端（不过滤）
 	Page      int    `json:"page"`
 	PageSize  int    `json:"pageSize"`
 	Keyword   string `json:"keyword"`   // 股票代码或名称模糊匹配

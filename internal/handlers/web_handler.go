@@ -180,10 +180,11 @@ func GetEMDictCode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": code})
 }
 
-// GetTradingRecordStatistics 获取交易记录统计
+// GetTradingRecordStatistics 获取交易记录统计（用户隔离）
 func GetTradingRecordStatistics(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	svc := services.GetTradingService()
-	stats, err := svc.GetTradingRecordStatistics()
+	stats, err := svc.GetTradingRecordStatistics(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": "获取统计数据失败"})
 		return
@@ -431,13 +432,17 @@ func GetCronTaskTypes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
 
-// CreateCronTask 创建定时任务
+// CreateCronTask 创建定时任务（用户隔离：自动关联当前用户）
 func CreateCronTask(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+
 	var task models.CronTask
 	if err := c.ShouldBindJSON(&task); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
 		return
 	}
+
+	task.UserID = userID
 
 	err := agent.NewCronTaskApi().Create(&task)
 	if err != nil {
@@ -447,15 +452,17 @@ func CreateCronTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建成功"})
 }
 
-// SearchCronTasks 搜索定时任务
+// SearchCronTasks 搜索定时任务（用户隔离）
 func SearchCronTasks(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	keyword := c.DefaultQuery("keyword", "")
-	tasks := agent.NewCronTaskApi().SearchTasks(keyword)
+	tasks := agent.NewCronTaskApi().SearchTasks(keyword, userID)
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": tasks})
 }
 
-// GetCronTaskList 获取定时任务列表
+// GetCronTaskList 获取定时任务列表（用户隔离）
 func GetCronTaskList(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
 	name := c.DefaultQuery("name", "")
@@ -463,6 +470,7 @@ func GetCronTaskList(c *gin.Context) {
 	status := c.DefaultQuery("status", "")
 
 	query := &models.CronTaskQuery{
+		UserID:   userID,
 		Page:     page,
 		PageSize: pageSize,
 		Name:     name,
@@ -474,8 +482,9 @@ func GetCronTaskList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
 
-// GetCronTaskByID 获取定时任务详情
+// GetCronTaskByID 获取定时任务详情（用户隔离：禁止查看他人任务）
 func GetCronTaskByID(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -483,7 +492,7 @@ func GetCronTaskByID(c *gin.Context) {
 		return
 	}
 
-	task, err := agent.NewCronTaskApi().GetByID(uint(id))
+	task, err := agent.NewCronTaskApi().GetByID(uint(id), userID)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务不存在"})
 		return
@@ -491,8 +500,9 @@ func GetCronTaskByID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": task})
 }
 
-// ExecuteCronTaskNow 立即执行定时任务
+// ExecuteCronTaskNow 立即执行定时任务（用户隔离）
 func ExecuteCronTaskNow(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -500,7 +510,7 @@ func ExecuteCronTaskNow(c *gin.Context) {
 		return
 	}
 
-	task, err := agent.NewCronTaskApi().GetByID(uint(id))
+	task, err := agent.NewCronTaskApi().GetByID(uint(id), userID)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务不存在：" + err.Error()})
 		return
@@ -516,13 +526,17 @@ func ExecuteCronTaskNow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务已开始执行"})
 }
 
-// UpdateCronTask 更新定时任务
+// UpdateCronTask 更新定时任务（用户隔离：禁止修改他人任务）
 func UpdateCronTask(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+
 	var task models.CronTask
 	if err := c.ShouldBindJSON(&task); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
 		return
 	}
+
+	task.UserID = userID
 
 	err := agent.NewCronTaskApi().Update(&task)
 	if err != nil {
@@ -532,8 +546,9 @@ func UpdateCronTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "更新成功"})
 }
 
-// DeleteCronTask 删除定时任务
+// DeleteCronTask 删除定时任务（用户隔离：禁止删除他人任务）
 func DeleteCronTask(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -541,7 +556,7 @@ func DeleteCronTask(c *gin.Context) {
 		return
 	}
 
-	err = agent.NewCronTaskApi().Delete(uint(id))
+	err = agent.NewCronTaskApi().Delete(uint(id), userID)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除失败：" + err.Error()})
 		return
@@ -549,8 +564,9 @@ func DeleteCronTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除成功"})
 }
 
-// EnableCronTask 启用/暂停定时任务
+// EnableCronTask 启用/暂停定时任务（用户隔离：禁止操作他人任务）
 func EnableCronTask(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
@@ -566,7 +582,7 @@ func EnableCronTask(c *gin.Context) {
 		return
 	}
 
-	err = agent.NewCronTaskApi().EnableTask(uint(id), req.Enable)
+	err = agent.NewCronTaskApi().EnableTask(uint(id), req.Enable, userID)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "操作失败：" + err.Error()})
 		return
@@ -956,4 +972,17 @@ func ValidateCronExpr(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "Cron 表达式有效", "valid": true})
+}
+
+// GetUplimitHot 获取涨停梯队数据（与桌面端 GetUplimitHot 一致）
+func GetUplimitHot(c *gin.Context) {
+	date := c.DefaultQuery("date", "")
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit <= 0 {
+		limit = 20
+	}
+	result := data.NewMarketNewsApi().GetUplimitHot(date, limit)
+	// 桌面端返回格式: {"code": xxx, "message": "xxx", "data": {...}}
+	// 前端期望 code=20000 表示成功
+	c.JSON(http.StatusOK, result)
 }

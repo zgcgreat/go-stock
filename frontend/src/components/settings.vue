@@ -11,7 +11,7 @@ import {
   CheckSponsorCode,
   FetchAiModels,
   FetchAiModelInfo
-} from "../../wailsjs/go/main/App";
+} from "../services/wails-bridge.js";
 import {NTag, NTooltip, NIcon, useMessage} from "naive-ui";
 import {data, models} from "../../wailsjs/go/models";
 import {EventsEmit} from "../../wailsjs/runtime";
@@ -194,7 +194,8 @@ async function fetchModelInfo(aiConfig, modelName) {
 
 onMounted(() => {
   GetConfig().then(res => {
-    formValue.value.ID = res.ID
+    console.log('GetConfig 返回数据:', res)
+    formValue.value.ID = res.ID || 1
     formValue.value.tushareToken = res.tushareToken
     formValue.value.iwencaiApiKey = res.iwencaiApiKey || ''
     formValue.value.emApiKey = res.emApiKey || ''

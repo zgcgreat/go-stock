@@ -1023,8 +1023,11 @@ type StockConceptInfo struct {
 }
 
 type AiRecommendStocks struct {
-	gorm.Model                  `md:"-"`
-	DataTime                    *time.Time `json:"dataTime" gorm:"index;autoCreateTime" md:"推荐时间"`
+	ID        uint      `gorm:"primarykey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	UserID   uint      `json:"userId" gorm:"column:user_id;index"`
+	DataTime *time.Time `json:"dataTime" gorm:"index;autoCreateTime" md:"推荐时间"`
 	ModelName                   string     `json:"modelName" md:"模型名称"`
 	Rating                      string     `json:"rating" md:"评级"`
 	StockCode                   string     `json:"stockCode" md:"股票代码"`
@@ -1105,6 +1108,7 @@ func (receiver AiRecommendStocks) ToMdExportStruct() AiRecommendStocksMdExport {
 }
 
 type AiRecommendStocksQuery struct {
+	UserID      uint   `form:"userId" json:"userId"`           // 用户隔离，0表示桌面端（不过滤）
 	Page        int    `form:"page" json:"page"`               // 页码
 	PageSize    int    `form:"pageSize" json:"pageSize"`       // 每页大小
 	ModelName   string `form:"modelName" json:"modelName"`     // 模型名称筛选
@@ -1459,6 +1463,7 @@ type SecuritiesCompanyOpinionData struct {
 
 type CronTask struct {
 	ID            uint       `json:"id" gorm:"primarykey"`
+	UserID        uint       `json:"userId" gorm:"index"`              // 用户隔离字段，0表示桌面端（不限制）
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 	Name          string     `json:"name" gorm:"size:255;not null"`
@@ -1480,6 +1485,7 @@ func (CronTask) TableName() string {
 }
 
 type CronTaskQuery struct {
+	UserID   uint   `json:"userId"`   // 用户隔离，0表示桌面端（不过滤）
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
 	Name     string `json:"name"`
@@ -1503,6 +1509,7 @@ type CronTaskPageData struct {
 // AiAssistantSession 悬浮 AI 助手会话表，保存最近一次对话
 type AiAssistantSession struct {
 	ID        uint      `json:"id" gorm:"primarykey"`
+	UserID    uint      `json:"userId" gorm:"index"`        // 用户隔离字段，0表示桌面端（不限制）
 	SessionId string    `json:"sessionId" gorm:"index;size:64"` // 会话ID，时间戳格式
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

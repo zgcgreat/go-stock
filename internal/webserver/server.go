@@ -61,6 +61,7 @@ func (ws *WebServer) initRouter() {
 	v1 := ws.router.Group("/api/v1")
 	{
 		public := v1.Group("/public")
+		public.Use(middleware.AuthOptional()) // 支持可选认证，获取用户ID
 		{
 			public.GET("/health", handlers.HealthCheck)
 			public.GET("/stocks/search", handlers.SearchStocks)
@@ -154,6 +155,7 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/hot-stock", handlers.GetHotStock)
 			protected.GET("/market/hot-event", handlers.GetHotEvent)
 			protected.GET("/market/hot-topic", handlers.GetHotTopic)
+			protected.GET("/market/uplimit-hot", handlers.GetUplimitHot)
 
 			// 研报/公告
 			protected.GET("/research/stock-report", handlers.GetStockResearchReport)
@@ -282,6 +284,7 @@ func (ws *WebServer) GetRouter() *gin.Engine {
 	return ws.router
 }
 
+// MigrateAllTables 执行所有数据库表迁移
 func MigrateAllTables() {
 	db.Dao.AutoMigrate(
 		&data.Group{},
@@ -316,4 +319,35 @@ func MigrateAllTables() {
 		&handlers.UserSetting{},
 		&models.User{},
 	)
+
+	// 显式添加 user_id 列（SQLite AutoMigrate 可能不完整）
+	// 所有带用户隔离的表：首次部署时自动添加缺失列
+	userIDTables := []string{
+		"settings",              // data.Settings
+		"ai_config",             // data.AIConfig
+		"followed_stock",        // data.FollowedStock
+		"trading_records",       // data.TradingRecord
+		"cron_tasks",           // models.CronTask
+		"ai_assistant_sessions", // models.AiAssistantSession
+		"ai_recommend_stocks",   // models.AiRecommendStocks
+		"followed_fund",         // data.FollowedFund
+		"stock_groups",          // data.Group
+		"group_stock_info",      // data.GroupStock
+		"ai_response_result",    // models.AIResponseResult
+	}
+	for _, table := range userIDTables {
+		migrateUserIDColumn(table)
+	}
+}
+
+// migrateUserIDColumn 确保表中存在 user_id 列
+func migrateUserIDColumn(tableName string) {
+	// 检查列是否存在
+	var count int64
+	db.Dao.Raw("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?", tableName, "user_id").Scan(&count)
+	if count == 0 {
+		// 列不存在，添加它
+		db.Dao.Exec("ALTER TABLE " + tableName + " ADD COLUMN user_id INTEGER DEFAULT 0")
+		log.Printf("Migrated: Added user_id column to %s", tableName)
+	}
 }

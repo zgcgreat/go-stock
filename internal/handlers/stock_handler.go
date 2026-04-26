@@ -11,6 +11,7 @@ import (
 
 	"go-stock/backend/data"
 	"go-stock/backend/db"
+	"go-stock/internal/middleware"
 )
 
 // GetStockBasics 获取股票基本信息
@@ -114,28 +115,20 @@ func GetStockKLine(c *gin.Context) {
 	}
 
 	kLineType := c.DefaultQuery("klt", "101") // 默认日K
-	days, _ := strconv.Atoi(c.DefaultQuery("days", "120"))
-	adjustFlag := c.DefaultQuery("fqt", "") // qfq=前复权, hfq=后复权
+	// 同时支持 days 和 limit 参数（前端可能用 limit）
+	days, _ := strconv.Atoi(c.DefaultQuery("days", ""))
+	if days <= 0 {
+		days, _ = strconv.Atoi(c.DefaultQuery("limit", "120"))
+	}
 	if days <= 0 {
 		days = 120
 	}
 
-	// 优先复用桌面端默认日K逻辑，保持 Web 与桌面表现一致。
-	// 桌面端 GetStockKLine 使用腾讯日K接口：GetHK_KLineData(stockCode, "day", days)。
-	var kLines *[]data.KLineData
-	if kLineType == "101" && adjustFlag == "" {
-		kLines = data.NewStockDataApi().GetHK_KLineData(stockCode, "day", int64(days))
-	} else {
-		config := data.GetSettingConfig()
-		if config == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "Config not found",
-				"message": "配置获取失败",
-			})
-			return
-		}
-		api := data.NewEastMoneyKLineApi(config)
-		kLines = api.GetKLineDataBefore(stockCode, kLineType, adjustFlag, days, "")
+	// 复用桌面端逻辑：优先东方财富，失败时自动切换其他数据源
+	result := data.FetchKLineWithFallback(stockCode, "", kLineType, days, "")
+	kLines := &[]data.KLineData{}
+	if result != nil && result.Data != nil {
+		kLines = result.Data
 	}
 
 	// Web端返回格式与桌面端保持一致：直接返回数组
@@ -157,15 +150,21 @@ func GetStockRealTime(c *gin.Context) {
 		return
 	}
 
+	// 获取用户ID（匿名用户 userID=0，只返回行情不填充持仓信息）
+	userID, _ := middleware.GetUserIDFromContext(c)
+
 	stockApi := data.NewStockDataApi()
 	stocks, _ := stockApi.GetStockCodeRealTimeData(codes)
 
-	// 为每只股票填充关注信息和计算字段（与桌面端保持一致）
+	// 为每只股票填充关注信息和计算字段（仅限当前用户的持仓数据）
 	for i := range *stocks {
 		follow := &data.FollowedStock{
 			StockCode: (*stocks)[i].Code,
 		}
-		db.Dao.Model(follow).Where("stock_code = ?", (*stocks)[i].Code).First(follow)
+		if userID > 0 {
+			// 有登录用户：只查当前用户的持仓信息
+			db.Dao.Model(follow).Where("stock_code = ? AND user_id = ?", (*stocks)[i].Code, userID).First(follow)
+		}
 		// 调用 addStockFollowData 计算涨跌幅、盈亏等字段
 		addStockFollowData(*follow, &(*stocks)[i])
 	}

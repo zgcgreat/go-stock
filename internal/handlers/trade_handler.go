@@ -9,9 +9,16 @@ import (
 
 	"go-stock/backend/data"
 	"go-stock/backend/services"
+	"go-stock/internal/middleware"
 )
 
-// GetTradeRecords 获取交易记录列表
+// getUserID 统一从 context 获取用户 ID，未登录返回 0
+func getUserID(c *gin.Context) uint {
+	userID, _ := middleware.GetUserIDFromContext(c)
+	return userID
+}
+
+// GetTradeRecords 获取交易记录列表（用户隔离）
 func GetTradeRecords(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
@@ -20,8 +27,11 @@ func GetTradeRecords(c *gin.Context) {
 	startDate := c.Query("startDate")
 	endDate := c.Query("endDate")
 
+	userID := getUserID(c)
+
 	svc := services.GetTradingService()
 	result, err := svc.GetTradingRecordList(data.TradingRecordListQuery{
+		UserID:    userID,
 		Page:      page,
 		PageSize:  pageSize,
 		Keyword:   keyword,
@@ -44,7 +54,7 @@ func GetTradeRecords(c *gin.Context) {
 	})
 }
 
-// CreateTradeRecord 创建交易记录
+// CreateTradeRecord 创建交易记录（用户隔离）
 func CreateTradeRecord(c *gin.Context) {
 	var record data.TradingRecord
 
@@ -59,6 +69,8 @@ func CreateTradeRecord(c *gin.Context) {
 	if record.TradingTime.IsZero() {
 		record.TradingTime = time.Now()
 	}
+
+	record.UserID = getUserID(c)
 
 	svc := services.GetTradingService()
 	id, err := svc.AddTradingRecord(record)
@@ -77,7 +89,7 @@ func CreateTradeRecord(c *gin.Context) {
 	})
 }
 
-// UpdateTradeRecord 更新交易记录
+// UpdateTradeRecord 更新交易记录（用户隔离：禁止修改他人记录）
 func UpdateTradeRecord(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -99,6 +111,7 @@ func UpdateTradeRecord(c *gin.Context) {
 	}
 
 	record.ID = uint(id)
+	record.UserID = getUserID(c)
 
 	svc := services.GetTradingService()
 	if err := svc.UpdateTradingRecord(record); err != nil {
@@ -115,7 +128,7 @@ func UpdateTradeRecord(c *gin.Context) {
 	})
 }
 
-// DeleteTradeRecord 删除交易记录
+// DeleteTradeRecord 删除交易记录（用户隔离：禁止删除他人记录）
 func DeleteTradeRecord(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -127,8 +140,10 @@ func DeleteTradeRecord(c *gin.Context) {
 		return
 	}
 
+	userID := getUserID(c)
+
 	svc := services.GetTradingService()
-	if err := svc.DeleteTradingRecord(uint(id)); err != nil {
+	if err := svc.DeleteTradingRecord(uint(id), userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    -1,
 			"message": "删除交易记录失败: " + err.Error(),
