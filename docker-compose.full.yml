@@ -21,7 +21,7 @@ services:
     image: go-stock-frontend
     container_name: go-stock-frontend
     ports:
-      - "80:80"
+      - "5173:5173"
     depends_on:
       - backend
     restart: unless-stopped
