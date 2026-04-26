@@ -1,5 +1,5 @@
 # 使用官方Go镜像作为构建环境
-FROM golang:1.21-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # 安装必要工具
 RUN apk add --no-cache git ca-certificates
