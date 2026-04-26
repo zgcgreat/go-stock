@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -236,6 +237,14 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// 检查邮箱是否已存在
+	if req.Email != "" {
+		if err := db.Dao.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "EMAIL_EXISTS", "message": "邮箱已被注册"})
+			return
+		}
+	}
+
 	// 加密密码
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -256,7 +265,14 @@ func Register(c *gin.Context) {
 
 	if err := db.Dao.Create(&user).Error; err != nil {
 		logger.SugaredLogger.Errorf("创建用户失败: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "CREATE_USER_ERROR", "message": "创建用户失败"})
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "UNIQUE constraint failed: users.email") {
+			c.JSON(http.StatusConflict, gin.H{"error": "EMAIL_EXISTS", "message": "邮箱已被注册"})
+		} else if strings.Contains(errMsg, "UNIQUE constraint failed: users.username") {
+			c.JSON(http.StatusConflict, gin.H{"error": "USERNAME_EXISTS", "message": "用户名已存在"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "CREATE_USER_ERROR", "message": "创建用户失败"})
+		}
 		return
 	}
 
