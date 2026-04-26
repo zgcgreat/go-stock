@@ -63,7 +63,7 @@ func FollowStock(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,
-		"message": "Stock followed successfully",
+		"message": "关注成功",
 		"data":    newFollow,
 	})
 }
