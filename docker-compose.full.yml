@@ -1,23 +1,9 @@
 version: '3.8'
 
 services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: go-stock-frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - go-stock-net
-
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
+    image: go-stock-backend
     container_name: go-stock-backend
     ports:
       - "8080:8080"
@@ -27,6 +13,17 @@ services:
     environment:
       - GO_STOCK_WEB_PORT=8080
       - TZ=Asia/Shanghai
+    restart: unless-stopped
+    networks:
+      - go-stock-net
+
+  frontend:
+    image: go-stock-frontend
+    container_name: go-stock-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
     restart: unless-stopped
     networks:
       - go-stock-net
