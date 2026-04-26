@@ -9,9 +9,20 @@ import (
 
 	"go-stock/backend/data"
 	"go-stock/backend/db"
+	"go-stock/internal/middleware"
 )
 
 func FollowStock(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
 	var followReq struct {
 		StockCode string `json:"stockCode" binding:"required"`
 		Name      string `json:"name"`
@@ -25,8 +36,9 @@ func FollowStock(c *gin.Context) {
 		return
 	}
 
+	// 检查当前用户是否已关注
 	var existingFollow data.FollowedStock
-	result := db.Dao.Where("stock_code = ?", followReq.StockCode).First(&existingFollow)
+	result := db.Dao.Where("stock_code = ? AND user_id = ?", followReq.StockCode, userID).First(&existingFollow)
 	if result.Error == nil {
 		c.JSON(http.StatusConflict, gin.H{
 			"error":   "Stock already followed",
@@ -38,6 +50,7 @@ func FollowStock(c *gin.Context) {
 	newFollow := &data.FollowedStock{
 		StockCode: followReq.StockCode,
 		Name:      followReq.Name,
+		UserID:    userID,
 	}
 
 	if err := db.Dao.Create(newFollow).Error; err != nil {
@@ -110,14 +123,24 @@ func UnfollowStock(c *gin.Context) {
 }
 
 func GetFollowList(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
 	// 获取groupId参数,默认为0(全部)
 	groupId, _ := strconv.Atoi(c.Query("groupId"))
 
 	var followedStocks []data.FollowedStock
 
 	if groupId == 0 {
-		// 获取所有关注的股票
-		err := db.Dao.Model(&data.FollowedStock{}).Order("sort ASC, time DESC").Find(&followedStocks).Error
+		// 获取当前用户所有关注的股票
+		err := db.Dao.Where("user_id = ?", userID).Model(&data.FollowedStock{}).Order("sort ASC, time DESC").Find(&followedStocks).Error
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":   "Failed to fetch follow list",
