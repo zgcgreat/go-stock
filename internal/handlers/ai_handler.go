@@ -128,6 +128,16 @@ func AITradeAnalyze(c *gin.Context) {
 
 // GetAIResponses 获取AI分析结果列表
 func GetAIResponses(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
 		page = 1
@@ -143,7 +153,7 @@ func GetAIResponses(c *gin.Context) {
 	var total int64
 	var aiResponses []models.AIResponseResult
 
-	query := db.Dao.Model(&models.AIResponseResult{})
+	query := db.Dao.Model(&models.AIResponseResult{}).Where("user_id = ?", userID)
 
 	if chatId := c.Query("chatId"); chatId != "" {
 		query = query.Where("chat_id LIKE ?", "%"+chatId+"%")
