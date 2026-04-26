@@ -1804,6 +1804,11 @@ function renderBullBearChart(chartRefVal, title, items, direction, dimension) {
 }
 
 function handleTreemap() {
+  if (!treemapRef.value) {
+    console.warn('[DEBUG] treemapRef not ready, retry...');
+    setTimeout(handleTreemap, 500);
+    return;
+  }
   const formatUtil = echarts.format;
   AnalyzeSentimentWithFreqWeight("").then((res) => {
     treemapchart = echarts.init(treemapRef.value);
