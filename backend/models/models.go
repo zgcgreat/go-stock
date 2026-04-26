@@ -188,6 +188,7 @@ type Commit struct {
 
 type AIResponseResult struct {
 	gorm.Model
+	UserID    uint                  `gorm:"column:user_id;index" json:"userId"`
 	ChatId    string                `json:"chatId"`
 	ModelName string                `json:"modelName"`
 	StockCode string                `json:"stockCode"`
