@@ -276,9 +276,16 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// 注册成功后生成 token
+	token, err := middleware.GenerateToken(&user)
+	if err != nil {
+		logger.SugaredLogger.Errorf("生成token失败: %v", err)
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "注册成功",
 		"userId":  user.ID,
+		"token":  token,
 	})
 }
 
