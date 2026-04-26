@@ -17,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # 构建应用
-RUN CGO_ENABLED=0 GOOS=linux go build -o go-stock-web ./cmd/web
+RUN CGO_ENABLED=0 GOOS=linux go build -o go-stock-web ./web
 
 # 使用轻量级基础镜像运行应用
 FROM alpine:latest
