@@ -182,6 +182,31 @@ func UnFollowFund(c *gin.Context) {
 	})
 }
 
+// GetFundRanking 获取基金排行
+func GetFundRanking(c *gin.Context) {
+	marketType := c.DefaultQuery("marketType", "kf")
+	fundType := c.DefaultQuery("fundType", "all")
+	sortField := c.DefaultQuery("sortField", "jnzf")
+	sortOrder := c.DefaultQuery("sortOrder", "desc")
+	pageIndex, _ := strconv.Atoi(c.DefaultQuery("pageIndex", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "50"))
+
+	result, err := data.NewFundApi().GetFundRanking(marketType, fundType, sortField, sortOrder, pageIndex, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get fund ranking",
+			"message": "获取基金排行失败: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    result,
+	})
+}
+
 // GetFollowedFund 获取关注的基金列表
 func GetFollowedFund(c *gin.Context) {
 	userID, exists := middleware.GetUserIDFromContext(c)

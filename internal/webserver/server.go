@@ -137,6 +137,7 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/groups/:id/stocks", handlers.AddStockGroup)
 
 			protected.GET("/funds", handlers.GetFundList)
+			protected.GET("/funds/ranking", handlers.GetFundRanking)
 			protected.POST("/funds/follow", handlers.FollowFund)
 			protected.DELETE("/funds/unfollow", handlers.UnFollowFund)
 			protected.GET("/funds/follow/list", handlers.GetFollowedFund)

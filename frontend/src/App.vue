@@ -494,7 +494,7 @@ const menuOptions = ref([
                   to: {name: 'fund', query: {name: '基金排行'}},
                   onClick: () => {
                     activeKey.value = 'fund'
-                    EventsEmit("changeFundTab", {name: '基金排行'})
+                    WailsBridgeEventsEmit("changeFundTab", {name: '基金排行'})
                   },
                 },
                 {default: () => '基金排行'}
@@ -677,7 +677,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 10, name: '提示词广场'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 10, name: '提示词广场'})
                       }, 100)
                     },
                   },
@@ -700,7 +700,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 11, name: '问答广场'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 11, name: '问答广场'})
                       }, 100)
                     },
                   },
@@ -723,7 +723,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 3, name: '形态选股'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 3, name: '形态选股'})
                       }, 100)
                     },
                   },
@@ -746,7 +746,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        EventsEmit("changeResearchTab", {ID: 0, name: '指标选股'})
+                        WailsBridgeEventsEmit("changeResearchTab", {ID: 0, name: '指标选股'})
                       }, 100)
                     },
                   },

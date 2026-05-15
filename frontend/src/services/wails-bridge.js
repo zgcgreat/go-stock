@@ -1931,3 +1931,95 @@ export function UpdateSkill(arg1) {
   if (isWailsMode()) return window.go.main.App.UpdateSkill(arg1);
   return Promise.resolve();
 }
+
+// ========== 基金相关新增 ==========
+
+export function GetFundKLine(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.GetFundKLine(arg1, arg2, arg3);
+  return apiService.client.get(`/funds/${arg1}/kline`, { params: { klt: arg2, limit: arg3 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || null)
+    .catch(() => null);
+}
+
+export function GetFundRanking(arg1, arg2, arg3, arg4, arg5, arg6) {
+  if (isWailsMode()) return window.go.main.App.GetFundRanking(arg1, arg2, arg3, arg4, arg5, arg6);
+  const params = {
+    marketType: arg1 || 'kf',
+    fundType: arg2 || 'all',
+    sortField: arg3 || 'jnzf',
+    sortOrder: arg4 || 'desc',
+    pageIndex: arg5 || 1,
+    pageSize: arg6 || 50,
+  };
+  return apiService.client.get('/funds/ranking', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { items: [], totalCount: 0 })
+    .catch(() => ({ items: [], totalCount: 0 }));
+}
+
+export function GetFundHistoryNetValue(arg1, arg2, arg3, arg4, arg5) {
+  if (isWailsMode()) return window.go.main.App.GetFundHistoryNetValue(arg1, arg2, arg3, arg4, arg5);
+  const params = {
+    pageIndex: arg2 || 1,
+    pageSize: arg3 || 20,
+    startDate: arg4 || '',
+    endDate: arg5 || '',
+  };
+  return apiService.client.get(`/funds/${arg1}/history`, { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function GetFundTop10Holdings(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetFundTop10Holdings(arg1);
+  return apiService.client.get(`/funds/${arg1}/holdings`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+// ========== 自定义策略相关 ==========
+
+export function GetAllCustomStrategies() {
+  if (isWailsMode()) return window.go.main.App.GetAllCustomStrategies();
+  return apiService.client.get('/custom-strategies', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function SaveCustomStrategy(arg1) {
+  if (isWailsMode()) return window.go.main.App.SaveCustomStrategy(arg1);
+  return apiService.client.post('/custom-strategies', arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '保存成功')
+    .catch(err => err.message || '保存失败');
+}
+
+export function DeleteCustomStrategy(arg1) {
+  if (isWailsMode()) return window.go.main.App.DeleteCustomStrategy(arg1);
+  return apiService.client.delete(`/custom-strategies/${arg1}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => err.message || '删除失败');
+}
+
+// ========== 设备绑定相关 ==========
+
+export function GetMachineId() {
+  if (isWailsMode()) return window.go.main.App.GetMachineId();
+  return apiService.client.get('/device/machine-id', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || '')
+    .catch(() => '');
+}
+
+export function CheckDeviceBinding(arg1) {
+  if (isWailsMode()) return window.go.main.App.CheckDeviceBinding(arg1);
+  return apiService.client.post('/device/check-binding', { machineId: arg1 }, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || { bound: false })
+    .catch(() => ({ bound: false }));
+}
+
+export function QuitApp() {
+  if (isWailsMode()) return window.go.main.App.QuitApp();
+  // Web 模式下无法直接退出
+  if (confirm('确定要退出应用吗？')) {
+    window.close();
+  }
+  return Promise.resolve();
+}
