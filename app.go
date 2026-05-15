@@ -13,6 +13,7 @@ import (
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
+	machineid "go-stock/backend/machineid"
 	"go-stock/backend/models"
 	"go-stock/backend/services"
 	"os"
@@ -32,7 +33,6 @@ import (
 	"github.com/duke-git/lancet/v2/mathutil"
 	"github.com/duke-git/lancet/v2/slice"
 	"github.com/duke-git/lancet/v2/strutil"
-	"github.com/go-resty/resty/v2"
 	"github.com/robfig/cron/v3"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -97,6 +97,60 @@ func (a *App) GetSponsorInfo() map[string]any {
 	return a.SponsorInfo
 }
 
+func (a *App) GetMachineId() string {
+	return machineid.GetMachineId()
+}
+
+func (a *App) CheckDeviceBinding(token string, apiBase string) map[string]any {
+	uuid := machineid.GetMachineId()
+	result := map[string]any{
+		"bound":       false,
+		"deviceCount": 0,
+		"maxDevices":  5,
+	}
+
+	if token == "" || apiBase == "" {
+		return result
+	}
+
+	url := fmt.Sprintf("%s/user/device-check?uuid=%s", apiBase, uuid)
+	resp, err := data.SharedHTTPClient.R().
+		SetHeader("Authorization", "Bearer "+token).
+		Get(url)
+	if err != nil {
+		return result
+	}
+
+	var respData struct {
+		Code int `json:"code"`
+		Data struct {
+			Bound       bool `json:"bound"`
+			DeviceCount int  `json:"deviceCount"`
+			MaxDevices  int  `json:"maxDevices"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(resp.Body(), &respData); err != nil {
+		return result
+	}
+	if respData.Code != 0 {
+		return result
+	}
+
+	result["bound"] = respData.Data.Bound
+	result["deviceCount"] = respData.Data.DeviceCount
+	result["maxDevices"] = respData.Data.MaxDevices
+	return result
+}
+
+func (a *App) QuitApp() {
+	if a.ctx != nil {
+		if a.cron != nil {
+			a.cron.Stop()
+		}
+		runtime.Quit(a.ctx)
+	}
+}
+
 // GetEffectiveSponsorVip 从本地配置解密赞助信息并判断当前是否在 VIP 有效期内（与 ai-assistant-web / data.EffectiveSponsorVipLevel 一致）。
 func (a *App) GetEffectiveSponsorVip() map[string]any {
 	level, active := data.EffectiveSponsorVipLevel()
@@ -146,7 +200,7 @@ func (a *App) CheckSponsorCode(sponsorCode string) map[string]any {
 			"msg":  "赞助码校验成功，感谢您的支持!",
 		}
 	} else {
-		return map[string]any{"code": 0, "message": "赞助码不能为空,请输入正确的赞助码!"}
+		return map[string]any{"code": 0, "msg": "赞助码不能为空,请输入正确的赞助码!"}
 	}
 }
 
@@ -179,7 +233,7 @@ func (a *App) CheckUpdate(flag int) {
 	releaseVersion := &models.GitHubReleaseVersion{}
 	var err error
 	if updateChannel == "release" {
-		_, err = resty.New().R().
+		_, err = data.SharedHTTPClient.R().
 			SetResult(releaseVersion).
 			Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases/latest")
 		if err != nil {
@@ -188,7 +242,7 @@ func (a *App) CheckUpdate(flag int) {
 		}
 	} else {
 		var releases []models.GitHubReleaseVersion
-		_, err = resty.New().R().
+		_, err = data.SharedHTTPClient.R().
 			SetResult(&releases).
 			Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases")
 		if err != nil {
@@ -225,7 +279,7 @@ func (a *App) CheckUpdate(flag int) {
 
 	if releaseVersion.TagName != Version {
 		tag := &models.Tag{}
-		_, err = resty.New().R().
+		_, err = data.SharedHTTPClient.R().
 			SetResult(tag).
 			Get("https://api.github.com/repos/ArvinLovegood/go-stock/git/ref/tags/" + releaseVersion.TagName)
 		if err == nil {
@@ -233,7 +287,7 @@ func (a *App) CheckUpdate(flag int) {
 		}
 
 		commit := &models.Commit{}
-		_, err = resty.New().R().
+		_, err = data.SharedHTTPClient.R().
 			SetResult(commit).
 			Get(tag.Object.Url)
 		if err == nil {
@@ -257,7 +311,7 @@ func (a *App) CheckUpdate(flag int) {
 			"source":  "go-stock",
 			"content": fmt.Sprintf("%s", commit.Message),
 		})
-		resp, err := resty.New().R().Get(downloadUrl)
+		resp, err := data.SharedHTTPClient.R().Get(downloadUrl)
 		if err != nil {
 			go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
 				"time":    "新版本：" + releaseVersion.TagName,
@@ -379,7 +433,7 @@ func (a *App) isVip(sponsorCode string, downloadUrl string, releaseVersion *mode
 
 func (a *App) syncNews() {
 	defer PanicHandler()
-	client := resty.New()
+	client := data.SharedHTTPClient
 	url := fmt.Sprintf("http://go-stock.sparkmemory.top:16666/FinancialNews/json?since=%d", time.Now().Add(-24*time.Hour).Unix())
 	//logger.SugaredLogger.Infof("syncNews:%s", url)
 	resp, err := client.R().SetDoNotParseResponse(true).Get(url)
@@ -642,16 +696,17 @@ func (a *App) domReady(ctx context.Context) {
 	//检查新版本
 	go func() {
 		a.CheckUpdate(0)
+		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
+			logger.SugaredLogger.Errorf("Checking for updates...")
+			a.CheckUpdate(0)
+		})
+
 		go a.CheckStockBaseInfo(a.ctx)
 		go syncAllStockInfo(a.ctx)
 
 		a.cron.AddFunc("0 0 2 * * *", func() {
 			logger.SugaredLogger.Errorf("Checking for updates...")
 			a.CheckStockBaseInfo(a.ctx)
-		})
-		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
-			logger.SugaredLogger.Errorf("Checking for updates...")
-			a.CheckUpdate(0)
 		})
 		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
 			syncAllStockInfo(a.ctx)
@@ -715,7 +770,7 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 		go runtime.EventsEmit(ctx, "loadingMsg", "done")
 	}()
 	stockBasics := &[]data.StockBasic{}
-	resty.New().R().
+	data.SharedHTTPClient.R().
 		SetHeader("user", "go-stock").
 		SetResult(stockBasics).
 		Get("http://8.134.249.145:18080/go-stock/stock_basic.json")
@@ -748,7 +803,7 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	//}
 
 	stockHKBasics := &[]models.StockInfoHK{}
-	resty.New().R().
+	data.SharedHTTPClient.R().
 		SetHeader("user", "go-stock").
 		SetResult(stockHKBasics).
 		Get("http://8.134.249.145:18080/go-stock/stock_base_info_hk.json")
@@ -774,7 +829,7 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	//	}
 	//}
 	stockUSBasics := &[]models.StockInfoUS{}
-	resty.New().R().
+	data.SharedHTTPClient.R().
 		SetHeader("user", "go-stock").
 		SetResult(stockUSBasics).
 		Get("http://8.134.249.145:18080/go-stock/stock_base_info_us.json")
@@ -824,7 +879,8 @@ func (a *App) AddCronTask(follow data.FollowedStock) func() {
 	return func() {
 		go runtime.EventsEmit(a.ctx, "warnMsg", "开始自动分析"+follow.Name+"_"+follow.StockCode)
 		ai := data.NewDeepSeekOpenAi(a.ctx, follow.AiConfigId)
-		msgs := ai.NewChatStream(follow.Name, follow.StockCode, "", nil, a.AiTools, true)
+		thinking := data.GetSettingConfig().GetAIConfigThinking(follow.AiConfigId)
+		msgs := ai.NewChatStream(follow.Name, follow.StockCode, "", nil, a.AiTools, thinking)
 		var res strings.Builder
 
 		chatId := ""
@@ -852,7 +908,7 @@ func (a *App) AddCronTask(follow data.FollowedStock) func() {
 
 func refreshTelegraphList() *[]string {
 	url := "https://www.cls.cn/telegraph"
-	response, err := resty.New().R().
+	response, err := data.SharedHTTPClient.R().
 		SetHeader("Referer", "https://www.cls.cn/").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
 		Get(url)
@@ -904,7 +960,7 @@ func isTradingDay(date time.Time) bool {
 }
 
 func checkHolidayAPI(date string) (isHoliday bool, apiOk bool) {
-	client := resty.New()
+	client := data.SharedHTTPClient
 	client.SetTimeout(3 * time.Second)
 	type holidayResp struct {
 		Code    int `json:"code"`
@@ -1027,7 +1083,7 @@ func isHKTradingDay(date time.Time) bool {
 }
 
 func checkHKHolidayAPI(date string) (isHoliday bool, apiOk bool) {
-	client := resty.New()
+	client := data.SharedHTTPClient
 	client.SetTimeout(5 * time.Second)
 	type klineResp struct {
 		Data struct {
@@ -1107,7 +1163,7 @@ func isUSTradingDay(estTime time.Time) bool {
 }
 
 func checkUSHolidayAPI(date string) (isHoliday bool, apiOk bool) {
-	client := resty.New()
+	client := data.SharedHTTPClient
 	client.SetTimeout(5 * time.Second)
 	type usHolidayResp struct {
 		IsHoliday    bool   `json:"is_holiday"`
@@ -1826,7 +1882,7 @@ func (a *App) ShareAnalysis(stockCode, stockName string) string {
 	if res != nil && len(res.Content) > 100 {
 		analysisTime := res.CreatedAt.Format("2006/01/02")
 		//logger.SugaredLogger.Infof("%s analysisTime:%s", res.CreatedAt, analysisTime)
-		response, err := resty.New().SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
+		response, err := data.SharedHTTPClient.SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
 			"text":         res.Content,
 			"stockCode":    stockCode,
 			"stockName":    stockName,
@@ -1852,7 +1908,7 @@ func (a *App) ShareText(text, title string) string {
 		title = "AI助手"
 	}
 	analysisTime := time.Now().Format("2006/01/02")
-	response, err := resty.New().SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
+	response, err := data.SharedHTTPClient.SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
 		"text":         text,
 		"stockCode":    title,
 		"stockName":    title,
@@ -1876,6 +1932,33 @@ func (a *App) FollowFund(fundCode string) string {
 func (a *App) UnFollowFund(fundCode string) string {
 	return data.NewFundApi().UnFollowFund(fundCode)
 }
+func (a *App) GetFundKLine(fundCode string, klt string, limit int) *data.KLineSourceResult {
+	return data.NewFundKLineApi().GetFundKLineWithFallback(fundCode, klt, limit)
+}
+func (a *App) GetFundHistoryNetValue(fundCode string, pageSize int, startDate string, endDate string) []data.FundHistoryNetValue {
+	res, _ := data.NewFundApi().GetFundHistoryNetValue(fundCode, 1, pageSize, startDate, endDate)
+	if res == nil {
+		return []data.FundHistoryNetValue{}
+	}
+	return res
+}
+func (a *App) GetFundTop10Holdings(fundCode string) []data.FundHoldingStock {
+	res, err := data.NewFundApi().GetFundTop10Holdings(fundCode)
+	if err != nil || res == nil {
+		return []data.FundHoldingStock{}
+	}
+	return res
+}
+
+func (a *App) GetFundRanking(marketType, fundType, sortField, sortOrder string, pageIndex, pageSize int) *data.FundRankingResult {
+	res, err := data.NewFundApi().GetFundRanking(marketType, fundType, sortField, sortOrder, pageIndex, pageSize)
+	if err != nil {
+		logger.SugaredLogger.Errorf("GetFundRanking error: %v", err)
+		return &data.FundRankingResult{}
+	}
+	return res
+}
+
 func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
 	res := data.NewDeepSeekOpenAi(a.ctx, 0).GetAIResponseResult(stockCode)
 	if res != nil && len(res.Content) > 100 {
@@ -2372,7 +2455,7 @@ func (a *App) FetchAiModels(baseUrl, apiKey string) []string {
 		Data []modelItem `json:"data"`
 	}
 
-	client := resty.New()
+	client := data.SharedHTTPClient
 	client.SetBaseURL(baseUrl)
 	client.SetHeader("Authorization", "Bearer "+apiKey)
 	client.SetHeader("Content-Type", "application/json")
@@ -2427,7 +2510,7 @@ func (a *App) FetchAiModelInfo(baseUrl, apiKey, modelName string) *AiModelInfo {
 		}
 		var detail modelDetail
 
-		client := resty.New()
+		client := data.SharedHTTPClient
 		client.SetBaseURL(baseUrl)
 		client.SetHeader("Authorization", "Bearer "+apiKey)
 		client.SetHeader("Content-Type", "application/json")
@@ -2582,12 +2665,28 @@ func getBuiltinModelMaxTokens(modelName string) int {
 
 // InitCronTasks 在应用启动时，自动为启用状态的定时任务创建调度
 func (a *App) InitCronTasks() {
-	tasks := agent.NewCronTaskApi().GetAll()
+	cronApi := agent.NewCronTaskApi()
+	if !cronApi.ExistsByTaskType("stock_change_save") {
+		task := &models.CronTask{
+			Name:        "异动数据保存",
+			CronExpr:    "0 */1 * * * *",
+			TaskType:    "stock_change_save",
+			Enable:      true,
+			Status:      "active",
+			Description: "每分钟自动保存A股异动数据（火箭发射、快速反弹、大笔买入、封涨停板等），交易时间外自动跳过",
+		}
+		err := cronApi.Create(task)
+		if err != nil {
+			logger.SugaredLogger.Errorf("自动创建异动数据保存任务失败：%v", err)
+		} else {
+			logger.SugaredLogger.Info("已自动创建异动数据保存定时任务")
+		}
+	}
+	tasks := cronApi.GetAll()
 	if len(tasks) == 0 {
 		return
 	}
 	for _, t := range tasks {
-		// 避免闭包捕获循环变量
 		taskCopy := t
 		entryID, err := a.cron.AddFunc(taskCopy.CronExpr, func() {
 			err := agent.NewCronTaskApi().ExecuteTask(a.ctx, &taskCopy)
@@ -2601,7 +2700,6 @@ func (a *App) InitCronTasks() {
 			continue
 		}
 		a.setCronEntry(convertor.ToString(taskCopy.ID)+"_"+taskCopy.Name, entryID)
-		//logger.SugaredLogger.Infof("自动创建定时任务成功：%s (ID:%d) entryID:%v", taskCopy.Name, taskCopy.ID, entryID)
 	}
 }
 

@@ -66,6 +66,10 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['ChatWithAgent'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
+export function CheckDeviceBinding(arg1, arg2) {
+  return window['go']['main']['App']['CheckDeviceBinding'](arg1, arg2);
+}
+
 export function CheckFrequentTrading(arg1) {
   return window['go']['main']['App']['CheckFrequentTrading'](arg1);
 }
@@ -116,6 +120,10 @@ export function DeleteAllStockInfo(arg1) {
 
 export function DeleteCronTask(arg1) {
   return window['go']['main']['App']['DeleteCronTask'](arg1);
+}
+
+export function DeleteCustomStrategy(arg1) {
+  return window['go']['main']['App']['DeleteCustomStrategy'](arg1);
 }
 
 export function DeleteMCPServer(arg1) {
@@ -206,6 +214,10 @@ export function GetAllConcepts() {
   return window['go']['main']['App']['GetAllConcepts']();
 }
 
+export function GetAllCustomStrategies() {
+  return window['go']['main']['App']['GetAllCustomStrategies']();
+}
+
 export function GetAllIndustries() {
   return window['go']['main']['App']['GetAllIndustries']();
 }
@@ -266,6 +278,10 @@ export function GetCronTaskTypes() {
   return window['go']['main']['App']['GetCronTaskTypes']();
 }
 
+export function GetCustomStrategyList(arg1) {
+  return window['go']['main']['App']['GetCustomStrategyList'](arg1);
+}
+
 export function GetDailyChangeStats(arg1) {
   return window['go']['main']['App']['GetDailyChangeStats'](arg1);
 }
@@ -284,6 +300,22 @@ export function GetFollowList(arg1) {
 
 export function GetFollowedFund() {
   return window['go']['main']['App']['GetFollowedFund']();
+}
+
+export function GetFundHistoryNetValue(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetFundHistoryNetValue'](arg1, arg2, arg3, arg4);
+}
+
+export function GetFundKLine(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetFundKLine'](arg1, arg2, arg3);
+}
+
+export function GetFundRanking(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['GetFundRanking'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function GetFundTop10Holdings(arg1) {
+  return window['go']['main']['App']['GetFundTop10Holdings'](arg1);
 }
 
 export function GetGroupList() {
@@ -320,6 +352,10 @@ export function GetMCPServerList(arg1) {
 
 export function GetMCPToolsByServerID(arg1) {
   return window['go']['main']['App']['GetMCPToolsByServerID'](arg1);
+}
+
+export function GetMachineId() {
+  return window['go']['main']['App']['GetMachineId']();
 }
 
 export function GetMarketStatisticByDate(arg1) {
@@ -546,6 +582,10 @@ export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
+export function QuitApp() {
+  return window['go']['main']['App']['QuitApp']();
+}
+
 export function ReFleshTelegraphList(arg1) {
   return window['go']['main']['App']['ReFleshTelegraphList'](arg1);
 }
@@ -568,6 +608,10 @@ export function SaveAiAssistantSession(arg1, arg2) {
 
 export function SaveAsMarkdown(arg1, arg2) {
   return window['go']['main']['App']['SaveAsMarkdown'](arg1, arg2);
+}
+
+export function SaveCustomStrategy(arg1) {
+  return window['go']['main']['App']['SaveCustomStrategy'](arg1);
 }
 
 export function SaveImage(arg1, arg2) {

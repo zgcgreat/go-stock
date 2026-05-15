@@ -35,6 +35,8 @@ declare module 'vue' {
     McpServerManager: typeof import('./src/components/mcp-server-manager.vue')['default']
     MoneyTrend: typeof import('./src/components/moneyTrend.vue')['default']
     NewsList: typeof import('./src/components/newsList.vue')['default']
+    PromptPlaza: typeof import('./src/components/promptPlaza.vue')['default']
+    PromptQa: typeof import('./src/components/promptQa.vue')['default']
     PromptTemplateList: typeof import('./src/components/promptTemplateList.vue')['default']
     RankTable: typeof import('./src/components/rankTable.vue')['default']
     Register: typeof import('./src/components/Register.vue')['default']

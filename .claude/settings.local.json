@@ -25,7 +25,8 @@
       "Bash(findstr :8080)",
       "Bash(curl:*)",
       "Bash(npm run:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(git merge *)"
     ]
   }
 }

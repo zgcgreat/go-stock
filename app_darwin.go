@@ -22,6 +22,9 @@ import (
 // startup 在应用程序启动时调用
 func (a *App) startup(ctx context.Context) {
 	defer PanicHandler()
+
+	data.ConfigureFromSettings(data.GetSettingConfig())
+
 	runtime.EventsOn(ctx, "frontendError", func(optionalData ...interface{}) {
 		logger.SugaredLogger.Errorf("Frontend error: %v\n", optionalData)
 	})
@@ -214,8 +217,8 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 		return true // 如果选择了取消，不关闭应用
 	} else {
 		// 在 macOS 上应用退出时执行清理工作
-		a.cron.Stop() // 停止定时任务
-		return false  // 如果选择了确定，继续关闭应用
+		a.cron.Stop()
+		return false // 如果选择了确定，继续关闭应用
 	}
 }
 

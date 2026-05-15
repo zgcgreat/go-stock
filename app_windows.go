@@ -70,6 +70,9 @@ func UpdateSystrayTooltip(text string) {
 // startup is called at application startup
 func (a *App) startup(ctx context.Context) {
 	defer PanicHandler()
+
+	data.ConfigureFromSettings(data.GetSettingConfig())
+
 	runtime.EventsOn(ctx, "frontendError", func(optionalData ...interface{}) {
 		logger.SugaredLogger.Errorf("Frontend error: %v\n", optionalData)
 	})
@@ -206,7 +209,7 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 		logger.SugaredLogger.Debugf("dialog:%s", dialog)
 		if dialog == "确定" || dialog == "Yes" {
 			if a.cron != nil {
-				a.cron.Stop() // 停止定时任务
+				a.cron.Stop()
 			}
 			return false
 		}

@@ -365,7 +365,7 @@ const userPromptOptions = computed(() =>
   (userPromptTemplates.value || []).map(t => ({ label: t.name ?? '', value: t.ID ?? t.id }))
 )
 const userPromptId = ref(null)
-const thinkingMode = ref(false)
+const thinkingMode = ref(true)
 const memoryMode = ref(true)
 const memoryCount = ref(5)
 const memoryCountOptions = [
@@ -1222,6 +1222,7 @@ watch(aiConfigId, (newId) => {
 .msg-content .msg-markdown :deep(.md-editor-preview) {
   font-size: 13px;
   line-height: 1.6;
+  padding: 0 8px;
 }
 .message-item.user .msg-content :deep(.md-editor-preview),
 .message-item.user .msg-content :deep(.md-editor-preview-wrapper) {

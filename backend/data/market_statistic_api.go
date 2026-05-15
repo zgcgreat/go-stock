@@ -9,7 +9,6 @@ import (
 	"go-stock/backend/util"
 	"time"
 
-	"github.com/go-resty/resty/v2"
 )
 
 type MarketStatisticApi struct {
@@ -66,7 +65,7 @@ func (a *MarketStatisticApi) FetchAndSave() error {
 	url := "https://x-quote.cls.cn/quote/index/home?app=CailianpressWeb&os=web&sv=8.4.6"
 	logger.SugaredLogger.Infof("开始获取市场统计数据: %s", url)
 
-	resp, err := resty.New().R().
+	resp, err := SharedHTTPClient.R().
 		SetHeader("User-Agent", util.GetUserAgent()).
 		SetHeader("Referer", "https://www.cls.cn/").
 		Get(url)

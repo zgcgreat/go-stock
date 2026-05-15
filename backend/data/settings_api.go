@@ -12,41 +12,38 @@ import (
 )
 
 type Settings struct {
-	ID                    uint           `gorm:"primarykey"`
-	CreatedAt             time.Time      `json:"-"`
-	UpdatedAt             time.Time      `json:"-"`
-	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
-	UserID                uint           `gorm:"column:user_id;index"`
-	TushareToken          string         `json:"tushareToken"`
-	LocalPushEnable        bool           `json:"localPushEnable"`
-	DingPushEnable         bool           `json:"dingPushEnable"`
-	DingRobot              string         `json:"dingRobot"`
-	UpdateBasicInfoOnStart bool           `json:"updateBasicInfoOnStart"`
-	RefreshInterval        int64          `json:"refreshInterval"`
-	OpenAiEnable          bool           `json:"openAiEnable"`
-	Prompt                 string         `json:"prompt"`
-	CheckUpdate            bool           `json:"checkUpdate"`
-	UpdateChannel          string         `json:"updateChannel"`
-	QuestionTemplate       string         `json:"questionTemplate"`
-	CrawlTimeOut          int64          `json:"crawlTimeOut"`
-	KDays                  int64          `json:"kDays"`
-	EnableDanmu            bool           `json:"enableDanmu"`
-	BrowserPath            string         `json:"browserPath"`
-	EnableNews             bool           `json:"enableNews"`
-	DarkTheme              bool           `json:"darkTheme"`
-	BrowserPoolSize        int            `json:"browserPoolSize"`
-	EnableFund             bool           `json:"enableFund"`
-	EnablePushNews         bool           `json:"enablePushNews"`
-	EnableOnlyPushRedNews  bool           `json:"enableOnlyPushRedNews"`
-	SponsorCode            string         `json:"sponsorCode"`
-	HttpProxy              string         `json:"httpProxy"`
-	HttpProxyEnabled       bool           `json:"httpProxyEnabled"`
-	EnableAgent            bool           `json:"enableAgent"`
-	QgqpBId                string         `json:"qgqpBId" gorm:"column:qgqp_b_id"`
-	IwencaiApiKey          string         `json:"iwencaiApiKey" gorm:"column:iwencai_api_key"`
-	EmApiKey               string         `json:"emApiKey" gorm:"column:em_api_key"`
-	WindowWidth            int            `json:"windowWidth"`
-	WindowHeight           int            `json:"windowHeight"`
+	gorm.Model
+	TushareToken           string `json:"tushareToken"`
+	LocalPushEnable        bool   `json:"localPushEnable"`
+	DingPushEnable         bool   `json:"dingPushEnable"`
+	DingRobot              string `json:"dingRobot"`
+	UpdateBasicInfoOnStart bool   `json:"updateBasicInfoOnStart"`
+	RefreshInterval        int64  `json:"refreshInterval"`
+	OpenAiEnable           bool   `json:"openAiEnable"`
+	Prompt                 string `json:"prompt"`
+	CheckUpdate            bool   `json:"checkUpdate"`
+	UpdateChannel          string `json:"updateChannel"`
+	QuestionTemplate       string `json:"questionTemplate"`
+	CrawlTimeOut           int64  `json:"crawlTimeOut"`
+	KDays                  int64  `json:"kDays"`
+	EnableDanmu            bool   `json:"enableDanmu"`
+	BrowserPath            string `json:"browserPath"`
+	EnableNews             bool   `json:"enableNews"`
+	DarkTheme              bool   `json:"darkTheme"`
+	BrowserPoolSize        int    `json:"browserPoolSize"`
+	EnableFund             bool   `json:"enableFund"`
+	EnablePushNews         bool   `json:"enablePushNews"`
+	EnableOnlyPushRedNews  bool   `json:"enableOnlyPushRedNews"`
+	SponsorCode            string `json:"sponsorCode"`
+	HttpProxy              string `json:"httpProxy"`
+	HttpProxyEnabled       bool   `json:"httpProxyEnabled"`
+	EnableAgent            bool   `json:"enableAgent"`
+	QgqpBId                string `json:"qgqpBId" gorm:"column:qgqp_b_id"`
+	IwencaiApiKey          string `json:"iwencaiApiKey" gorm:"column:iwencai_api_key"`
+	EmApiKey               string `json:"emApiKey" gorm:"column:em_api_key"`
+	WindowWidth            int    `json:"windowWidth"`
+	WindowHeight           int    `json:"windowHeight"`
+	PromptPlazaApiBase     string `json:"promptPlazaApiBase" gorm:"column:prompt_plaza_api_base"`
 }
 
 func (receiver Settings) TableName() string {
@@ -54,11 +51,9 @@ func (receiver Settings) TableName() string {
 }
 
 type AIConfig struct {
-	ID               uint    `gorm:"primarykey"`
+	ID               uint `gorm:"primarykey"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
-	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
-	UserID           uint    `gorm:"column:user_id;index"`
 	Name             string  `json:"name"`
 	BaseUrl          string  `json:"baseUrl"`
 	ApiKey           string  `json:"apiKey" `
@@ -81,6 +76,18 @@ type SettingConfig struct {
 	AiConfigs []*AIConfig `json:"aiConfigs"`
 }
 
+func (c *SettingConfig) GetAIConfigThinking(aiConfigId int) bool {
+	if aiConfigId <= 0 && len(c.AiConfigs) > 0 {
+		return c.AiConfigs[0].Thinking
+	}
+	for _, cfg := range c.AiConfigs {
+		if int(cfg.ID) == aiConfigId {
+			return cfg.Thinking
+		}
+	}
+	return false
+}
+
 type SettingsApi struct {
 	Config *SettingConfig
 }
@@ -98,18 +105,12 @@ func (s *SettingsApi) Export() string {
 
 func UpdateConfig(s *SettingConfig) string {
 	if s.Settings == nil {
-		return "配置数据为空"
+		return "保存失败: 配置数据为空"
 	}
 	count := int64(0)
 	db.Dao.Model(&Settings{}).Count(&count)
 	if count > 0 {
-		// 获取第一条记录的ID（确保更新正确的记录）
-		var existing Settings
-		if err := db.Dao.Model(&Settings{}).First(&existing).Error; err != nil {
-			logger.SugaredLogger.Error("查询现有配置失败:", err)
-			return "查询现有配置失败: " + err.Error()
-		}
-		db.Dao.Model(&Settings{}).Where("id=?", existing.ID).Updates(map[string]any{
+		result := db.Dao.Model(&Settings{}).Where("id=?", s.ID).Updates(map[string]any{
 			"local_push_enable":          s.LocalPushEnable,
 			"ding_push_enable":           s.DingPushEnable,
 			"ding_robot":                 s.DingRobot,
@@ -139,28 +140,33 @@ func UpdateConfig(s *SettingConfig) string {
 			"em_api_key":                 s.EmApiKey,
 			"window_width":               s.WindowWidth,
 			"window_height":              s.WindowHeight,
+			"prompt_plaza_api_base":      s.PromptPlazaApiBase,
 		})
+		if result.Error != nil {
+			logger.SugaredLogger.Errorf("更新配置失败: %v", result.Error)
+			return "保存失败: " + result.Error.Error()
+		}
 
-		//更新AiConfig
 		err := updateAiConfigs(s.AiConfigs)
 		if err != nil {
 			logger.SugaredLogger.Errorf("更新AI模型服务配置失败: %v", err)
 			return "更新AI模型服务配置失败: " + err.Error()
 		}
 	} else {
-		// 创建新配置（使用前端传入的数据，而非空对象）
-		result := db.Dao.Create(s.Settings)
+		result := db.Dao.Model(&Settings{}).Create(s.Settings)
 		if result.Error != nil {
 			logger.SugaredLogger.Error("创建配置失败:", result.Error)
 			return "创建配置失败: " + result.Error.Error()
 		}
-		// 创建关联的 AiConfig
 		err := updateAiConfigs(s.AiConfigs)
 		if err != nil {
-			logger.SugaredLogger.Errorf("创建AI模型服务配置失败: %v", err)
-			return "创建AI模型服务配置失败: " + err.Error()
+			logger.SugaredLogger.Errorf("更新AI模型服务配置失败: %v", err)
+			return "更新AI模型服务配置失败: " + err.Error()
 		}
 	}
+
+	ConfigureFromSettings(s)
+
 	return "保存成功！"
 }
 
@@ -173,7 +179,7 @@ func updateAiConfigs(aiConfigs []*AIConfig) error {
 		return db.Dao.Exec("DELETE FROM sqlite_sequence WHERE name='ai_config'").Error
 	}
 	// 仅收集大于 0 的 ID，用于识别已存在的配置；
-	// ID<=0 视为"新配置"，强制走插入逻辑，避免多个 ID 为 0 的配置互相覆盖。
+	// ID<=0 视为“新配置”，强制走插入逻辑，避免多个 ID 为 0 的配置互相覆盖。
 	var ids []uint
 	lo.ForEach(aiConfigs, func(item *AIConfig, index int) {
 		if item.ID > 0 {
@@ -212,6 +218,7 @@ func updateAiConfigs(aiConfigs []*AIConfig) error {
 				"http_proxy":         item.HttpProxy,
 				"http_proxy_enabled": item.HttpProxyEnabled,
 				"session_id":         item.SessionId,
+				"thinking":           item.Thinking,
 			}).Error
 			if e != nil {
 				return
@@ -240,9 +247,6 @@ func GetSettingConfig() *SettingConfig {
 	aiConfigs := make([]*AIConfig, 0)
 	// 处理数据库查询可能返回的空结果
 	result := db.Dao.Model(&Settings{}).First(settings)
-	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		logger.SugaredLogger.Error("查询配置失败:", result.Error)
-	}
 	if settings.OpenAiEnable {
 		// 处理AI配置查询可能出现的错误
 		result = db.Dao.Model(&AIConfig{}).Find(&aiConfigs)
@@ -268,182 +272,10 @@ func GetSettingConfig() *SettingConfig {
 	if settings.BrowserPoolSize <= 0 {
 		settings.BrowserPoolSize = 1
 	}
-	settings.EnableFund = false
 	settings.EnableAgent = false
 
 	settingConfig.Settings = settings
 	settingConfig.AiConfigs = aiConfigs
 
 	return settingConfig
-}
-
-// GetSettingConfigByUserID 根据用户ID获取配置（Web端用户隔离）
-// 如果用户没有配置，则从系统默认配置（user_id=0）复制
-func GetSettingConfigByUserID(userID uint) *SettingConfig {
-	settingConfig := &SettingConfig{}
-	settings := &Settings{}
-	aiConfigs := make([]*AIConfig, 0)
-
-	// 根据 userID 查询用户配置
-	result := db.Dao.Model(&Settings{}).Where("user_id = ?", userID).First(settings)
-	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		logger.SugaredLogger.Errorf("查询用户配置失败 userID=%d: %v", userID, result.Error)
-	}
-
-	// 如果用户没有配置（特别是 userID > 0 的情况），从系统默认配置复制
-	if result.Error != nil || settings.ID == 0 {
-		if userID > 0 {
-			// 尝试获取系统默认配置作为模板
-			defaultSettings := &Settings{}
-			defaultResult := db.Dao.Model(&Settings{}).Where("user_id = ?", 0).First(defaultSettings)
-			if defaultResult.Error == nil {
-				*settings = *defaultSettings
-				settings.ID = 0 // 新建时不使用原ID
-				settings.UserID = userID
-
-				// 复制默认AI配置
-				defaultAiConfigs := make([]*AIConfig, 0)
-				db.Dao.Model(&AIConfig{}).Where("user_id = ?", 0).Find(&defaultAiConfigs)
-				for _, cfg := range defaultAiConfigs {
-					newCfg := *cfg
-					newCfg.ID = 0
-					newCfg.UserID = userID
-					aiConfigs = append(aiConfigs, &newCfg)
-				}
-			}
-		}
-	}
-
-	if settings.OpenAiEnable {
-		// 如果还没有AI配置，再查询该用户的
-		if len(aiConfigs) == 0 {
-			result = db.Dao.Model(&AIConfig{}).Where("user_id = ?", userID).Find(&aiConfigs)
-			if result.Error != nil {
-				logger.SugaredLogger.Errorf("查询AI配置失败 userID=%d: %v", userID, result.Error)
-			}
-		}
-		if len(aiConfigs) > 0 {
-			lo.ForEach(aiConfigs, func(item *AIConfig, index int) {
-				if item.TimeOut <= 0 {
-					item.TimeOut = 60 * 5
-				}
-			})
-		}
-		if settings.CrawlTimeOut <= 0 {
-			settings.CrawlTimeOut = 60
-		}
-		if settings.KDays < 30 {
-			settings.KDays = 60
-		}
-	}
-	if settings.BrowserPath == "" {
-		settings.BrowserPath, _ = CheckBrowser()
-	}
-	if settings.BrowserPoolSize <= 0 {
-		settings.BrowserPoolSize = 1
-	}
-	settings.EnableFund = false
-	settings.EnableAgent = false
-	settings.UserID = userID
-
-	settingConfig.Settings = settings
-	settingConfig.AiConfigs = aiConfigs
-
-	return settingConfig
-}
-
-// UpdateConfigByUserID 根据用户ID更新配置（Web端用户隔离）
-func UpdateConfigByUserID(userID uint, s *SettingConfig) string {
-	if s.Settings == nil {
-		return "配置数据为空"
-	}
-	s.Settings.UserID = userID
-
-	// 查询该用户的现有配置
-	var existing Settings
-	result := db.Dao.Model(&Settings{}).Where("user_id = ?", userID).First(&existing)
-	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		logger.SugaredLogger.Errorf("查询用户配置失败 userID=%d: %v", userID, result.Error)
-		return "查询现有配置失败: " + result.Error.Error()
-	}
-
-	if result.RowsAffected > 0 {
-		// 更新现有配置
-		db.Dao.Model(&Settings{}).Where("id = ?", existing.ID).Updates(map[string]any{
-			"local_push_enable":           s.LocalPushEnable,
-			"ding_push_enable":            s.DingPushEnable,
-			"ding_robot":                  s.DingRobot,
-			"update_basic_info_on_start":  s.UpdateBasicInfoOnStart,
-			"refresh_interval":            s.RefreshInterval,
-			"open_ai_enable":              s.OpenAiEnable,
-			"tushare_token":               s.TushareToken,
-			"prompt":                      s.Prompt,
-			"check_update":                s.CheckUpdate,
-			"update_channel":              s.UpdateChannel,
-			"question_template":           s.QuestionTemplate,
-			"crawl_time_out":              s.CrawlTimeOut,
-			"k_days":                      s.KDays,
-			"enable_danmu":                s.EnableDanmu,
-			"browser_path":                s.BrowserPath,
-			"enable_news":                 s.EnableNews,
-			"dark_theme":                  s.DarkTheme,
-			"enable_fund":                 s.EnableFund,
-			"enable_push_news":            s.EnablePushNews,
-			"enable_only_push_red_news":   s.EnableOnlyPushRedNews,
-			"sponsor_code":                s.SponsorCode,
-			"http_proxy":                  s.HttpProxy,
-			"http_proxy_enabled":          s.HttpProxyEnabled,
-			"enable_agent":                s.EnableAgent,
-			"qgqp_b_id":                   s.QgqpBId,
-			"iwencai_api_key":             s.IwencaiApiKey,
-			"em_api_key":                  s.EmApiKey,
-			"window_width":                s.WindowWidth,
-			"window_height":               s.WindowHeight,
-		})
-
-		// 更新AI配置
-		err := updateAiConfigsByUserID(userID, s.AiConfigs)
-		if err != nil {
-			logger.SugaredLogger.Errorf("更新AI模型服务配置失败 userID=%d: %v", userID, err)
-			return "更新AI模型服务配置失败: " + err.Error()
-		}
-	} else {
-		// 创建新配置
-		s.Settings.ID = 0 // 确保创建新记录
-		createResult := db.Dao.Create(s.Settings)
-		if createResult.Error != nil {
-			logger.SugaredLogger.Errorf("创建用户配置失败 userID=%d: %v", userID, createResult.Error)
-			return "创建配置失败: " + createResult.Error.Error()
-		}
-
-		// 创建AI配置
-		err := updateAiConfigsByUserID(userID, s.AiConfigs)
-		if err != nil {
-			logger.SugaredLogger.Errorf("创建AI模型服务配置失败 userID=%d: %v", userID, err)
-			return "创建AI模型服务配置失败: " + err.Error()
-		}
-	}
-	return "保存成功！"
-}
-
-// updateAiConfigsByUserID 根据用户ID更新AI配置
-func updateAiConfigsByUserID(userID uint, aiConfigs []*AIConfig) error {
-	// 先删除该用户的旧AI配置
-	err := db.Dao.Where("user_id = ?", userID).Delete(&AIConfig{}).Error
-	if err != nil {
-		return err
-	}
-
-	if len(aiConfigs) == 0 {
-		return nil
-	}
-
-	// 为新配置设置 userID
-	for i := range aiConfigs {
-		aiConfigs[i].ID = 0
-		aiConfigs[i].UserID = userID
-	}
-
-	// 批量创建新配置
-	return db.Dao.CreateInBatches(aiConfigs, len(aiConfigs)).Error
 }

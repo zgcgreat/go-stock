@@ -244,7 +244,7 @@ type StockBasicResponse struct {
 
 func NewStockDataApi() *StockDataApi {
 	return &StockDataApi{
-		client: resty.New(),
+		client: SharedHTTPClient,
 		config: GetSettingConfig(),
 	}
 }

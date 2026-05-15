@@ -16,7 +16,6 @@ import (
 	"github.com/coocood/freecache"
 	"github.com/duke-git/lancet/v2/convertor"
 	"github.com/duke-git/lancet/v2/strutil"
-	"github.com/go-resty/resty/v2"
 	"github.com/robertkrimen/otto"
 	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
@@ -37,7 +36,7 @@ func (m MarketNewsApi) TelegraphList(crawlTimeOut int64) *[]models.Telegraph {
 	//https://www.cls.cn/nodeapi/telegraphList
 	url := "https://www.cls.cn/nodeapi/telegraphList"
 	res := map[string]any{}
-	_, _ = resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
+	_, _ = SharedHTTPClient.SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://www.cls.cn/").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
 		SetResult(&res).
@@ -103,7 +102,7 @@ func (m MarketNewsApi) TelegraphList(crawlTimeOut int64) *[]models.Telegraph {
 
 func (m MarketNewsApi) GetNewTelegraph(crawlTimeOut int64) *[]models.Telegraph {
 	url := "https://www.cls.cn/telegraph"
-	response, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
+	response, _ := SharedHTTPClient.SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://www.cls.cn/").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
 		Get(url)
@@ -253,7 +252,7 @@ func (m MarketNewsApi) GetTelegraphListWithPaging(source string, page, pageSize 
 
 func (m MarketNewsApi) GetSinaNews(crawlTimeOut uint) *[]models.Telegraph {
 	news := &[]models.Telegraph{}
-	response, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
+	response, _ := SharedHTTPClient.SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://finance.sina.com.cn").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
 		Get("https://zhibo.sina.com.cn/api/zhibo/feed?callback=callback&page=1&page_size=20&zhibo_id=152&tag_id=0&dire=f&dpc=1&pagesize=20&id=4161089&type=0&_=" + strconv.FormatInt(time.Now().Unix(), 10))
@@ -344,73 +343,14 @@ func (m MarketNewsApi) GetSinaNews(crawlTimeOut uint) *[]models.Telegraph {
 }
 
 func (m MarketNewsApi) GlobalStockIndexes(crawlTimeOut uint) map[string]any {
-	// 构建结果
-	result := make(map[string]any)
-
-	// 从财联社API获取中国主要指数（优先获取，保证有数据）
-	clsResp, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
-		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36").
-		Get("https://x-quote.cls.cn/quote/index/home?app=CailianpressWeb&os=web&sv=8.4.6")
-	var clsData map[string]any
-	json.Unmarshal(clsResp.Body(), &clsData)
-
-	// 将中国主要指数放入common
-	var common []map[string]any
-	if clsData != nil && clsData["data"] != nil {
-		if data, ok := clsData["data"].(map[string]any); ok {
-			if indexQuote, ok := data["index_quote"].([]any); ok {
-				for _, item := range indexQuote {
-					if idx, ok := item.(map[string]any); ok {
-						secuCode, _ := idx["secu_code"].(string)
-						secuName, _ := idx["secu_name"].(string)
-						lastPx, _ := idx["last_px"].(float64)
-						change, _ := idx["change"].(float64)
-						changePx, _ := idx["change_px"].(float64)
-
-						zxj := fmt.Sprintf("%.2f", lastPx)
-						zdf := fmt.Sprintf("%.2f", change*100)
-
-						common = append(common, map[string]any{
-							"code":     secuCode,
-							"name":     secuName,
-							"zxj":      zxj,
-							"zdf":      zdf,
-							"change":   changePx,
-							"location": "中国",
-							"state":    "open",
-							"img":      "",
-						})
-					}
-				}
-			}
-		}
-	}
-	result["common"] = common
-
-	// 获取腾讯的全球指数数据
-	response, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
+	response, _ := SharedHTTPClient.SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://stockapp.finance.qq.com/mstats").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
 		Get("https://proxy.finance.qq.com/ifzqgtimg/appstock/app/rank/indexRankDetail2")
 	js := string(response.Body())
 	res := make(map[string]any)
 	json.Unmarshal([]byte(js), &res)
-	if data, ok := res["data"].(map[string]any); ok && data != nil {
-		if v, ok := data["america"].([]any); ok {
-			result["america"] = v
-		}
-		if v, ok := data["europe"].([]any); ok {
-			result["europe"] = v
-		}
-		if v, ok := data["asia"].([]any); ok {
-			result["asia"] = v
-		}
-		if v, ok := data["other"].([]any); ok {
-			result["other"] = v
-		}
-	}
-
-	return result
+	return res["data"].(map[string]any)
 }
 
 // GlobalStockIndexesReadable 获取全球指数并转换为 AI 易读的 Markdown 文本。
@@ -660,7 +600,7 @@ func (m MarketNewsApi) GetCachedGlobalStockIndexesReadable(region string) string
 func (m MarketNewsApi) GetIndustryRank(sort string, cnt int) map[string]any {
 
 	url := fmt.Sprintf("https://proxy.finance.qq.com/ifzqgtimg/appstock/app/mktHs/rank?l=%d&p=1&t=01/averatio&ordertype=&o=%s", cnt, sort)
-	response, _ := resty.New().SetTimeout(time.Duration(5)*time.Second).R().
+	response, _ := SharedHTTPClient.SetTimeout(time.Duration(5)*time.Second).R().
 		SetHeader("Referer", "https://stockapp.finance.qq.com/").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
 		Get(url)
@@ -673,7 +613,7 @@ func (m MarketNewsApi) GetIndustryRank(sort string, cnt int) map[string]any {
 func (m MarketNewsApi) GetIndustryMoneyRankSina(fenlei, sort string) []map[string]any {
 	url := fmt.Sprintf("https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/MoneyFlow.ssl_bkzj_bk?page=1&num=20&sort=%s&asc=0&fenlei=%s", sort, fenlei)
 
-	response, _ := resty.New().SetTimeout(time.Duration(5)*time.Second).R().
+	response, _ := SharedHTTPClient.SetTimeout(time.Duration(5)*time.Second).R().
 		SetHeader("Host", "vip.stock.finance.sina.com.cn").
 		SetHeader("Referer", "https://finance.sina.com.cn").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
@@ -693,7 +633,7 @@ func (m MarketNewsApi) GetMoneyRankSina(sort string) []map[string]any {
 		sort = "netamount"
 	}
 	url := fmt.Sprintf("https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/MoneyFlow.ssl_bkzj_ssggzj?page=1&num=20&sort=%s&asc=0&bankuai=&shichang=", sort)
-	response, _ := resty.New().SetTimeout(time.Duration(5)*time.Second).R().
+	response, _ := SharedHTTPClient.SetTimeout(time.Duration(5)*time.Second).R().
 		SetHeader("Host", "vip.stock.finance.sina.com.cn").
 		SetHeader("Referer", "https://finance.sina.com.cn").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
@@ -711,7 +651,7 @@ func (m MarketNewsApi) GetMoneyRankSina(sort string) []map[string]any {
 func (m MarketNewsApi) GetStockMoneyTrendByDay(stockCode string, days int) []map[string]any {
 	url := fmt.Sprintf("http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/MoneyFlow.ssl_qsfx_zjlrqs?page=1&num=%d&sort=opendate&asc=0&daima=%s", days, stockCode)
 
-	response, _ := resty.New().SetTimeout(time.Duration(5)*time.Second).R().
+	response, _ := SharedHTTPClient.SetTimeout(time.Duration(5)*time.Second).R().
 		SetHeader("Host", "vip.stock.finance.sina.com.cn").
 		SetHeader("Referer", "https://finance.sina.com.cn").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").Get(url)
@@ -741,7 +681,7 @@ func (m MarketNewsApi) LongTiger(date string) *[]models.LongTigerRankData {
 	params["source"] = "WEB"
 	params["client"] = "WEB"
 	params["filter"] = fmt.Sprintf("(TRADE_DATE<='%s')(TRADE_DATE>='%s')", date, date)
-	resp, err := resty.New().SetTimeout(time.Duration(15)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(15)*time.Second).R().
 		SetHeader("Host", "datacenter-web.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/stock/tradedetail.html").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
@@ -807,7 +747,7 @@ func (m MarketNewsApi) IndustryResearchReport(industryCode string, days int) []a
 	url := "https://reportapi.eastmoney.com/report/list"
 
 	//logger.SugaredLogger.Infof("beginDate:%s endDate:%s", beginDate, endDate)
-	resp, err := resty.New().SetTimeout(time.Duration(15)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(15)*time.Second).R().
 		SetHeader("Host", "reportapi.eastmoney.com").
 		SetHeader("Origin", "https://data.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/report/stock.jshtml").
@@ -861,7 +801,7 @@ func (m MarketNewsApi) StockResearchReport(stockCode string, days int) []any {
 	url := "https://reportapi.eastmoney.com/report/list2"
 
 	//logger.SugaredLogger.Infof("beginDate:%s endDate:%s", beginDate, endDate)
-	resp, err := resty.New().SetTimeout(time.Duration(15)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(15)*time.Second).R().
 		SetHeader("Host", "reportapi.eastmoney.com").
 		SetHeader("Origin", "https://data.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/report/stock.jshtml").
@@ -907,7 +847,7 @@ func (m MarketNewsApi) StockNotice(stock_list string) []any {
 	}
 
 	url := "https://np-anotice-stock.eastmoney.com/api/security/ann?page_size=50&page_index=1&ann_type=SHA%2CCYB%2CSZA%2CBJA%2CINV&client_source=web&f_node=0&stock_list=" + strings.Join(stockCodes, ",")
-	resp, err := resty.New().SetTimeout(time.Duration(15)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(15)*time.Second).R().
 		SetHeader("Host", "np-anotice-stock.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/notices/hsa/5.html").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
@@ -936,7 +876,7 @@ func (m MarketNewsApi) EMDictCode(code string, cache *freecache.Cache) []any {
 	params := map[string]string{
 		"bkCode": code,
 	}
-	resp, err := resty.New().SetTimeout(time.Duration(15)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(15)*time.Second).R().
 		SetHeader("Host", "reportapi.eastmoney.com").
 		SetHeader("Origin", "https://data.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/report/industry.jshtml").
@@ -954,7 +894,7 @@ func (m MarketNewsApi) EMDictCode(code string, cache *freecache.Cache) []any {
 }
 
 func (m MarketNewsApi) TradingViewNews() *[]models.Telegraph {
-	client := resty.New()
+	client := SharedHTTPClient
 	config := GetSettingConfig()
 	if config.HttpProxyEnabled && config.HttpProxy != "" {
 		client.SetProxy(config.HttpProxy)
@@ -1030,7 +970,7 @@ func (m MarketNewsApi) TradingViewNewsDetail(id string) *models.TVNewsDetail {
 	newsDetail := &models.TVNewsDetail{}
 	newsUrl := fmt.Sprintf("https://news-headlines.tradingview.com/v3/story?id=%s&lang=zh-Hans", url.QueryEscape(id))
 
-	client := resty.New()
+	client := SharedHTTPClient
 	config := GetSettingConfig()
 	if config.HttpProxyEnabled && config.HttpProxy != "" {
 		client.SetProxy(config.HttpProxy)
@@ -1055,62 +995,70 @@ func (m MarketNewsApi) TradingViewNewsDetail(id string) *models.TVNewsDetail {
 }
 
 func (m MarketNewsApi) XUEQIUHotStock(size int, marketType string) *[]models.HotItem {
-	request := resty.New().SetTimeout(time.Duration(30) * time.Second).R()
-	_, err := request.
-		SetHeader("Host", "xueqiu.com").
-		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
-		Get("https://xueqiu.com/hq#hot")
-
-	//cookies := resp.Header().Get("Set-Cookie")
-	//logger.SugaredLogger.Infof("cookies:%s", cookies)
+	cookieHeader, cookieErr := FetchXueqiuCookiesViaChromedp("", 30*time.Second, "https://xueqiu.com/hq#hot")
+	if cookieErr != nil {
+		logger.SugaredLogger.Warnf("雪球 chromedp 获取 cookie 失败: %v", cookieErr)
+	}
 
 	url := fmt.Sprintf("https://stock.xueqiu.com/v5/stock/hot_stock/list.json?page=1&size=%d&_type=%s&type=%s", size, marketType, marketType)
 	res := &models.XUEQIUHot{}
-	_, err = request.
-		SetHeader("Host", "stock.xueqiu.com").
+	request := SharedHTTPClient.SetTimeout(time.Duration(30) * time.Second).R()
+	request.SetHeader("Host", "stock.xueqiu.com").
 		SetHeader("Origin", "https://xueqiu.com").
 		SetHeader("Referer", "https://xueqiu.com/").
-		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
-		//SetHeader("Cookie", "cookiesu=871730774144180; device_id=ee75cebba8a35005c9e7baf7b7dead59; s=ch12b12pfi; Hm_lvt_1db88642e346389874251b5a1eded6e3=1746247619; xq_a_token=361dcfccb1d32a1d9b5b65f1a188b9c9ed1e687d; xqat=361dcfccb1d32a1d9b5b65f1a188b9c9ed1e687d; xq_r_token=450d1db0db9659a6af7cc9297bfa4fccf1776fae; xq_id_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJ1aWQiOi0xLCJpc3MiOiJ1YyIsImV4cCI6MTc1MzgzODAwNiwiY3RtIjoxNzUxMjUxMzc2MDY3LCJjaWQiOiJkOWQwbjRBWnVwIn0.TjEtQ5WEN4ajnVjVnY3J-Qq9LjL-F0eat9Cefv_tLJLqsPhzD2y8Lc1CeIu0Ceqhlad7O_yW1tR9nb2dIjDpyOPzWKxvwSOKXLm8XMoz4LMgE2pysBCH4TsetzHsEOhBsY467q-JX3WoFuqo-dqv1FfLSondZCspjEMFdgPFt2V-2iXJY05YUwcBVUvL74mT9ZjNq0KaDeRBJk_il6UR8yibG7RMbe9xWYz5dSO_wJwWuxvnZ8u9EXC2m-TV7-QHVxFHR_5e8Fodrzg0yIcLU4wBTSoIIQDUKqngajX2W-nUAdo6fr78NNDmoswFVH7T7XMuQciMAqj9MpMCVW3Sog; u=871730774144180; ssxmod_itna=iq+h7KAImDORKYQ4Y5G=nxBKDtD7D3qCD0dGMDxeq7tDRDFqApKDHtA68oon7ziBA0+PbZ9xGN4oYxiNDAPq0iDC+Wjxs9Orw5KQb9iqP4MAn0TbNsbtU22eqbCe=S3vTv6xoDHxY=DU1GzeieDx=PD5xDTDWeDGDD3DmnsDi5YD0KDjBYpH+omDYPDEBYDaxDbDimwY4GCrDDCtc5Dw6bmzDDzznL5WWAPzWffZg3YcFgxf8GwD7y3Dla4rMhw23=cz0Efdk0A5hYDXotDvhoY1/H6neEvOt3o=Q0ruT+5RuxoRhDxCmh5tGP32xBD5G0xS2xcb4quDK0Dy2ZmY/DDWM0qmEeSEDeOCIq1fw1misCY=WAzoOtMwDzGdUjpRk5Z0xQBDI2IMw4H7qNiNBLxWiDD; ssxmod_itna2=iq+h7KAImDORKYQ4Y5G=nxBKDtD7D3qCD0dGMDxeq7tDRDFqApKDHtA68oon7ziBA0+PbZYxD3boBmiEPtDFOEPAeFmDDsuGSxf46oGKwGHd8wtUjFe+oV1lxUzutkGly=nCyCjq=UTHxMxFCr1DsFiKPuEpPVO7GrOyk5Aymnc0+11AFND7v16PvwrFQH4I72=3O1OpK7rGw+poWNCxjj=Ka5QDFWAvEzrDFQcIH=GpKpS90FAyIzGcTyck+yhQKaojn96dRqeIh=HkaFrlGnKwzO+a49=F7/c/MejoR3QM20K9IIOymrMN2bsk2TRdKFiaf4O0ut2MauiOER=iQNW2WVgDrkKzD=57r577wEx2hwkqhf8T8BDvkHZRDirC0bNK4O=G3TSkd3wYwq8bst0t9qF/e3M87NYtU2IWYWzqd=BqEfdqGq0R8wxmqLzpeGeuwSTq1OAiB87gDrozjnGkwDKRdrLz8uDjQKVlGhWk8Wd/rXQjx4pG=BNqpW/6TS1wpfxzGf5CrUhtt0j0wC5AUFo2GbX+QXPzD2guxKXrx8lZUQlwWIHyEUz+OLh0eWUkfHfM0YWXlgOejnuUa06rW9y5maDPipGms751hxKcqLq62pQty4iX3QDF6SRQd3tfEBf3CH7r2xe2qq0qdOI5Ge=GezD/Us5Z0xQBwVAZ2N/XvD0HDD").
-		SetResult(res).
-		Get(url)
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
+	if cookieErr == nil && cookieHeader != "" {
+		request.SetHeader("Cookie", cookieHeader)
+	}
+	_, err := request.SetResult(res).Get(url)
 	if err != nil {
 		logger.SugaredLogger.Errorf("XUEQIUHotStock err:%s", err.Error())
 		return &[]models.HotItem{}
 	}
-	//logger.SugaredLogger.Infof("XUEQIUHotStock:%+v", res)
+	if res.ErrorCode != 0 {
+		logger.SugaredLogger.Errorf("XUEQIUHotStock API error: code=%d, desc=%s", res.ErrorCode, res.ErrorDescription)
+		return &[]models.HotItem{}
+	}
 	return &res.Data.Items
 }
 
 func (m MarketNewsApi) HotEvent(size int) *[]models.HotEvent {
-	request := resty.New().SetTimeout(time.Duration(30) * time.Second).R()
-	_, err := request.
-		SetHeader("Host", "xueqiu.com").
-		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
-		Get("https://xueqiu.com/hq#hot")
+	cookieHeader, cookieErr := FetchXueqiuCookiesViaChromedp("", 30*time.Second, "https://xueqiu.com/hq#hot")
+	if cookieErr != nil {
+		logger.SugaredLogger.Warnf("雪球 chromedp 获取 cookie 失败: %v", cookieErr)
+	}
 
 	events := &[]models.HotEvent{}
 	sprintf := fmt.Sprintf("https://xueqiu.com/hot_event/list.json?count=%d", size)
+	request := SharedHTTPClient.SetTimeout(time.Duration(30) * time.Second).R()
+	request.SetHeader("Host", "xueqiu.com").
+		SetHeader("Referer", "https://xueqiu.com/").
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
+	if cookieErr == nil && cookieHeader != "" {
+		request.SetHeader("Cookie", cookieHeader)
+	}
 	resp, err := request.Get(sprintf)
 	if err != nil {
 		logger.SugaredLogger.Errorf("HotEvent err:%s", err.Error())
 		return events
 	}
-	//logger.SugaredLogger.Infof("HotEvent:%s", resp.Body())
 	respMap := map[string]any{}
 	err = json.Unmarshal(resp.Body(), &respMap)
+	if err != nil {
+		logger.SugaredLogger.Errorf("HotEvent json unmarshal err:%s", err.Error())
+		return events
+	}
 	items, err := json.Marshal(respMap["list"])
 	if err != nil {
 		return events
 	}
 	json.Unmarshal(items, events)
 	return events
-
 }
 
 func (m MarketNewsApi) HotTopic(size int) []any {
 	url := "https://gubatopic.eastmoney.com/interface/GetData.aspx?path=newtopic/api/Topic/HomePageListRead"
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "gubatopic.eastmoney.com").
 		SetHeader("Origin", "https://gubatopic.eastmoney.com").
 		SetHeader("Referer", "https://gubatopic.eastmoney.com/").
@@ -1138,7 +1086,7 @@ func (m MarketNewsApi) InvestCalendar(yearMonth string) []any {
 	}
 
 	url := "https://app.jiuyangongshe.com/jystock-app/api/v1/timeline/list"
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "app.jiuyangongshe.com").
 		SetHeader("Origin", "https://www.jiuyangongshe.com").
 		SetHeader("Referer", "https://www.jiuyangongshe.com/").
@@ -1166,7 +1114,7 @@ func (m MarketNewsApi) InvestCalendar(yearMonth string) []any {
 
 func (m MarketNewsApi) ClsCalendar() []any {
 	url := "https://www.cls.cn/api/calendar/web/list?app=CailianpressWeb&flag=0&os=web&sv=8.4.6&type=0&sign=4b839750dc2f6b803d1c8ca00d2b40be"
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "www.cls.cn").
 		SetHeader("Origin", "https://www.cls.cn").
 		SetHeader("Referer", "https://www.cls.cn/").
@@ -1185,7 +1133,7 @@ func (m MarketNewsApi) GetGDP() *models.GDPResp {
 	res := &models.GDPResp{}
 
 	url := "https://datacenter-web.eastmoney.com/api/data/v1/get?callback=data&columns=REPORT_DATE%2CTIME%2CDOMESTICL_PRODUCT_BASE%2CFIRST_PRODUCT_BASE%2CSECOND_PRODUCT_BASE%2CTHIRD_PRODUCT_BASE%2CSUM_SAME%2CFIRST_SAME%2CSECOND_SAME%2CTHIRD_SAME&pageNumber=1&pageSize=20&sortColumns=REPORT_DATE&sortTypes=-1&source=WEB&client=WEB&reportName=RPT_ECONOMY_GDP&p=1&pageNo=1&pageNum=1&_=" + strconv.FormatInt(time.Now().Unix(), 10)
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "datacenter-web.eastmoney.com").
 		SetHeader("Origin", "https://datacenter.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/cjsj/gdp.html").
@@ -1220,7 +1168,7 @@ func (m MarketNewsApi) GetCPI() *models.CPIResp {
 	res := &models.CPIResp{}
 
 	url := "https://datacenter-web.eastmoney.com/api/data/v1/get?callback=data&columns=REPORT_DATE%2CTIME%2CNATIONAL_SAME%2CNATIONAL_BASE%2CNATIONAL_SEQUENTIAL%2CNATIONAL_ACCUMULATE%2CCITY_SAME%2CCITY_BASE%2CCITY_SEQUENTIAL%2CCITY_ACCUMULATE%2CRURAL_SAME%2CRURAL_BASE%2CRURAL_SEQUENTIAL%2CRURAL_ACCUMULATE&pageNumber=1&pageSize=20&sortColumns=REPORT_DATE&sortTypes=-1&source=WEB&client=WEB&reportName=RPT_ECONOMY_CPI&p=1&pageNo=1&pageNum=1&_=" + strconv.FormatInt(time.Now().Unix(), 10)
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "datacenter-web.eastmoney.com").
 		SetHeader("Origin", "https://datacenter.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/cjsj/gdp.html").
@@ -1255,7 +1203,7 @@ func (m MarketNewsApi) GetCPI() *models.CPIResp {
 func (m MarketNewsApi) GetPPI() *models.PPIResp {
 	res := &models.PPIResp{}
 	url := "https://datacenter-web.eastmoney.com/api/data/v1/get?callback=data&columns=REPORT_DATE,TIME,BASE,BASE_SAME,BASE_ACCUMULATE&pageNumber=1&pageSize=20&sortColumns=REPORT_DATE&sortTypes=-1&source=WEB&client=WEB&reportName=RPT_ECONOMY_PPI&p=1&pageNo=1&pageNum=1&_=" + strconv.FormatInt(time.Now().Unix(), 10)
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "datacenter-web.eastmoney.com").
 		SetHeader("Origin", "https://datacenter.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/cjsj/gdp.html").
@@ -1285,7 +1233,7 @@ func (m MarketNewsApi) GetPPI() *models.PPIResp {
 func (m MarketNewsApi) GetPMI() *models.PMIResp {
 	res := &models.PMIResp{}
 	url := "https://datacenter-web.eastmoney.com/api/data/v1/get?callback=data&columns=REPORT_DATE%2CTIME%2CMAKE_INDEX%2CMAKE_SAME%2CNMAKE_INDEX%2CNMAKE_SAME&pageNumber=1&pageSize=20&sortColumns=REPORT_DATE&sortTypes=-1&source=WEB&client=WEB&reportName=RPT_ECONOMY_PMI&p=1&pageNo=1&pageNum=1&_=" + strconv.FormatInt(time.Now().Unix(), 10)
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "datacenter-web.eastmoney.com").
 		SetHeader("Origin", "https://datacenter.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/cjsj/gdp.html").
@@ -1313,7 +1261,7 @@ func (m MarketNewsApi) GetPMI() *models.PMIResp {
 }
 func (m MarketNewsApi) GetIndustryReportInfo(infoCode string) string {
 	url := "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=" + infoCode
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "data.eastmoney.com").
 		SetHeader("Origin", "https://data.eastmoney.com").
 		SetHeader("Referer", "https://data.eastmoney.com/report/industry.jshtml").
@@ -1341,7 +1289,7 @@ func (receiver MarketNewsApi) GetSecuritiesCompanyOpinion(startDate string, endD
 	res := models.SecuritiesCompanyOpinionResp{}
 
 	url := fmt.Sprintf("https://reportapi.eastmoney.com/report/jg?cb=data&pageSize=50&beginTime=%s&endTime=%s&pageNo=1&fields=&qType=4&orgCode=&author=&p=1&pageNum=1&pageNumber=1&_=%d", startDate, endDate, time.Now().Unix())
-	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(time.Duration(30)*time.Second).R().
 		SetHeader("Host", "reportapi.eastmoney.com").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
@@ -1370,7 +1318,7 @@ func (receiver MarketNewsApi) GetSecuritiesCompanyOpinion(startDate string, endD
 
 func (m MarketNewsApi) GetSecuritiesCompanyOpinionContent(OrgSName, encodeUrl string) string {
 	url := "https://data.eastmoney.com/report/zw_brokerreport.jshtml?encodeUrl=" + encodeUrl
-	resp, _ := resty.New().R().
+	resp, _ := SharedHTTPClient.R().
 		SetHeader("Host", "data.eastmoney.com").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
@@ -1385,7 +1333,7 @@ func (m MarketNewsApi) GetSecuritiesCompanyOpinionContent(OrgSName, encodeUrl st
 }
 
 func (m MarketNewsApi) ReutersNew() *models.ReutersNews {
-	client := resty.New()
+	client := SharedHTTPClient
 	config := GetSettingConfig()
 	if config.HttpProxyEnabled && config.HttpProxy != "" {
 		client.SetProxy(config.HttpProxy)
@@ -1409,7 +1357,7 @@ func (m MarketNewsApi) ReutersNew() *models.ReutersNews {
 }
 
 func (m MarketNewsApi) InteractiveAnswer(page int, pageSize int, keyWord string) *models.InteractiveAnswer {
-	client := resty.New()
+	client := SharedHTTPClient
 	config := GetSettingConfig()
 	if config.HttpProxyEnabled && config.HttpProxy != "" {
 		client.SetProxy(config.HttpProxy)
@@ -1442,7 +1390,7 @@ func (m MarketNewsApi) InteractiveAnswer(page int, pageSize int, keyWord string)
 
 func (m MarketNewsApi) CailianpressWeb(searchWords string) *models.CailianpressWeb {
 	res := &models.CailianpressWeb{}
-	_, err := resty.New().SetTimeout(time.Second*10).R().
+	_, err := SharedHTTPClient.SetTimeout(time.Second*10).R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Host", "www.cls.cn").
 		SetHeader("Origin", "https://www.cls.cn").
@@ -1529,7 +1477,7 @@ func (m MarketNewsApi) GetUplimitHot(date string, limit int) map[string]any {
 		date = time.Now().In(loc).Format("2006-01-02")
 	}
 	apiUrl := fmt.Sprintf("https://api.zizizaizai.com/v3/open/review/uplimit/hot?date1=%s&limit=%d", date, limit)
-	resp, err := resty.New().SetTimeout(15*time.Second).R().
+	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36").
 		SetHeader("Accept", "application/json").
 		Get(apiUrl)

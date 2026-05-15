@@ -95,6 +95,7 @@ const handleProgress = (progress) => {
 const enableEditor = ref(false)
 const mdPreviewRef = ref(null)
 const mdEditorRef = ref(null)
+const aiResultScrollRef = ref(null)
 const tipsRef = ref(null)
 const message = useMessage()
 const notify = useNotification()
@@ -124,7 +125,7 @@ const vipLevel = ref(0)
 const klineAutoCloseTimer = ref(null)
 const addBTN = ref(true)
 const enableTools = ref(true)
-const thinkingMode = ref(false)
+const thinkingMode = ref(true)
 const formModel = ref({
   name: "",
   code: "",
@@ -400,7 +401,6 @@ onBeforeMount(() => {
   })
 
   EventsOn("newChatStream", async (msg) => {
-    data.loading = false
     if (msg === "DONE") {
       SaveAIResponseResult(data.code, data.name, data.airesult, data.chatId, data.question, data.aiConfigId)
       message.info("AI分析完成！")
@@ -413,6 +413,9 @@ onBeforeMount(() => {
       if (msg.question) {
         data.question = msg.question
       }
+      if (msg.content || msg.reasoning_content || msg.extraContent) {
+        data.loading = false
+      }
       if (msg.content) {
         data.airesult = data.airesult + msg.content
       }
@@ -422,7 +425,6 @@ onBeforeMount(() => {
       if (msg.extraContent) {
         data.airesult = data.airesult + msg.extraContent
       }
-      data.loading= true
       scrollToAiResultBottom()
     }
   })
@@ -437,20 +439,15 @@ onBeforeMount(() => {
 
   EventsOn("updateVersion", async (msg) => {
     const githubTimeStr = msg.published_at;
-    // 创建一个 Date 对象
     const utcDate = new Date(githubTimeStr);
-// 获取本地时间
     const date = new Date(utcDate.getTime());
     const year = date.getFullYear();
-// getMonth 返回值是 0 - 11，所以要加 1
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = String(date.getSeconds()).padStart(2, '0');
-
     const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-
     notify.info({
       avatar: () =>
           h(NAvatar, {
@@ -460,7 +457,6 @@ onBeforeMount(() => {
           }),
       title: '发现新版本: ' + msg.tag_name,
       content: () => {
-        //return h(MdPreview, {theme:'dark',modelValue:msg.commit?.message}, null)
         return h('div', {
           style: {
             'text-align': 'left',
@@ -2107,15 +2103,12 @@ async function copyToClipboard() {
 
 function scrollToAiResultBottom() {
   nextTick(() => {
-    const previewEl = mdPreviewRef.value?.$el || mdEditorRef.value?.$el
-    if (previewEl) {
-      const scrollContainer = previewEl.querySelector('.md-editor-preview-wrapper') || 
-                               previewEl.querySelector('.md-editor-preview') ||
-                               previewEl
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight
+    requestAnimationFrame(() => {
+      const el = aiResultScrollRef.value
+      if (el) {
+        el.scrollTop = el.scrollHeight
       }
-    }
+    })
   })
 }
 
@@ -2666,7 +2659,7 @@ watch(modalShow6, (newVal) => {
     </n-input-group>
     <!--    </n-card>-->
   </div>
-  <n-modal transform-origin="center" size="small" v-model:show="modalShow" :title="formModel.name" style="width: 800px"
+  <n-modal transform-origin="center" size="small" v-model:show="modalShow" :title="formModel.name" style="width: 800px;max-width: calc(100vw - 32px);"
            :preset="'card'">
     <n-form :model="formModel" :rules="{
               costPrice: { required: true, message: '请输入成本'},
@@ -2782,29 +2775,30 @@ watch(modalShow6, (newVal) => {
       </n-flex>
     </template>
   </n-modal>
-  <n-modal v-model:show="modalShow2" :title="data.name+' '+ data.changePercent+'%'" style="width: 1000px"
+  <n-modal v-model:show="modalShow2" :title="data.name+' '+ data.changePercent+'%'" style="width: 1000px;max-width: calc(100vw - 32px);"
            :preset="'card'" @after-enter="handleFeishi" @after-leave="clearFeishi">
     <!--    <n-image :src="data.fenshiURL" />-->
-    <div ref="kLineChartRef2" style="width: 1000px; height: 500px;"></div>
+    <div ref="kLineChartRef2" style="width: 100%; height: 500px;"></div>
   </n-modal>
-  <n-modal v-model:show="modalShow3" :title="data.name" style="width: 1000px" :preset="'card'"
+  <n-modal v-model:show="modalShow3" :title="data.name" style="width: 1000px;max-width: calc(100vw - 32px);" :preset="'card'"
            @after-enter="handleKLine">
     <!--    <n-image :src="data.kURL" />-->
-    <div ref="kLineChartRef" style="width: 1000px; height: 500px;"></div>
+    <div ref="kLineChartRef" style="width: 100%; height: 500px;"></div>
   </n-modal>
 
-  <n-modal transform-origin="center" v-model:show="modalShow4" preset="card" style="width: 800px;"
+  <n-modal transform-origin="center" v-model:show="modalShow4" preset="card" style="width: 800px;max-width: calc(100vw - 32px);"
            :title="'['+data.name+']AI分析'">
     <n-spin size="small" :show="data.loading">
-      <MdEditor v-if="enableEditor" :toolbars="toolbars" ref="mdEditorRef" style="height: 440px;text-align: left"
+      <MdEditor v-if="enableEditor" :toolbars="toolbars" ref="mdEditorRef" style="height: 440px;max-height: 60vh;text-align: left"
                 :modelValue="data.airesult" :theme="theme">
         <template #defToolbars>
           <ExportPDF :file-name="data.name+'['+data.code+']AI分析报告'" style="text-align: left"
                      :modelValue="data.airesult" @onProgress="handleProgress"/>
         </template>
       </MdEditor>
-      <MdPreview v-if="!enableEditor" ref="mdPreviewRef" style="height: 440px;text-align: left"
-                 :modelValue="data.airesult" :theme="theme"/>
+      <div v-if="!enableEditor" ref="aiResultScrollRef" style="height: 440px;max-height: 60vh;text-align: left;overflow-y: auto;">
+        <MdPreview ref="mdPreviewRef" :modelValue="data.airesult" :theme="theme"/>
+      </div>
     </n-spin>
     <template #footer>
       <n-flex justify="space-between" ref="tipsRef">
@@ -2867,7 +2861,7 @@ watch(modalShow6, (newVal) => {
       </n-flex>
     </template>
   </n-modal>
-  <n-modal v-model:show="modalShow5" :title="data.name+'资金趋势'" style="width: 1000px" :preset="'card'">
+  <n-modal v-model:show="modalShow5" :title="data.name+'资金趋势'" style="width: 1000px;max-width: calc(100vw - 32px);" :preset="'card'">
     <money-trend :code="data.code" :name="data.name" :days="360" :dark-theme="data.darkTheme"
                  :chart-height="500"></money-trend>
   </n-modal>

@@ -126,6 +126,12 @@ func (a *CronTaskApi) GetAll() []models.CronTask {
 	return tasks
 }
 
+func (a *CronTaskApi) ExistsByTaskType(taskType string) bool {
+	var count int64
+	db.Dao.Model(&models.CronTask{}).Where("task_type = ?", taskType).Count(&count)
+	return count > 0
+}
+
 func (a *CronTaskApi) EnableTask(id uint, enable bool, userID uint) error {
 	q := db.Dao.Model(&models.CronTask{}).Where("id = ?", id)
 	// 用户隔离：禁止启用/禁用他人创建的任务

@@ -7,7 +7,8 @@
       :title="hasBackgroundTask ? 'go-stock AI Agent 助手正在后台分析...' : 'go-stock AI Agent 助手'"
     >
       <div class="edge-trigger-inner">
-        <NIcon :component="SparklesOutline" size="22" />
+        <NIcon :component="SparklesOutline" size="18" />
+        <span class="edge-trigger-text">AI助手</span>
         <div v-if="hasBackgroundTask" class="edge-trigger-badge" />
       </div>
     </div>
@@ -21,7 +22,7 @@
           size="small"
           class="panel-card"
           :bordered="false"
-          content-style="padding: 0; display: flex; flex-direction: column; height: 100%;"
+          content-style="padding: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden;"
         >
           <template #header>
             <div class="panel-header">
@@ -44,7 +45,7 @@
             </div>
           </template>
 
-          <div class="chat-body">
+            <div class="chat-body">
             <Transition name="hint-fade">
               <div v-if="hintVisible" class="hint-bar">{{ hintText }}</div>
             </Transition>
@@ -70,6 +71,9 @@
                     <div
                       :class="['message-item', group.userMsg.role]"
                     >
+                      <div class="msg-avatar user-avatar">
+                        <NIcon :component="PersonCircleOutline" size="18" />
+                      </div>
                       <div class="msg-bubble">
                         <div class="msg-content">
                           <div v-if="group.userMsg.time" class="msg-meta msg-meta-user-inner">
@@ -84,9 +88,6 @@
                             class="msg-markdown"
                           />
                         </div>
-                      </div>
-                      <div class="msg-avatar user-avatar">
-                        <NIcon :component="PersonCircleOutline" size="20" />
                       </div>
                     </div>
                     <div
@@ -198,6 +199,7 @@
                 </div>
               </div>
             </NScrollbar>
+            </div>
 
             <div class="chat-footer">
               <div class="chat-footer-row">
@@ -299,7 +301,6 @@
                 </NButton>
               </div>
             </div>
-          </div>
         </NCard>
       </div>
     </div>
@@ -1261,8 +1262,17 @@ onBeforeUnmount(() => {
 .edge-trigger-inner {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+}
+.edge-trigger-text {
+  font-size: 14px;
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+  line-height: 1;
+  white-space: nowrap;
 }
 .edge-trigger-badge {
   position: absolute;
@@ -1405,7 +1415,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 .chat-scroll :deep(.n-scrollbar-content) {
-  flex: 1;
   min-height: 0;
 }
 .message-list {
@@ -1459,15 +1468,16 @@ onBeforeUnmount(() => {
 }
 .message-item {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   align-items: flex-start;
 }
 .message-item.user {
-  justify-content: flex-end;
+  align-items: flex-end;
 }
 .msg-avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1486,11 +1496,9 @@ onBeforeUnmount(() => {
 }
 .msg-bubble {
   max-width: 100%;
-  flex: 1;
-  min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 14px;
+  padding: 8px 10px;
   border-radius: 12px;
   font-size: 14px;
   line-height: 1.5;
@@ -1670,7 +1678,7 @@ onBeforeUnmount(() => {
 }
 .msg-json-md-content {
   padding: 12px;
-  max-height: 500px;
+  max-height: 300px;
   overflow-y: auto;
   text-align: left;
 }
@@ -1753,9 +1761,15 @@ onBeforeUnmount(() => {
   min-width: 0;
   box-sizing: border-box;
 }
+.msg-content .msg-markdown :deep(.md-editor-preview-wrapper) {
+  width: 100%;
+}
 .msg-content .msg-markdown :deep(.md-editor-preview) {
   font-size: 13px;
   line-height: 1.6;
+  padding: 0 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .message-item.user .msg-content :deep(.md-editor-preview),
 .message-item.user .msg-content :deep(.md-editor-preview-wrapper) {
@@ -1797,7 +1811,8 @@ onBeforeUnmount(() => {
 .chat-footer-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .chat-footer-select {
   flex: 1;
@@ -1845,6 +1860,7 @@ onBeforeUnmount(() => {
 }
 .chat-footer-input .n-input {
   flex: 1;
+  min-width: 0;
 }
 .chat-footer-input .n-input :deep(textarea) {
   text-align: left;

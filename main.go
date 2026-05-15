@@ -9,6 +9,7 @@ import (
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	log "go-stock/backend/logger"
+	"go-stock/backend/machineid"
 	"go-stock/backend/models"
 	"os"
 	"runtime/debug"
@@ -72,7 +73,9 @@ func main() {
 	}()
 
 	checkDir("data")
+	machineid.Init(BuildKey)
 	data.SponsorDecryptKeyHex = BuildKey
+	data.SetAppIcon(icon)
 	db.Init("")
 	data.InitAnalyzeSentiment()
 	go AutoMigrate()
@@ -168,7 +171,7 @@ func main() {
 
 	// Create application with options
 	err = wails.Run(&options.App{
-		Title: "go-stock：AI赋能股票分析✨ " + OFFICIAL_STATEMENT + " " + convertor.ToString(appWidth) + "x" + convertor.ToString(appHeight),
+		Title: "go-stock：AI赋能股票分析✨ " + OFFICIAL_STATEMENT,
 		// 默认窗口大小：自适应但保留明显边距
 		Width:  appWidth,
 		Height: appHeight,
@@ -296,6 +299,7 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&models.MCPServer{})
 	db.Dao.AutoMigrate(&models.MCPServerTool{})
 	db.Dao.AutoMigrate(&models.Skill{})
+	db.Dao.AutoMigrate(&models.CustomStrategy{})
 
 	//updateMultipleModel()
 

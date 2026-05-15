@@ -38,6 +38,8 @@ export function CalculateNextRunTimes(arg1:string,arg2:number):Promise<Array<str
 
 export function ChatWithAgent(arg1:string,arg2:number,arg3:any,arg4:boolean,arg5:number,arg6:boolean,arg7:string):Promise<void>;
 
+export function CheckDeviceBinding(arg1:string,arg2:string):Promise<Record<string, any>>;
+
 export function CheckFrequentTrading(arg1:string):Promise<Record<string, any>>;
 
 export function CheckSponsorCode(arg1:string):Promise<Record<string, any>>;
@@ -63,6 +65,8 @@ export function DeleteAiRecommendStocks(arg1:number):Promise<string>;
 export function DeleteAllStockInfo(arg1:number):Promise<string>;
 
 export function DeleteCronTask(arg1:number):Promise<string>;
+
+export function DeleteCustomStrategy(arg1:number):Promise<string>;
 
 export function DeleteMCPServer(arg1:number):Promise<string>;
 
@@ -108,6 +112,8 @@ export function GetAiRecommendStocksList(arg1:models.AiRecommendStocksQuery):Pro
 
 export function GetAllConcepts():Promise<Array<string>>;
 
+export function GetAllCustomStrategies():Promise<any>;
+
 export function GetAllIndustries():Promise<Array<string>>;
 
 export function GetAllMCPTools():Promise<Array<models.MCPServerTool>>;
@@ -138,6 +144,8 @@ export function GetCronTaskList(arg1:models.CronTaskQuery):Promise<models.CronTa
 
 export function GetCronTaskTypes():Promise<Array<lo.Tuple2_string_string_>>;
 
+export function GetCustomStrategyList(arg1:models.CustomStrategyQuery):Promise<models.CustomStrategyPageData>;
+
 export function GetDailyChangeStats(arg1:number):Promise<Array<data.DailyChangeStats>>;
 
 export function GetDailyDimensionStats(arg1:string,arg2:string,arg3:number):Promise<Array<data.DailyDimensionStats>>;
@@ -147,6 +155,14 @@ export function GetEffectiveSponsorVip():Promise<Record<string, any>>;
 export function GetFollowList(arg1:number):Promise<any>;
 
 export function GetFollowedFund():Promise<Array<data.FollowedFund>>;
+
+export function GetFundHistoryNetValue(arg1:string,arg2:number,arg3:string,arg4:string):Promise<Array<data.FundHistoryNetValue>>;
+
+export function GetFundKLine(arg1:string,arg2:string,arg3:number):Promise<data.KLineSourceResult>;
+
+export function GetFundRanking(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number,arg6:number):Promise<data.FundRankingResult>;
+
+export function GetFundTop10Holdings(arg1:string):Promise<Array<data.FundHoldingStock>>;
 
 export function GetGroupList():Promise<Array<data.Group>>;
 
@@ -165,6 +181,8 @@ export function GetMCPServerByID(arg1:number):Promise<models.MCPServer>;
 export function GetMCPServerList(arg1:models.MCPServerQuery):Promise<models.MCPServerPageResp>;
 
 export function GetMCPToolsByServerID(arg1:number):Promise<Array<models.MCPServerTool>>;
+
+export function GetMachineId():Promise<string>;
 
 export function GetMarketStatisticByDate(arg1:string):Promise<Array<models.MarketStatistic>>;
 
@@ -278,6 +296,8 @@ export function NewsPush(arg1:any):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function QuitApp():Promise<void>;
+
 export function ReFleshTelegraphList(arg1:string):Promise<any>;
 
 export function RemoveGroup(arg1:number):Promise<string>;
@@ -289,6 +309,8 @@ export function SaveAIResponseResult(arg1:string,arg2:string,arg3:string,arg4:st
 export function SaveAiAssistantSession(arg1:string,arg2:Array<models.AiAssistantMessage>):Promise<void>;
 
 export function SaveAsMarkdown(arg1:string,arg2:string):Promise<string>;
+
+export function SaveCustomStrategy(arg1:models.CustomStrategy):Promise<string>;
 
 export function SaveImage(arg1:string,arg2:string):Promise<string>;
 

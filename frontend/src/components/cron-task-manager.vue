@@ -1402,7 +1402,7 @@ const resetForm = () => {
     promptId: null,
     aiConfigId: null,
     sysPromptId: null,
-    thinking: false,
+    thinking: true,
     stockCode: '',
     stockName: '',
     agentMode: ''
@@ -1411,7 +1411,7 @@ const resetForm = () => {
     promptId: null,
     aiConfigId: null,
     sysPromptId: null,
-    thinking: false,
+    thinking: true,
     agentMode: ''
   })
   // 重置 Cron 配置器

@@ -7,17 +7,18 @@ import {
   AnalyticsOutline,
   BarChartSharp, Bonfire, BonfireOutline, DiamondOutline, EaselSharp,
   ExpandOutline, Flag,
-  Flame, FlameSharp, FlaskOutline, InformationOutline,
+  Flame, FlameSharp, FlaskOutline, GlobeOutline, InformationOutline,
   LogoGithub,
+  ChatbubblesOutline,
   NewspaperOutline,
   NewspaperSharp, Notifications,
   PeopleOutline,
   PowerOutline, Pulse,
   ReorderTwoOutline,
   SettingsOutline, ServerOutline, Skull, SkullOutline, SkullSharp,
-  SparklesOutline, FlashOutline,
+  SparklesOutline, FlashOutline, Star,
   StarOutline,
-  Wallet, WarningOutline, TimeOutline,
+  Wallet, WarningOutline, TimeOutline, SearchOutline,
   LogOutOutline
 } from '@vicons/ionicons5'
 import {AnalyzeSentiment, GetConfig, GetGroupList, GetVersionInfo} from "../wailsjs/go/main/App";
@@ -485,6 +486,22 @@ const menuOptions = ref([
         show: realtimeProfit.value,
         icon: renderIcon(AlarmOutline),
       },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  to: {name: 'fund', query: {name: '基金排行'}},
+                  onClick: () => {
+                    activeKey.value = 'fund'
+                    EventsEmit("changeFundTab", {name: '基金排行'})
+                  },
+                },
+                {default: () => '基金排行'}
+            ),
+        key: 'fundRanking',
+        icon: renderIcon(TrendingUp),
+      },
     ]
   },
   {
@@ -575,7 +592,7 @@ const menuOptions = ref([
                   {default: () => '股票推荐记录'}
               ),
           key: 'research2',
-          icon: renderIcon(DiamondOutline),
+          icon: renderIcon(Star),
         },
         {
           label: () =>
@@ -654,20 +671,89 @@ const menuOptions = ref([
                     to: {
                       name: 'research',
                       query: {
-                        name:"股票信息筛选",
+                        name:"提示词广场",
                       },
                     },
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 3, name: '股票信息筛选'})
+                        EventsEmit("changeResearchTab", {ID: 10, name: '提示词广场'})
                       }, 100)
                     },
                   },
-                  {default: () => '股票信息筛选'}
+                  {default: () => '提示词广场'}
+              ),
+          key: 'promptPlaza',
+          icon: renderIcon(GlobeOutline),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"问答广场",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 11, name: '问答广场'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '问答广场'}
+              ),
+          key: 'promptQa',
+          icon: renderIcon(ChatbubblesOutline),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"形态选股",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 3, name: '形态选股'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '形态选股'}
               ),
           key: 'research4',
-          icon: renderIcon(AppsList20Regular),
+          icon: renderIcon(SearchOutline),
+        },
+        {
+          label: () =>
+              h(
+                  RouterLink,
+                  {
+                    to: {
+                      name: 'research',
+                      query: {
+                        name:"指标选股",
+                      },
+                    },
+                    onClick: () => {
+                      activeKey.value = 'research'
+                      setTimeout(() => {
+                        EventsEmit("changeResearchTab", {ID: 0, name: '指标选股'})
+                      }, 100)
+                    },
+                  },
+                  {default: () => '指标选股'}
+              ),
+          key: 'research_select_stock',
+          icon: renderIcon(BoxSearch20Regular),
         },
         {
           label: () =>
@@ -956,6 +1042,8 @@ onBeforeMount(() => {
         updateMarketStatus()
       }
     }
+    officialStatement.value = result.officialStatement || ""
+    updateMarketStatus()
   })
 })
 

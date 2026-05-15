@@ -2,9 +2,12 @@ package agent
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"go-stock/backend/data"
 	"go-stock/backend/logger"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -15,7 +18,6 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino-ext/components/model/openrouter"
-	"github.com/cloudwego/eino-ext/components/model/qianfan"
 	"github.com/cloudwego/eino-ext/components/model/qwen"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/duke-git/lancet/v2/strutil"
@@ -31,7 +33,6 @@ const (
 	providerDashScope
 	providerOpenRouter
 	providerAnthropic
-	providerQianfan
 	providerOllama
 	providerGemini
 	providerDeepSeek
@@ -39,6 +40,11 @@ const (
 
 func normalizeBaseURL(base string) string {
 	return strings.TrimSuffix(strings.TrimSpace(base), "/")
+}
+
+func normalizeChatModelBaseURL(base string) string {
+	base = normalizeBaseURL(base)
+	return strings.TrimSuffix(base, "/chat/completions")
 }
 
 func detectChatModelProvider(baseLower, modelName string) chatModelProvider {
@@ -56,9 +62,6 @@ func detectChatModelProvider(baseLower, modelName string) chatModelProvider {
 	}
 	if strings.Contains(baseLower, "anthropic.com") || strings.Contains(baseLower, "api.anthropic") {
 		return providerAnthropic
-	}
-	if strings.Contains(baseLower, "qianfan.baidubce.com") || strings.Contains(baseLower, "aip.baidubce.com") {
-		return providerQianfan
 	}
 	if strings.Contains(baseLower, ":11434") || strings.Contains(baseLower, "ollama") {
 		return providerOllama
@@ -108,10 +111,32 @@ func parseAccessSecret(apiKey string) (ak, sk string) {
 func ptrFloat32(v float32) *float32 { return &v }
 func ptrBool(v bool) *bool          { return &v }
 
+func createHTTPClientWithProxy(proxyURL string, timeout time.Duration) *http.Client {
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+	}
+
+	if proxyURL != "" {
+		proxyParsed, err := url.Parse(proxyURL)
+		if err == nil {
+			transport.Proxy = http.ProxyURL(proxyParsed)
+			logger.SugaredLogger.Infof("createChatModel using proxy: %s", proxyURL)
+		} else {
+			logger.SugaredLogger.Warnf("createChatModel failed to parse proxy URL: %v", err)
+		}
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+	}
+}
+
 // createChatModel 按 Eino 生态组件路由（参见 https://www.cloudwego.io/zh/docs/eino/ecosystem_integration/chat_model/ ）
 // 未命中专用实现时回退到 OpenAI 兼容 ChatModel（硅基流动、LM Studio、Azure OpenAI 等）。
 func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCallingChatModel, error) {
-	baseLower := strings.ToLower(normalizeBaseURL(aiConfig.BaseUrl))
+	baseURL := normalizeChatModelBaseURL(aiConfig.BaseUrl)
+	baseLower := strings.ToLower(baseURL)
 	temperature := float32(aiConfig.Temperature)
 	timeout := time.Duration(aiConfig.TimeOut) * time.Second
 	if timeout <= 0 {
@@ -122,8 +147,13 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		maxTok = 4096
 	}
 
+	var httpClient *http.Client
+	if aiConfig.HttpProxyEnabled && aiConfig.HttpProxy != "" {
+		httpClient = createHTTPClientWithProxy(aiConfig.HttpProxy, timeout)
+	}
+
 	p := detectChatModelProvider(baseLower, aiConfig.ModelName)
-	logger.SugaredLogger.Infof("createChatModel provider=%d base=%q model=%q", p, aiConfig.BaseUrl, aiConfig.ModelName)
+	logger.SugaredLogger.Infof("createChatModel provider=%d base=%q model=%q proxy=%v", p, aiConfig.BaseUrl, aiConfig.ModelName, aiConfig.HttpProxyEnabled)
 
 	switch p {
 	case providerVolcArk:
@@ -131,19 +161,26 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		if aiConfig.Thinking {
 			thinking = &ark.Thinking{Type: "enabled"}
 		}
-		return ark.NewChatModel(ctx, &ark.ChatModelConfig{
-			BaseURL:     strings.TrimSpace(aiConfig.BaseUrl),
+		arkClient := httpClient
+		if arkClient == nil {
+			arkClient = createHTTPClientWithProxy("", timeout)
+		}
+		cfg := &ark.ChatModelConfig{
+			BaseURL:     baseURL,
 			Model:       aiConfig.ModelName,
 			APIKey:      aiConfig.ApiKey,
-			MaxTokens:   &aiConfig.MaxTokens,
+			MaxTokens:   &maxTok,
 			Temperature: &temperature,
 			Thinking:    thinking,
-		})
+			Timeout:     &timeout,
+			HTTPClient:  arkClient,
+		}
+		return ark.NewChatModel(ctx, cfg)
 
 	case providerDashScope:
 		cfg := &qwen.ChatModelConfig{
 			APIKey:    aiConfig.ApiKey,
-			BaseURL:   strings.TrimSpace(aiConfig.BaseUrl),
+			BaseURL:   baseURL,
 			Model:     aiConfig.ModelName,
 			Timeout:   timeout,
 			MaxTokens: &maxTok,
@@ -154,12 +191,15 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		if aiConfig.Thinking {
 			cfg.EnableThinking = ptrBool(true)
 		}
+		if httpClient != nil {
+			cfg.HTTPClient = httpClient
+		}
 		return qwen.NewChatModel(ctx, cfg)
 
 	case providerOpenRouter:
 		cfg := &openrouter.Config{
 			APIKey:    aiConfig.ApiKey,
-			BaseURL:   strings.TrimSpace(aiConfig.BaseUrl),
+			BaseURL:   baseURL,
 			Model:     aiConfig.ModelName,
 			Timeout:   timeout,
 			MaxTokens: &maxTok,
@@ -171,6 +211,9 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			enabled := true
 			cfg.Reasoning = &openrouter.Reasoning{Enabled: &enabled}
 		}
+		if httpClient != nil {
+			cfg.HTTPClient = httpClient
+		}
 		return openrouter.NewChatModel(ctx, cfg)
 
 	case providerAnthropic:
@@ -178,39 +221,26 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		if maxOut <= 0 {
 			maxOut = 8192
 		}
+		anthropicClient := httpClient
+		if anthropicClient == nil {
+			anthropicClient = createHTTPClientWithProxy("", timeout)
+		}
 		cfg := &claude.Config{
-			APIKey:    aiConfig.ApiKey,
-			Model:     aiConfig.ModelName,
-			MaxTokens: maxOut,
+			APIKey:     aiConfig.ApiKey,
+			Model:      aiConfig.ModelName,
+			MaxTokens:  maxOut,
+			HTTPClient: anthropicClient,
 		}
 		if aiConfig.Temperature > 0 {
 			cfg.Temperature = ptrFloat32(temperature)
 		}
-		if b := strings.TrimSpace(aiConfig.BaseUrl); b != "" {
+		if b := baseURL; b != "" {
 			cfg.BaseURL = &b
 		}
 		if aiConfig.Thinking {
 			cfg.Thinking = &claude.Thinking{Enable: true, BudgetTokens: min(maxOut, 32000)}
 		}
 		return claude.NewChatModel(ctx, cfg)
-
-	case providerQianfan:
-		ak, sk := parseAccessSecret(aiConfig.ApiKey)
-		if ak == "" || sk == "" {
-			return nil, fmt.Errorf("千帆模型需在 API Key 中配置「AccessKey|SecretKey」（竖线或分号分隔），或参考 eino-ext qianfan 文档设置环境变量")
-		}
-		qcfg := qianfan.GetQianfanSingletonConfig()
-		qcfg.AccessKey = ak
-		qcfg.SecretKey = sk
-		tok := maxTok
-		cfg := &qianfan.ChatModelConfig{
-			Model:               aiConfig.ModelName,
-			MaxCompletionTokens: &tok,
-		}
-		if aiConfig.Temperature > 0 {
-			cfg.Temperature = ptrFloat32(temperature)
-		}
-		return qianfan.NewChatModel(ctx, cfg)
 
 	case providerOllama:
 		base := strings.TrimSpace(aiConfig.BaseUrl)
@@ -231,13 +261,21 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			tv := ollamaapi.ThinkValue{Value: true}
 			cfg.Thinking = &tv
 		}
+		if httpClient != nil {
+			cfg.HTTPClient = httpClient
+		}
 		return ollama.NewChatModel(ctx, cfg)
 
 	case providerGemini:
+		geminiClient := httpClient
+		if geminiClient == nil {
+			geminiClient = createHTTPClientWithProxy("", timeout)
+		}
 		cc := &genai.ClientConfig{APIKey: aiConfig.ApiKey}
-		if b := strings.TrimSpace(aiConfig.BaseUrl); b != "" {
+		if b := baseURL; b != "" {
 			cc.HTTPOptions = genai.HTTPOptions{BaseURL: b}
 		}
+		cc.HTTPClient = geminiClient
 		client, err := genai.NewClient(ctx, cc)
 		if err != nil {
 			return nil, fmt.Errorf("gemini genai client: %w", err)
@@ -258,29 +296,36 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		return gemini.NewChatModel(ctx, gcfg)
 
 	case providerDeepSeek:
-		return deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
-			BaseURL:     strings.TrimSpace(aiConfig.BaseUrl),
+		cfg := &deepseek.ChatModelConfig{
+			BaseURL:     baseURL,
 			Model:       aiConfig.ModelName,
 			APIKey:      aiConfig.ApiKey,
 			MaxTokens:   maxTok,
 			Temperature: temperature,
 			Timeout:     timeout,
-		})
+		}
+		if httpClient != nil {
+			cfg.HTTPClient = httpClient
+		}
+		return deepseek.NewChatModel(ctx, cfg)
 
 	default:
 		extraFields := map[string]any{}
 		if aiConfig.Thinking {
-			extraFields["thinking"] = map[string]any{"type": "enabled"}
+			logger.SugaredLogger.Warnf("generic OpenAI-compatible agent model %q ignores thinking option to keep request parameters standard", aiConfig.ModelName)
 		}
-		mt := aiConfig.MaxTokens
-		return einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
-			BaseURL:     strings.TrimSpace(aiConfig.BaseUrl),
+		cfg := &einoopenai.ChatModelConfig{
+			BaseURL:     baseURL,
 			Model:       aiConfig.ModelName,
 			APIKey:      aiConfig.ApiKey,
 			Timeout:     timeout,
-			MaxTokens:   &mt,
+			MaxTokens:   &maxTok,
 			Temperature: &temperature,
 			ExtraFields: extraFields,
-		})
+		}
+		if httpClient != nil {
+			cfg.HTTPClient = httpClient
+		}
+		return einoopenai.NewChatModel(ctx, cfg)
 	}
 }

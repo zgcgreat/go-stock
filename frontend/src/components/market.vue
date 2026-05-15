@@ -38,7 +38,6 @@ import HotEvents from "./HotEvents.vue";
 import HotTopics from "./HotTopics.vue";
 import InvestCalendarTimeLine from "./InvestCalendarTimeLine.vue";
 import ClsCalendarTimeLine from "./ClsCalendarTimeLine.vue";
-import SelectStock from "./SelectStock.vue";
 import Stockhotmap from "./stockhotmap.vue";
 import MarketStatistic from "./MarketStatistic.vue";
 
@@ -84,9 +83,10 @@ const indexInterval = ref(null)
 const indexIndustryRank = ref(null)
 const tradingCheckInterval = ref(null)
 const mdPreviewRef = ref(null)
+const aiResultScrollRef = ref(null)
 const stockCode= ref('')
 const enableTools= ref(true)
-const thinkingMode = ref(false)
+const thinkingMode = ref(true)
 const treemapRef = ref(null);
 let treemapchart =null;
 const marketStatisticRef = ref(null);
@@ -318,8 +318,6 @@ function updateTab(name) {
 }
 
 EventsOn("summaryStockNews", async (msg) => {
-  loading.value = false
-  ////console.log(msg)
   if (msg === "DONE") {
     await SaveAIResponseResult("市场资讯", "市场资讯", aiSummary.value, chatId.value, question.value,aiConfigId.value)
     message.info("AI分析完成！")
@@ -331,6 +329,9 @@ EventsOn("summaryStockNews", async (msg) => {
     }
     if (msg.question) {
       question.value = msg.question
+    }
+    if (msg.content || msg.reasoning_content || msg.extraContent) {
+      loading.value = false
     }
     if (msg.content) {
       aiSummary.value = aiSummary.value + msg.content
@@ -347,22 +348,18 @@ EventsOn("summaryStockNews", async (msg) => {
     if (msg.time) {
       aiSummaryTime.value = msg.time
     }
-    loading.value = true
     scrollToAiResultBottom()
   }
 })
 
 function scrollToAiResultBottom() {
   nextTick(() => {
-    const previewEl = mdPreviewRef.value?.$el
-    if (previewEl) {
-      const scrollContainer = previewEl.querySelector('.md-editor-preview-wrapper') || 
-                               previewEl.querySelector('.md-editor-preview') ||
-                               previewEl
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight
+    requestAnimationFrame(() => {
+      const el = aiResultScrollRef.value
+      if (el) {
+        el.scrollTop = el.scrollHeight
       }
-    }
+    })
   })
 }
 
@@ -779,10 +776,12 @@ function ReFlesh(source) {
       </n-tab-pane>
     </n-tabs>
   </n-card>
-  <n-modal transform-origin="center" v-model:show="summaryModal" preset="card" style="width: 800px;"
+  <n-modal transform-origin="center" v-model:show="summaryModal" preset="card" style="width: 800px;max-width: calc(100vw - 32px);"
            :title="'AI市场资讯总结'">
     <n-spin size="small" :show="loading">
-      <MdPreview ref="mdPreviewRef" style="height: 440px;text-align: left" :modelValue="aiSummary" :theme="theme"/>
+      <div ref="aiResultScrollRef" style="height: 440px;max-height: 60vh;text-align: left;overflow-y: auto;">
+        <MdPreview ref="mdPreviewRef" :modelValue="aiSummary" :theme="theme"/>
+      </div>
     </n-spin>
     <template #footer>
       <n-flex justify="space-between" ref="tipsRef">
