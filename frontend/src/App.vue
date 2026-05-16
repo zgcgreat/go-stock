@@ -1,5 +1,5 @@
 <script setup>
-import {h, onBeforeMount, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {h, onBeforeMount, onBeforeUnmount, onMounted, ref, watch, computed} from "vue";
 import {RouterLink, useRouter, useRoute} from 'vue-router'
 import {createDiscreteApi, darkTheme, lightTheme, NIcon, NText, NButton, dateZhCN, zhCN} from 'naive-ui'
 import {
@@ -24,6 +24,8 @@ import {
 import {AnalyzeSentiment, GetConfig, GetGroupList, GetVersionInfo} from "../wailsjs/go/main/App";
 import FloatingAiAssistant from "./components/FloatingAiAssistant.vue";
 import FloatingAgentAssistant from "./components/FloatingAgentAssistant.vue";
+import WebLayout from "./components/layout/WebLayout.vue";
+import { useIsWebMode } from "./composables/useResponsive.js";
 import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
 import {Prompt, ReportAnalytics, ReportMoney, ReportSearch, TrendingUp} from "@vicons/tabler";
 import {LocalFireDepartmentRound} from "@vicons/material";
@@ -63,6 +65,10 @@ const isWebMode = ref(true)
 const officialStatement = ref("")
 const marketStatus = ref('')
 let marketStatusTimer = null
+
+// Web 模式检测（用于响应式布局）
+const { isWebMode: isWebModeDetected } = useIsWebMode()
+const useNewLayout = computed(() => isWebMode.value && isWebModeDetected.value)
 
 const investmentMottos = [
   "投资有风险，入市需谨慎",
@@ -934,6 +940,10 @@ function renderIcon(icon) {
   return () => h(NIcon, null, {default: () => h(icon)})
 }
 
+function handleMenuSelect(key) {
+  activeKey.value = key
+}
+
 function toggleFullscreen(e) {
   activeKey.value = 'full'
   if (isFullscreen.value) {
@@ -1139,7 +1149,33 @@ onBeforeUnmount(() => {
                 :rotate="-15"
             >
               <FloatingAgentAssistant />
-              <n-flex>
+
+              <!-- Web 模式：使用新的响应式布局 -->
+              <WebLayout
+                v-if="useNewLayout"
+                :menu-options="menuOptions"
+                :active-key="activeKey"
+                @select="handleMenuSelect"
+              >
+                <n-spin :show="loading">
+                  <template #description>
+                    {{ loadingMsg }}
+                  </template>
+                  <n-marquee :speed="100" style="position: relative;top:0;z-index: 19;width: 100%"
+                             v-if="(telegraph.length>0)&&(enableNews)">
+                    <n-tag type="warning" v-for="item in telegraph" style="margin-right: 10px">
+                      {{ item }}
+                    </n-tag>
+                  </n-marquee>
+                  <n-scrollbar style="max-height: calc(100vh - 20px);overflow: hidden">
+                    <n-skeleton v-if="loading" height="calc(100vh)" />
+                    <RouterView/>
+                  </n-scrollbar>
+                </n-spin>
+              </WebLayout>
+
+              <!-- 桌面端模式：保持原有布局 -->
+              <n-flex v-else>
                 <n-grid x-gap="12" :cols="1">
                   <n-gi>
                     <n-spin :show="loading">
