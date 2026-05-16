@@ -851,6 +851,7 @@ func processMessageFuture(msgFuture react.MessageFuture, ch chan *schema.Message
 }
 
 func processAdkMessageStream(sr *schema.StreamReader[*schema.Message], role schema.RoleType, toolName string, ch chan *schema.Message, fullResponse *strings.Builder) {
+	chunkCount := 0
 	for {
 		msg, err := sr.Recv()
 		if err != nil {
@@ -859,8 +860,12 @@ func processAdkMessageStream(sr *schema.StreamReader[*schema.Message], role sche
 		if msg == nil {
 			continue
 		}
+		chunkCount++
+		logger.SugaredLogger.Infof("[StreamChunk] #%d role=%s contentLen=%d reasoningLen=%d",
+			chunkCount, role, len(msg.Content), len(msg.ReasoningContent))
 		handleAdkMessage(msg, role, toolName, ch, fullResponse)
 	}
+	logger.SugaredLogger.Infof("[StreamComplete] total chunks=%d", chunkCount)
 }
 
 func processAdkMessage(msg *schema.Message, role schema.RoleType, toolName string, ch chan *schema.Message, fullResponse *strings.Builder) {
