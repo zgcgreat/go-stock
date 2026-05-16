@@ -298,9 +298,31 @@ func runReact(ctx context.Context, stockAiAgent *StockAiAgent, messages []*schem
 				}
 				break
 			}
-			if msg != nil && msg.Content != "" {
-				fullResponse.WriteString(msg.Content)
+			if msg != nil {
+				// 实时发送流式消息到前端
+				if msg.Content != "" {
+					fullResponse.WriteString(msg.Content)
+					// 发送增量内容
+					ch <- &schema.Message{
+						Role:    schema.Assistant,
+						Content: msg.Content,
+					}
+				}
+				if msg.ReasoningContent != "" {
+					// 发送思考内容
+					ch <- &schema.Message{
+						Role:             schema.Assistant,
+						ReasoningContent: msg.ReasoningContent,
+					}
+				}
 			}
+		}
+
+		// 发送完成信号
+		ch <- &schema.Message{
+			Role:    schema.Assistant,
+			Content: "",
+			Extra:   map[string]any{"finish_reason": "stop"},
 		}
 
 		if fullResponse.Len() != 0 && memoryService != nil {
