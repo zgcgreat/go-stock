@@ -113,8 +113,11 @@ func ptrBool(v bool) *bool          { return &v }
 
 func createHTTPClientWithProxy(proxyURL string, timeout time.Duration) *http.Client {
 	transport := &http.Transport{
-		TLSClientConfig:  &tls.Config{InsecureSkipVerify: false},
+		TLSClientConfig:    &tls.Config{InsecureSkipVerify: false},
 		DisableCompression: true, // 禁用压缩以支持 SSE 流式传输
+		DisableKeepAlives:  false,
+		MaxIdleConns:       10,
+		IdleConnTimeout:    30 * time.Second,
 	}
 
 	if proxyURL != "" {
