@@ -371,7 +371,8 @@ func tryPlanExecute(ctx context.Context, stockAiAgent *StockAiAgent, messages []
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent: adkAgent,
+		Agent:           adkAgent,
+		EnableStreaming: true, // 启用流式输出
 	})
 
 	safeSend(ch, &schema.Message{
@@ -445,6 +446,9 @@ func tryPlanExecute(ctx context.Context, stockAiAgent *StockAiAgent, messages []
 
 		if event.Output != nil && event.Output.MessageOutput != nil {
 			mv := event.Output.MessageOutput
+			// 调试日志：检查流式状态
+			logger.SugaredLogger.Infof("[ADK] IsStreaming=%v, MessageStream=%v, Message=%v",
+				mv.IsStreaming, mv.MessageStream != nil, mv.Message != nil)
 			phase := detectPhase(mv.Role, mv.ToolName)
 			if phase != "" && phase != lastPhase {
 				lastPhase = phase
@@ -597,7 +601,8 @@ func runPlanExecute(ctx context.Context, stockAiAgent *StockAiAgent, messages []
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent: adkAgent,
+		Agent:           adkAgent,
+		EnableStreaming: true, // 启用流式输出
 	})
 
 	safeSend(ch, &schema.Message{
@@ -662,6 +667,9 @@ func runPlanExecute(ctx context.Context, stockAiAgent *StockAiAgent, messages []
 
 		if event.Output != nil && event.Output.MessageOutput != nil {
 			mv := event.Output.MessageOutput
+			// 调试日志：检查流式状态
+			logger.SugaredLogger.Infof("[ADK-runPlanExecute] IsStreaming=%v, MessageStream=%v, Message=%v",
+				mv.IsStreaming, mv.MessageStream != nil, mv.Message != nil)
 			phase := detectPhase(mv.Role, mv.ToolName)
 			if phase != "" && phase != lastPhase {
 				lastPhase = phase
