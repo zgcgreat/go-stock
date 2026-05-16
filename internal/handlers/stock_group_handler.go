@@ -139,6 +139,62 @@ func AddGroup(c *gin.Context) {
 	})
 }
 
+// RemoveGroup 删除分组
+func RemoveGroup(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
+	groupIDStr := c.Param("id")
+	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid group ID",
+			"message": "无效的分组ID",
+		})
+		return
+	}
+
+	// 检查分组是否属于当前用户
+	var group data.Group
+	result := db.Dao.Where("id = ? AND user_id = ?", groupID, userID).First(&group)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Group not found",
+			"message": "分组不存在或不属于当前用户",
+		})
+		return
+	}
+
+	// 删除分组中的所有股票
+	if err := db.Dao.Where("group_id = ? AND user_id = ?", groupID, userID).Delete(&data.GroupStock{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete group stocks",
+			"message": "删除分组股票失败",
+		})
+		return
+	}
+
+	// 删除分组
+	if err := db.Dao.Where("id = ? AND user_id = ?", groupID, userID).Delete(&data.Group{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete group",
+			"message": "删除分组失败",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+	})
+}
+
 // UpdateGroupSort 更新分组排序
 func UpdateGroupSort(c *gin.Context) {
 	userID, exists := middleware.GetUserIDFromContext(c)
@@ -294,10 +350,20 @@ func AddStockGroup(c *gin.Context) {
 		return
 	}
 
+	// 从URL路径获取分组ID
+	groupIDStr := c.Param("id")
+	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid group ID",
+			"message": "无效的分组ID",
+		})
+		return
+	}
+
 	var stockGroupReq struct {
-		GroupID   uint   `json:"groupId" binding:"required"`
 		StockCode string `json:"stockCode" binding:"required"`
-		StockName string `json:"stockName" binding:"required"`
+		StockName string `json:"stockName"`
 		Sort      int    `json:"sort,omitempty"`
 	}
 
@@ -310,7 +376,7 @@ func AddStockGroup(c *gin.Context) {
 	}
 
 	var group data.Group
-	result := db.Dao.Where("id = ? AND user_id = ?", stockGroupReq.GroupID, userID).First(&group)
+	result := db.Dao.Where("id = ? AND user_id = ?", groupID, userID).First(&group)
 	if result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   "Group not found",
@@ -321,7 +387,7 @@ func AddStockGroup(c *gin.Context) {
 
 	var existingGroupStock data.GroupStock
 	result = db.Dao.Where("group_id = ? AND stock_code = ? AND user_id = ?",
-		stockGroupReq.GroupID, stockGroupReq.StockCode, userID).First(&existingGroupStock)
+		groupID, stockGroupReq.StockCode, userID).First(&existingGroupStock)
 	if result.Error == nil {
 		c.JSON(http.StatusConflict, gin.H{
 			"error":   "Stock already in group",
@@ -332,13 +398,13 @@ func AddStockGroup(c *gin.Context) {
 
 	if stockGroupReq.Sort == 0 {
 		var maxGroupStock data.GroupStock
-		db.Dao.Where("group_id = ?", stockGroupReq.GroupID).Order("sort DESC").First(&maxGroupStock)
+		db.Dao.Where("group_id = ?", groupID).Order("sort DESC").First(&maxGroupStock)
 		stockGroupReq.Sort = maxGroupStock.Sort + 1
 	}
 
 	newGroupStock := &data.GroupStock{
 		UserID:    userID,
-		GroupID:   stockGroupReq.GroupID,
+		GroupID:   uint(groupID),
 		StockCode: stockGroupReq.StockCode,
 		StockName: stockGroupReq.StockName,
 		Sort:      stockGroupReq.Sort,
@@ -356,5 +422,59 @@ func AddStockGroup(c *gin.Context) {
 		"code":    0,
 		"message": "Stock added to group successfully",
 		"data":    newGroupStock,
+	})
+}
+
+// RemoveStockGroup 从分组中移除股票
+func RemoveStockGroup(c *gin.Context) {
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "User ID not found in context",
+			"message": "用户信息异常",
+		})
+		return
+	}
+
+	groupIDStr := c.Param("id")
+	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid group ID",
+			"message": "无效的分组ID",
+		})
+		return
+	}
+
+	stockCode := c.Query("stockCode")
+	if stockCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Stock code is required",
+			"message": "股票代码不能为空",
+		})
+		return
+	}
+
+	// 删除分组中的股票
+	result := db.Dao.Where("group_id = ? AND stock_code = ? AND user_id = ?", groupID, stockCode, userID).Delete(&data.GroupStock{})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to remove stock from group",
+			"message": "移除股票失败",
+		})
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Stock not found in group",
+			"message": "股票不在分组中",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "移除成功",
 	})
 }

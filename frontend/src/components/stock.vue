@@ -312,7 +312,12 @@ function handleTabDragEnd(event) {
 
 onBeforeMount(() => {
   GetGroupList().then(result => {
+    console.log('[stock.vue] GetGroupList result:', result);
     const groups = Array.isArray(result) ? result : []
+    console.log('[stock.vue] groups length:', groups.length);
+    if (groups.length > 0) {
+      console.log('[stock.vue] first group:', groups[0]);
+    }
     groupList.value = groups
     // 检查是否存在相同的序号
     const sorts = groups.map(item => item.sort);
@@ -1949,7 +1954,7 @@ function aiReCheckStock(stock, stockCode) {
 
 function aiCheckStock(stock, stockCode) {
   GetAIResponseResult(stockCode).then(result => {
-    if (result.content) {
+    if (result && result.content) {
       data.modelName = result.modelName
       data.chatId = result.chatId
       data.question = result.question
@@ -2280,7 +2285,7 @@ function delTab(groupId) {
 }
 
 function delStockGroup(code, name, groupId) {
-  RemoveStockGroup(code, name, groupId).then(result => {
+  RemoveStockGroup(groupId, code, 0).then(result => {
     updateTab(groupId)
     message.info(result)
   })

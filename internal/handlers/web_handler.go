@@ -39,6 +39,8 @@ func RefreshTelegraphList(c *gin.Context) {
 		data.NewMarketNewsApi().TelegraphList(30)
 	case "新浪财经":
 		data.NewMarketNewsApi().GetSinaNews(30)
+	case "外媒":
+		data.NewMarketNewsApi().TradingViewNews()
 	}
 	news := data.NewMarketNewsApi().GetTelegraphList(source)
 	if limit > 0 && len(*news) > limit {
@@ -866,17 +868,8 @@ func GetAllStockChangesWithPagingHandler(c *gin.Context) {
 
 // SaveStockChangesToHistoryHandler 保存异动数据到历史
 func SaveStockChangesToHistoryHandler(c *gin.Context) {
-	changeTypesStr := c.Query("changeTypes")
-	var changeTypes []int
-	if changeTypesStr != "" {
-		for _, s := range strings.Split(changeTypesStr, ",") {
-			if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
-				changeTypes = append(changeTypes, v)
-			}
-		}
-	}
-
-	result := data.NewStockChangesApi().GetStockChanges(changeTypes, 0, 500)
+	// 使用 GetAllStockChangesWithPaging 获取所有类型的异动数据
+	result := data.NewStockChangesApi().GetAllStockChangesWithPaging(500)
 	if result == nil || len(result.Data) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    0,
@@ -985,4 +978,139 @@ func GetUplimitHot(c *gin.Context) {
 	// 桌面端返回格式: {"code": xxx, "message": "xxx", "data": {...}}
 	// 前端期望 code=20000 表示成功
 	c.JSON(http.StatusOK, result)
+}
+
+// GetChangeRank 获取异动排行（股票/行业/概念异动次数）
+func GetChangeRank(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "1"))
+	topN, _ := strconv.Atoi(c.DefaultQuery("topN", "20"))
+	if days <= 0 {
+		days = 1
+	}
+	if topN <= 0 {
+		topN = 20
+	}
+
+	result, err := data.NewStockChangeHistoryService().GetChangeRank(days, topN)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "success",
+			"data": gin.H{
+				"topStocks":     []data.ChangeRankItem{},
+				"topIndustries": []data.ChangeRankItem{},
+				"topConcepts":   []data.ChangeRankItem{},
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    result,
+	})
+}
+
+// GetDailyChangeStats 获取每日异动统计
+func GetDailyChangeStats(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	if days <= 0 {
+		days = 30
+	}
+
+	result, err := data.NewStockChangeHistoryService().GetDailyChangeStats(days)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []data.DailyChangeStats{}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetChangeTypeDailyStats 获取按异动类型的每日统计
+func GetChangeTypeDailyStats(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	if days <= 0 {
+		days = 30
+	}
+
+	result, err := data.NewStockChangeHistoryService().GetChangeTypeDailyStats(days)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []data.ChangeTypeDailyStats{}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetAllMarkets 获取所有市场
+func GetAllMarkets(c *gin.Context) {
+	markets, err := data.NewStockDataApi().GetAllMarkets()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []string{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": markets})
+}
+
+// GetAllIndustries 获取所有行业
+func GetAllIndustries(c *gin.Context) {
+	industries, err := data.NewStockDataApi().GetAllIndustries()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []string{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": industries})
+}
+
+// GetAllConcepts 获取所有概念
+func GetAllConcepts(c *gin.Context) {
+	concepts, err := data.NewStockDataApi().GetAllConcepts()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []string{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": concepts})
+}
+
+// GetAllSkills 获取所有技能
+func GetAllSkills(c *gin.Context) {
+	skills := data.NewSkillApi().GetAll()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": skills})
+}
+
+// GetSkillList 获取技能列表
+func GetSkillList(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	name := c.Query("name")
+	category := c.Query("category")
+
+	query := &models.SkillQuery{
+		Page:     page,
+		PageSize: pageSize,
+		Name:     name,
+		Category: category,
+	}
+
+	result := data.NewSkillApi().List(query)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetSkillByID 根据ID获取技能
+func GetSkillByID(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的技能ID"})
+		return
+	}
+
+	skill, err := data.NewSkillApi().GetByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "技能不存在", "data": nil})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": skill})
 }

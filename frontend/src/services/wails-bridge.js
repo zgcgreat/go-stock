@@ -475,11 +475,11 @@ export function SetTradingPrice(code, entryPrice, takeProfitPrice, stopLossPrice
   return Promise.resolve('设置成功');
 }
 
-export function AddGroup(name) {
+export function AddGroup(group) {
   if (isWailsMode()) {
-    return window.go.main.App.AddGroup(name);
+    return window.go.main.App.AddGroup(group);
   }
-  return apiService.client.post('/groups', { name }, { headers: getAuthHeaders() })
+  return apiService.client.post('/groups', { name: group.name, sort: group.sort, desc: group.desc }, { headers: getAuthHeaders() })
     .then(res => res.data?.message || res.data?.data || '添加成功')
     .catch(err => err.message || '添加失败');
 }
@@ -488,7 +488,9 @@ export function RemoveGroup(id) {
   if (isWailsMode()) {
     return window.go.main.App.RemoveGroup(id);
   }
-  return Promise.resolve('删除成功');
+  return apiService.client.delete(`/groups/${id}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => err.message || '删除失败');
 }
 
 export function AddStockGroup(groupId, stockCode) {
@@ -504,7 +506,9 @@ export function RemoveStockGroup(groupId, stockCode, index) {
   if (isWailsMode()) {
     return window.go.main.App.RemoveStockGroup(groupId, stockCode, index);
   }
-  return Promise.resolve('删除成功');
+  return apiService.client.delete(`/groups/${groupId}/stocks?stockCode=${encodeURIComponent(stockCode)}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '移除成功')
+    .catch(err => err.message || '移除失败');
 }
 
 export function UpdateGroupSort(id, newSort) {
@@ -1155,12 +1159,16 @@ export function GetRecentDaysMarketStatistic(arg1) {
 
 export function GetDailyChangeStats(arg1) {
   if (isWailsMode()) return window.go.main.App.GetDailyChangeStats(arg1);
-  return Promise.resolve([]);
+  return apiService.client.get('/stock-changes/daily-stats', { params: { days: arg1 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function GetChangeTypeDailyStats(arg1) {
   if (isWailsMode()) return window.go.main.App.GetChangeTypeDailyStats(arg1);
-  return Promise.resolve([]);
+  return apiService.client.get('/stock-changes/type-stats', { params: { days: arg1 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function GetDailyDimensionStats(arg1, arg2, arg3) {
@@ -1175,11 +1183,9 @@ export function GetTypeStatsByDate(arg1) {
 
 export function GetChangeRank(arg1, arg2) {
   if (isWailsMode()) return window.go.main.App.GetChangeRank(arg1, arg2);
-  return Promise.resolve({
-    topStocks: [],
-    topIndustries: [],
-    topConcepts: [],
-  });
+  return apiService.client.get('/market/change-rank', { params: { days: arg1, topN: arg2 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { topStocks: [], topIndustries: [], topConcepts: [] })
+    .catch(() => ({ topStocks: [], topIndustries: [], topConcepts: [] }));
 }
 
 export function GetMarketStatisticByDate(arg1) {
@@ -1299,17 +1305,23 @@ export function UpdateAiRecommendStocksAlert(id, enableAlert) {
 
 export function GetAllConcepts() {
   if (isWailsMode()) return window.go.main.App.GetAllConcepts();
-  return Promise.resolve([]);
+  return apiService.client.get('/stocks/concepts', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function GetAllIndustries() {
   if (isWailsMode()) return window.go.main.App.GetAllIndustries();
-  return Promise.resolve([]);
+  return apiService.client.get('/stocks/industries', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function GetAllMarkets() {
   if (isWailsMode()) return window.go.main.App.GetAllMarkets();
-  return Promise.resolve([]);
+  return apiService.client.get('/stocks/markets', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function GetStockChanges(arg1, arg2, arg3) {
@@ -1854,7 +1866,9 @@ export function EnableSkill(arg1, arg2) {
 
 export function GetAllSkills() {
   if (isWailsMode()) return window.go.main.App.GetAllSkills();
-  return Promise.resolve([]);
+  return apiService.client.get('/skills/all', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function GetLatestTradingDay() {
@@ -1869,15 +1883,22 @@ export function IsTradingDay(date) {
 
 export function GetSkillByID(arg1) {
   if (isWailsMode()) return window.go.main.App.GetSkillByID(arg1);
-  return Promise.resolve(null);
+  return apiService.client.get(`/skills/${arg1}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || null)
+    .catch(() => null);
 }
 
 export function GetSkillList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetSkillList(arg1);
-  return Promise.resolve({
-    list: [],
-    total: 0,
-  });
+  const params = {
+    page: arg1?.page || 1,
+    pageSize: arg1?.pageSize || 10,
+    name: arg1?.name || '',
+    status: arg1?.status || '',
+  };
+  return apiService.client.get('/skills', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { list: [], total: 0 })
+    .catch(() => ({ list: [], total: 0 }));
 }
 
 export function GetStockCommonKLine(arg1, arg2, arg3) {

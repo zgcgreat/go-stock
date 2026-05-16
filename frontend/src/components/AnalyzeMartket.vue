@@ -1916,7 +1916,7 @@ function handleTreemap() {
   <n-collapse :trigger-areas="triggerAreas" :default-expanded-names="['1']" display-directive="show">
     <n-collapse-item  name="1" >
       <template #header>
-          <n-flex>
+          <n-flex :wrap="true">
               <n-tag size="small" :bordered="false" v-for="(item, index) in mainIndex" :type="item.zdf>0?'error':'success'">
                 <n-flex>
                   <n-image :width="20" :src="item.img" />

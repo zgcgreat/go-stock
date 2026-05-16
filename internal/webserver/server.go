@@ -132,9 +132,11 @@ func (ws *WebServer) initRouter() {
 
 			protected.GET("/groups", handlers.GetGroupList)
 			protected.POST("/groups", handlers.AddGroup)
+			protected.DELETE("/groups/:id", handlers.RemoveGroup)
 			protected.PUT("/groups/:id/sort", handlers.UpdateGroupSort)
 			protected.GET("/groups/:id/stocks", handlers.GetGroupStockList)
 			protected.POST("/groups/:id/stocks", handlers.AddStockGroup)
+			protected.DELETE("/groups/:id/stocks", handlers.RemoveStockGroup)
 
 			protected.GET("/funds", handlers.GetFundList)
 			protected.GET("/funds/ranking", handlers.GetFundRanking)
@@ -157,6 +159,7 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/hot-event", handlers.GetHotEvent)
 			protected.GET("/market/hot-topic", handlers.GetHotTopic)
 			protected.GET("/market/uplimit-hot", handlers.GetUplimitHot)
+			protected.GET("/market/change-rank", handlers.GetChangeRank)
 
 			// 研报/公告
 			protected.GET("/research/stock-report", handlers.GetStockResearchReport)
@@ -173,6 +176,14 @@ func (ws *WebServer) initRouter() {
 			// 股票信息
 			protected.GET("/stocks/all-info/list", handlers.GetAllStockInfoList)
 			protected.GET("/stocks/all", handlers.GetAllStocks)
+			protected.GET("/stocks/markets", handlers.GetAllMarkets)
+			protected.GET("/stocks/industries", handlers.GetAllIndustries)
+			protected.GET("/stocks/concepts", handlers.GetAllConcepts)
+
+			// 技能管理
+			protected.GET("/skills", handlers.GetSkillList)
+			protected.GET("/skills/all", handlers.GetAllSkills)
+			protected.GET("/skills/:id", handlers.GetSkillByID)
 
 			// 定时任务
 			protected.GET("/cron-task/types", handlers.GetCronTaskTypes)
@@ -218,6 +229,8 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
 			protected.GET("/stock-changes/history", handlers.GetStockChangeHistoryHandler)
 			protected.POST("/stock-changes/save", handlers.SaveStockChangesToHistoryHandler)
+			protected.GET("/stock-changes/daily-stats", handlers.GetDailyChangeStats)
+			protected.GET("/stock-changes/type-stats", handlers.GetChangeTypeDailyStats)
 
 			// 用户管理（仅管理员）
 			admin := protected.Group("/admin")
