@@ -34,5 +34,18 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
+  },
+  build: {
+    // 减少构建内存占用
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        // 分包策略，减少单个 chunk 大小
+        manualChunks: {
+          'vendor': ['vue', 'vue-router', 'pinia'],
+          'tdesign': ['tdesign-vue-next'],
+        }
+      }
+    }
   }
 })

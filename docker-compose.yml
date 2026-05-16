@@ -1,11 +1,24 @@
 version: '3.8'
 
 services:
-  go-stock-web:
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: go-stock-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # 后端服务
+  backend:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: go-stock-web
+      dockerfile: Dockerfile.backend
+    container_name: go-stock-backend
     ports:
       - "8080:8080"
     volumes:

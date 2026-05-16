@@ -1,11 +1,9 @@
 # ============================================
-# 多阶段构建 Dockerfile
-# 适用于 1C2G VPS 部署
-# 前端需在本地预先构建：cd frontend && npm install && npm run build
+# 后端 Dockerfile
 # ============================================
 
-# 阶段1: 构建后端
-FROM golang:1.23-alpine AS backend-builder
+# 阶段1: 构建
+FROM golang:1.23-alpine AS builder
 
 # 安装必要工具
 RUN apk add --no-cache git ca-certificates gcc musl-dev
@@ -24,15 +22,10 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
-# 复制本地已构建的前端产物
-COPY frontend/dist ./frontend/dist
-
-# 构建后端，限制并发减少内存占用
-ENV GOMAXPROCS=1
+# 构建后端
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o go-stock-web ./web/
 
-# ============================================
-# 阶段2: 运行镜像
+# 阶段2: 运行
 FROM alpine:latest
 
 # 安装必要工具
@@ -44,7 +37,7 @@ ENV TZ=Asia/Shanghai
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
-COPY --from=backend-builder /app/go-stock-web .
+COPY --from=builder /app/go-stock-web .
 
 # 创建必要的目录
 RUN mkdir -p logs data
