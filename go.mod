@@ -1,6 +1,6 @@
 module go-stock
 
-go 1.24
+go 1.25
 
 require (
 	github.com/PuerkitoBio/goquery v1.12.0
