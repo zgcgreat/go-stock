@@ -21,10 +21,29 @@
             </div>
           </div>
         </div>
-        <t-chat-reasoning v-if="item.role === 'assistant'"  expand-icon-placement="right">
-          <t-chat-loading v-if="isStreamLoad" text="思考中..." />
-          <t-chat-content v-if="item.reasoning.length > 0" :content="item.reasoning" />
-        </t-chat-reasoning>
+        <!-- 思考过程区域：添加思考指示器 -->
+        <div v-if="item.role === 'assistant'" class="reasoning-wrapper">
+          <div class="reasoning-header" @click="toggleReasoning(index)">
+            <div class="reasoning-indicator" :class="{ 'thinking': isStreamLoad && !item.reasoning }">
+              <svg class="thinking-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+              <span class="thinking-text">{{ isStreamLoad && !item.reasoning ? '思考中...' : '思考过程' }}</span>
+              <div v-if="isStreamLoad && !item.reasoning" class="thinking-dots">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+              </div>
+            </div>
+            <svg :class="['reasoning-arrow', { 'expanded': reasoningExpandedMap[index] }]" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M7 10l5 5 5-5z"/>
+            </svg>
+          </div>
+          <div v-show="reasoningExpandedMap[index] || (item.reasoning && item.reasoning.length > 0)" class="reasoning-content">
+            <t-chat-loading v-if="isStreamLoad && (!item.reasoning || item.reasoning.length === 0)" text="" />
+            <t-chat-content v-if="item.reasoning && item.reasoning.length > 0" :content="item.reasoning" />
+          </div>
+        </div>
         <div v-if="item.role === 'assistant' && item.jsonMarkdown" class="agent-json-md">
           <div class="agent-json-md-header" @click="toggleJsonMd(index)">
             <svg :class="['agent-json-md-arrow', { 'agent-json-md-arrow-expanded': jsonMdExpandedMap[index] }]" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 6l6 6-6 6z"/></svg>
@@ -120,11 +139,19 @@ const agentModeOptions = [
   { label: '🧠 规划', value: 'plan_execute' },
 ]
 const jsonMdExpandedMap = ref({})
+const reasoningExpandedMap = ref({})
 
 function toggleJsonMd(index) {
   jsonMdExpandedMap.value = {
     ...jsonMdExpandedMap.value,
     [index]: !jsonMdExpandedMap.value[index]
+  }
+}
+
+function toggleReasoning(index) {
+  reasoningExpandedMap.value = {
+    ...reasoningExpandedMap.value,
+    [index]: !reasoningExpandedMap.value[index]
   }
 }
 
@@ -825,6 +852,138 @@ const inputEnter = function () {
   max-height: 500px;
   overflow-y: auto;
   text-align: left;
+}
+
+/* 思考过程样式 */
+.reasoning-wrapper {
+  margin-bottom: 8px;
+  border: 1px solid var(--td-component-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--td-bg-color-container-hover);
+}
+
+.reasoning-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.06) 0%, rgba(79, 70, 229, 0.06) 100%);
+  border-bottom: 1px solid var(--td-component-border);
+  transition: background 0.2s;
+}
+
+.reasoning-header:hover {
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.12) 0%, rgba(79, 70, 229, 0.12) 100%);
+}
+
+.reasoning-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reasoning-indicator.thinking {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.thinking-icon {
+  color: var(--td-text-color-secondary);
+  flex-shrink: 0;
+}
+
+.reasoning-indicator.thinking .thinking-icon {
+  color: #8b5cf6;
+  animation: spin 1s linear infinite;
+}
+
+.thinking-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--td-text-color-secondary);
+}
+
+.reasoning-indicator.thinking .thinking-text {
+  color: #8b5cf6;
+}
+
+/* 思考中的点点动画 */
+.thinking-dots {
+  display: flex;
+  gap: 3px;
+  margin-left: 4px;
+}
+
+.thinking-dots .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.thinking-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.thinking-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.reasoning-arrow {
+  color: var(--td-text-color-secondary);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.reasoning-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.reasoning-content {
+  padding: 10px 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  text-align: left;
+  font-size: 13px;
+  color: var(--td-text-color-secondary);
+}
+
+/* 动画定义 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 </style>
