@@ -1,6 +1,6 @@
 module go-stock
 
-go 1.26.0
+go 1.24
 
 require (
 	github.com/PuerkitoBio/goquery v1.12.0
@@ -92,7 +92,6 @@ require (
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/evanphx/json-patch v0.5.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/getlantern/context v0.0.0-20220418194847-3d5e7a086201 // indirect
 	github.com/getlantern/errors v1.0.4 // indirect
