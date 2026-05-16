@@ -365,38 +365,47 @@ function parseStepText(text) {
 }
 
 const handleAgentMessage = (data) => {
-  console.log(data)
+  console.log('handleAgentMessage received:', data)
   if(data['role']==="assistant"){
     loading.value = false;
-    const lastItem = chatList.value[0];
+    // 使用更可靠的方式获取和更新最后一个 assistant 消息
+    const lastItemIndex = chatList.value.findIndex(item => item.role === 'assistant')
+    if (lastItemIndex === -1) return
+
+    // 创建新的对象来触发响应式更新
+    const lastItem = chatList.value[lastItemIndex]
+    const updatedItem = { ...lastItem }
+
     if (data['reasoning_content']){
       const rc = data['reasoning_content']
       if (rc.startsWith('[STEP]')) {
         const stepText = rc.replace(/^\[STEP\]/, '').trim()
         if (stepText) {
-          if (!lastItem.steps) lastItem.steps = []
+          if (!updatedItem.steps) updatedItem.steps = []
           const parsed = parseStepText(stepText)
-          lastItem.steps.push(...parsed)
+          updatedItem.steps = [...updatedItem.steps, ...parsed]
         }
       } else {
-        lastItem.rawReasoning = (lastItem.rawReasoning || '') + rc
-        // 直接显示，不等待格式化
-        lastItem.reasoning = lastItem.rawReasoning
+        updatedItem.rawReasoning = (updatedItem.rawReasoning || '') + rc
+        updatedItem.reasoning = updatedItem.rawReasoning
       }
     }
     if (data['content']){
-      lastItem.rawContent = (lastItem.rawContent || '') + data['content']
-      // 直接显示原始内容，格式化由定时器处理
-      lastItem.content = lastItem.rawContent
+      updatedItem.rawContent = (updatedItem.rawContent || '') + data['content']
+      updatedItem.content = updatedItem.rawContent
     }
     if(data['tool_calls']){
-      for (const tool of  data['tool_calls']) {
-          console.log(tool.id, tool.type, tool.function.name, tool.function.arguments);
-        lastItem.reasoning += "\n```"+tool.function.name+"\n" +
+      for (const tool of data['tool_calls']) {
+        console.log(tool.id, tool.type, tool.function.name, tool.function.arguments);
+        updatedItem.reasoning = updatedItem.reasoning + "\n```"+tool.function.name+"\n" +
             "参数："+ (tool.function.arguments?tool.function.arguments:"无")+
             "\n```\n";
       }
     }
+
+    // 替换整个对象以触发响应式更新
+    chatList.value[lastItemIndex] = updatedItem
+
     // 流式更新时自动滚动到底部
     nextTick(() => {
       if (chatRef.value) {
@@ -408,17 +417,20 @@ const handleAgentMessage = (data) => {
     isStreamLoad.value = false;
     loading.value = false;
     stopFormatTimer()
-    const lastItem = chatList.value[0];
-    if (lastItem) {
+    const lastItemIndex = chatList.value.findIndex(item => item.role === 'assistant')
+    if (lastItemIndex !== -1) {
+      const lastItem = chatList.value[lastItemIndex]
+      const updatedItem = { ...lastItem }
       if (lastItem.rawContent) {
         const fmt = formatMarkdown(lastItem.rawContent)
-        lastItem.content = fmt.content
-        if (fmt.jsonMarkdown) lastItem.jsonMarkdown = fmt.jsonMarkdown
+        updatedItem.content = fmt.content
+        if (fmt.jsonMarkdown) updatedItem.jsonMarkdown = fmt.jsonMarkdown
       }
       if (lastItem.rawReasoning) {
         const fmt = formatMarkdown(lastItem.rawReasoning)
-        lastItem.reasoning = fmt.content
+        updatedItem.reasoning = fmt.content
       }
+      chatList.value[lastItemIndex] = updatedItem
     }
   }
 }
