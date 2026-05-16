@@ -1,0 +1,59 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Claude
+.claude
+.superpowers-memory
+.workbuddy
+
+# Node modules (will be installed in container)
+frontend/node_modules
+
+# Build artifacts (will be built in container)
+frontend/dist
+
+# Go build cache
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+*.test
+
+# Documentation
+*.md
+docs/
+
+# Logs and data (will be mounted)
+logs/
+data/
+*.db
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Wails (desktop app files)
+wailsjs/
+build/
+*.syso
+
+# Misc
+MERGE_CONFLICTS_RESOLUTION.md
+resolve_conflicts.ps1
