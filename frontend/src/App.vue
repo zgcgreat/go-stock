@@ -1021,7 +1021,11 @@ async function loadGroupList() {
 function updateMenuWithGroups() {
   menuOptions.value.forEach((item) => {
     if (item.key === 'stock') {
-      const existingKeys = (item.children || []).map(c => c.key)
+      // 确保 children 是数组
+      if (!Array.isArray(item.children)) {
+        item.children = []
+      }
+      const existingKeys = item.children.map(c => c.key)
       (groupList.value || []).forEach(g => {
         if (!existingKeys.includes(g.ID)) {
           item.children.push({
