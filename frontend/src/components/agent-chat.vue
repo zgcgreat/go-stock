@@ -90,7 +90,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import {ref, onMounted, h, onBeforeUnmount, onBeforeMount} from 'vue';
+import {ref, onMounted, h, onBeforeUnmount, onBeforeMount, nextTick} from 'vue';
 import {ArrowDownIcon, CheckCircleIcon, SystemSumIcon} from 'tdesign-icons-vue-next';
 const fetchCancel = ref(null);
 const loading = ref(false);
@@ -138,11 +138,13 @@ function getStepDotClass(step) {
 
 function startFormatTimer() {
   stopFormatTimer()
+  // 缩短格式化间隔，提升流式显示效果
   formatTimer = setInterval(() => {
     const lastItem = chatList.value[0]
     if (lastItem && lastItem.role === 'assistant') {
       if (lastItem.rawContent) {
         const fmt = formatMarkdown(lastItem.rawContent)
+        // 强制触发响应式更新
         lastItem.content = fmt.content
         if (fmt.jsonMarkdown) lastItem.jsonMarkdown = fmt.jsonMarkdown
       }
@@ -151,7 +153,7 @@ function startFormatTimer() {
         lastItem.reasoning = fmt.content
       }
     }
-  }, 1500)
+  }, 300) // 从 1500ms 缩短到 300ms
 }
 
 function stopFormatTimer() {
@@ -378,11 +380,13 @@ const handleAgentMessage = (data) => {
         }
       } else {
         lastItem.rawReasoning = (lastItem.rawReasoning || '') + rc
+        // 直接显示，不等待格式化
         lastItem.reasoning = lastItem.rawReasoning
       }
     }
     if (data['content']){
       lastItem.rawContent = (lastItem.rawContent || '') + data['content']
+      // 直接显示原始内容，格式化由定时器处理
       lastItem.content = lastItem.rawContent
     }
     if(data['tool_calls']){
@@ -393,6 +397,12 @@ const handleAgentMessage = (data) => {
             "\n```\n";
       }
     }
+    // 流式更新时自动滚动到底部
+    nextTick(() => {
+      if (chatRef.value) {
+        chatRef.value.scrollToBottom({ behavior: 'auto' })
+      }
+    })
   }
   if(data['response_meta']&&data['response_meta'].finish_reason==="stop"){
     isStreamLoad.value = false;
