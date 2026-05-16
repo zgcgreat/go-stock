@@ -134,11 +134,13 @@
                         <div class="msg-content">
                           <MdPreview
                             :theme="theme"
+                            :code-theme="codeTheme"
                             :style="{ textAlign: 'left' }"
                             v-if="msg.content"
                             :model-value="msg.content"
                             :editor-id="'ai-msg-' + (displayFromIndex + index)"
                             class="msg-markdown"
+                            @onHtmlChanged="onMdHtmlChanged"
                           />
                         </div>
                       </div>
@@ -149,6 +151,7 @@
                         </div>
                         <MdPreview
                           :theme="theme"
+                          :code-theme="codeTheme"
                           :style="{ textAlign: 'right' }"
                           v-if="msg.content"
                           :model-value="msg.content"
@@ -319,7 +322,9 @@ import {
 import { AbortSummaryStockNews, GetAiAssistantSession, GetAiConfigs, GetConfig, GetPromptTemplates, GetSponsorInfo, GetVersionInfo, SaveAiAssistantSession, ShareText, SummaryStockNews, EventsOn, EventsOff } from '../services/wails-bridge.js'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
+import 'katex/dist/katex.min.css'
 import html2canvas from 'html2canvas'
+import { enhanceCodeBlocks, getCodeTheme } from '../utils/codeBlockEnhancer.js'
 
 const DEFAULT_VISIBLE_COUNT = 20
 const COLLAPSE_CHAR_LIMIT = 200
@@ -589,6 +594,21 @@ function showMoreHistory() {
 }
 
 const theme = computed(() => (darkTheme.value ? 'dark' : 'light'))
+const codeTheme = computed(() => getCodeTheme(darkTheme.value))
+
+function onMdHtmlChanged() {
+  nextTick(() => {
+    document.querySelectorAll('.msg-markdown').forEach(container => {
+      enhanceCodeBlocks(container, {
+        collapseThreshold: 8,
+        addLineNumbers: true,
+        addCopyButton: true,
+        addLanguageTag: true
+      })
+    })
+  })
+}
+
 async function loadHistory() {
   try {
     const resp = await GetAiAssistantSession('')
@@ -1356,6 +1376,97 @@ watch(aiConfigId, (newId) => {
 .drawer-slide-enter-to .drawer-panel,
 .drawer-slide-leave-from .drawer-panel {
   transform: translateX(0);
+}
+
+/* 代码块增强样式 */
+.msg-markdown .md-editor-code-block {
+  position: relative;
+}
+.msg-markdown .md-editor-code-block pre {
+  margin: 0;
+}
+.msg-markdown .md-editor-code-block .code-lang-tag {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--n-text-color-3);
+  background: var(--n-color-hover);
+  border-radius: 4px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+.msg-markdown .md-editor-code-block .code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 2;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  background: var(--n-color-hover);
+  border: 1px solid var(--n-border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.msg-markdown .md-editor-code-block:hover .code-copy-btn {
+  opacity: 1;
+}
+.msg-markdown .md-editor-code-block .code-copy-btn:hover {
+  background: var(--n-primary-color-suppl);
+  border-color: var(--n-primary-color);
+  color: var(--n-primary-color);
+}
+.msg-markdown .md-editor-code-block .code-copy-btn.copy-success {
+  color: #67c23a;
+  border-color: #67c23a;
+}
+.msg-markdown .md-editor-code-block .code-collapse-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--n-text-color-3);
+  background: var(--n-color-hover);
+  border: 1px solid var(--n-border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.msg-markdown .md-editor-code-block:hover .code-collapse-btn {
+  opacity: 1;
+}
+.msg-markdown .md-editor-code-block.code-collapsed pre {
+  max-height: 120px;
+  overflow: hidden;
+}
+.msg-markdown .md-editor-code-block.code-collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(transparent, var(--n-color));
+  pointer-events: none;
+}
+[theme-mode="dark"] .msg-markdown .md-editor-code-block .code-lang-tag,
+[theme-mode="dark"] .msg-markdown .md-editor-code-block .code-copy-btn,
+[theme-mode="dark"] .msg-markdown .md-editor-code-block .code-collapse-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 </style>
 <!-- 下拉挂载到 body 时需提高 z-index，否则会被抽屉遮挡 -->

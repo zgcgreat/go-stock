@@ -81,6 +81,7 @@
                           </div>
                           <MdPreview
                             :theme="theme"
+                            :code-theme="codeTheme"
                             :style="{ textAlign: 'right' }"
                             v-if="group.userMsg.content"
                             :model-value="group.userMsg.content"
@@ -120,6 +121,7 @@
                             <div v-show="reasoningExpandedMap['r-' + group.assistantIndex]" class="msg-reasoning-content">
                               <MdPreview
                                 :theme="theme"
+                                :code-theme="codeTheme"
                                 :style="{ textAlign: 'left' }"
                                 :model-value="group.assistantMsg.reasoning"
                                 :editor-id="'agent-reasoning-' + group.assistantIndex"
@@ -135,6 +137,7 @@
                             <div v-show="reasoningExpandedMap['j-' + group.assistantIndex]" class="msg-json-md-content">
                               <MdPreview
                                 :theme="theme"
+                                :code-theme="codeTheme"
                                 :style="{ textAlign: 'left' }"
                                 :model-value="group.assistantMsg.jsonMarkdown"
                                 :editor-id="'agent-json-md-' + group.assistantIndex"
@@ -145,6 +148,7 @@
                           </div>
                           <MdPreview
                             :theme="theme"
+                            :code-theme="codeTheme"
                             :style="{ textAlign: 'left' }"
                             :model-value="group.assistantMsg.content || '...'"
                             :editor-id="'agent-msg-' + group.assistantIndex"
@@ -156,10 +160,14 @@
                             <span>思考中...</span>
                           </div>
                           <div class="msg-bubble-actions">
-                            <div v-if="group.assistantMsg.modelName || group.assistantMsg.time" class="msg-meta-row-assistant">
-                              <span v-if="group.assistantMsg.modelName" class="msg-model-name" :title="group.assistantMsg.modelName">{{ group.assistantMsg.modelName }}</span>
-                              <span v-if="group.assistantMsg.time" class="msg-time">{{ group.assistantMsg.time }}</span>
-                            </div>
+                            <MessageMetadata
+                              :model-name="group.assistantMsg.modelName"
+                              :prompt-tokens="group.assistantMsg.promptTokens"
+                              :completion-tokens="group.assistantMsg.completionTokens"
+                              :total-tokens="group.assistantMsg.totalTokens"
+                              :duration-ms="group.assistantMsg.durationMs"
+                            />
+                            <span v-if="group.assistantMsg.time" class="msg-time">{{ group.assistantMsg.time }}</span>
                             <NButton quaternary size="tiny" class="msg-toggle-btn" @click="toggleGroup(groupIndex)">
                               <template #icon>
                                 <NIcon :component="isGroupExpanded(groupIndex) ? ChevronUpOutline : ChevronDownOutline" />
@@ -338,7 +346,10 @@ import {
 import { EventsOff, EventsOn } from '../../wailsjs/runtime'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
+import 'katex/dist/katex.min.css'
 import html2canvas from 'html2canvas'
+import { enhanceCodeBlocks, getCodeTheme } from '../utils/codeBlockEnhancer.js'
+import MessageMetadata from './MessageMetadata.vue'
 
 const STORAGE_KEY_MODEL_ID = 'go-stock-agent-last-model-id'
 
@@ -523,26 +534,14 @@ function getStepDotClass(step) {
 
 function onMdHtmlChanged() {
   nextTick(() => {
-    document.querySelectorAll('.msg-markdown .md-editor-code-block').forEach(block => {
-      if (block.querySelector('.code-collapse-btn')) return
-      const codeEl = block.querySelector('code')
-      if (!codeEl) return
-      const lang = (codeEl.className || '').toLowerCase()
-      const isJson = lang.includes('json') || lang.includes('language-json')
-      const text = codeEl.textContent || ''
-      const lineCount = text.split('\n').length
-      if (!isJson && lineCount <= 8) return
-
-      block.classList.add('code-collapsed')
-      const btn = document.createElement('span')
-      btn.className = 'code-collapse-btn'
-      btn.textContent = '展开'
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation()
-        const collapsed = block.classList.toggle('code-collapsed')
-        btn.textContent = collapsed ? '展开' : '收起'
+    // 使用新的代码块增强工具
+    document.querySelectorAll('.msg-markdown').forEach(container => {
+      enhanceCodeBlocks(container, {
+        collapseThreshold: 8,
+        addLineNumbers: true,
+        addCopyButton: true,
+        addLanguageTag: true
       })
-      block.appendChild(btn)
     })
   })
 }
@@ -728,6 +727,7 @@ function abortStream(showTip = true) {
 }
 
 const theme = computed(() => (darkTheme.value ? 'dark' : 'light'))
+const codeTheme = computed(() => getCodeTheme(darkTheme.value))
 
 async function loadHistory() {
   try {
@@ -744,7 +744,11 @@ async function loadHistory() {
         modelName: m.modelName ?? '',
         reasoning: m.reasoning ?? '',
         steps: m.steps ?? [],
-        jsonMarkdown: m.jsonMarkdown ?? ''
+        jsonMarkdown: m.jsonMarkdown ?? '',
+        promptTokens: m.promptTokens ?? 0,
+        completionTokens: m.completionTokens ?? 0,
+        totalTokens: m.totalTokens ?? 0,
+        durationMs: m.durationMs ?? 0
       }))
       nextTick(() => {
         initDefaultExpanded()
@@ -763,7 +767,11 @@ function saveHistory() {
     modelName: m.modelName ?? '',
     reasoning: m.reasoning ?? '',
     steps: m.steps ?? [],
-    jsonMarkdown: m.jsonMarkdown ?? ''
+    jsonMarkdown: m.jsonMarkdown ?? '',
+    promptTokens: m.promptTokens ?? 0,
+    completionTokens: m.completionTokens ?? 0,
+    totalTokens: m.totalTokens ?? 0,
+    durationMs: m.durationMs ?? 0
   }))
   SaveAiAssistantSession(sessionId.value, list).catch(() => {})
 }
@@ -857,7 +865,12 @@ function sendMessage() {
     reasoning: '',
     rawReasoning: '',
     steps: [],
-    jsonMarkdown: ''
+    jsonMarkdown: '',
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    durationMs: 0,
+    startTime: Date.now()
   })
   inputValue.value = ''
   isStreamLoad.value = true
@@ -1133,6 +1146,19 @@ function onAgentMessage(msg) {
       if (last.rawReasoning) {
         const fmt = formatMarkdown(last.rawReasoning)
         last.reasoning = fmt.content
+      }
+      // 计算响应时间
+      if (last.startTime) {
+        last.durationMs = Date.now() - last.startTime
+      }
+      // 处理后端返回的元信息
+      if (msg?.usage) {
+        last.promptTokens = msg.usage.prompt_tokens || 0
+        last.completionTokens = msg.usage.completion_tokens || 0
+        last.totalTokens = msg.usage.total_tokens || 0
+      }
+      if (msg?.duration_ms) {
+        last.durationMs = msg.duration_ms
       }
     }
     saveHistory()
@@ -1532,6 +1558,21 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   overflow: hidden;
   background: var(--n-color-hover);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+/* 流式输出时的边框发光效果 */
+.msg-reasoning-wrapper.streaming {
+  border-color: var(--n-primary-color);
+  box-shadow: 0 0 8px rgba(100, 149, 237, 0.3);
+  animation: border-glow 1.5s ease-in-out infinite;
+}
+@keyframes border-glow {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(100, 149, 237, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(100, 149, 237, 0.4);
+  }
 }
 .msg-steps-wrapper {
   margin-bottom: 12px;
@@ -1539,6 +1580,12 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   overflow: hidden;
   background: var(--n-color-hover);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+/* 流式输出时的边框发光效果 */
+.msg-steps-wrapper.streaming {
+  border-color: #38ad9a;
+  box-shadow: 0 0 8px rgba(56, 173, 154, 0.3);
 }
 .msg-steps-header {
   display: flex;
@@ -1614,6 +1661,18 @@ onBeforeUnmount(() => {
 .msg-step-dot.step-done {
   background: #67c23a;
   box-shadow: 0 0 4px rgba(103, 194, 58, 0.4);
+  animation: step-done-pop 0.3s ease;
+}
+@keyframes step-done-pop {
+  0% {
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 .msg-step-text {
   flex: 1;
@@ -1918,17 +1977,67 @@ body > div:has(.n-select-menu) {
 .msg-markdown .md-editor-code-block pre {
   margin: 0;
 }
+
+/* 代码块增强样式 - 语言标签 */
+.msg-markdown .md-editor-code-block .code-lang-tag {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--n-text-color-3);
+  background: var(--n-color-hover);
+  border-radius: 4px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* 代码块增强样式 - 复制按钮 */
+.msg-markdown .md-editor-code-block .code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 2;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--n-text-color-3);
+  background: var(--n-color-hover);
+  border: 1px solid var(--n-border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.msg-markdown .md-editor-code-block:hover .code-copy-btn {
+  opacity: 1;
+}
+.msg-markdown .md-editor-code-block .code-copy-btn:hover {
+  background: var(--n-primary-color-suppl);
+  border-color: var(--n-primary-color);
+  color: var(--n-primary-color);
+}
+.msg-markdown .md-editor-code-block .code-copy-btn.copy-success {
+  color: #67c23a;
+  border-color: #67c23a;
+}
+
+/* 代码块增强样式 - 折叠按钮 */
 .msg-markdown .md-editor-code-block .code-collapse-btn {
   position: absolute;
-  top: 0;
-  right: 0;
+  bottom: 8px;
+  right: 12px;
   z-index: 2;
   padding: 2px 8px;
   font-size: 11px;
   color: var(--n-text-color-3);
   background: var(--n-color-hover);
   border: 1px solid var(--n-border-color);
-  border-radius: 0 4px 0 4px;
+  border-radius: 4px;
   cursor: pointer;
   user-select: none;
   opacity: 0;
@@ -1937,8 +2046,10 @@ body > div:has(.n-select-menu) {
 .msg-markdown .md-editor-code-block:hover .code-collapse-btn {
   opacity: 1;
 }
+
+/* 折叠状态 */
 .msg-markdown .md-editor-code-block.code-collapsed pre {
-  max-height: 80px;
+  max-height: 120px;
   overflow: hidden;
 }
 .msg-markdown .md-editor-code-block.code-collapsed::after {
@@ -1947,8 +2058,16 @@ body > div:has(.n-select-menu) {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 40px;
+  height: 50px;
   background: linear-gradient(transparent, var(--n-color));
   pointer-events: none;
+}
+
+/* 深色模式适配 */
+[theme-mode="dark"] .msg-markdown .md-editor-code-block .code-lang-tag,
+[theme-mode="dark"] .msg-markdown .md-editor-code-block .code-copy-btn,
+[theme-mode="dark"] .msg-markdown .md-editor-code-block .code-collapse-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 </style>

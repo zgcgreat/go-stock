@@ -42,7 +42,7 @@ export default defineConfig({
       output: {
         // 分包策略，减少单个 chunk 大小
         manualChunks: {
-          'vendor': ['vue', 'vue-router', 'pinia'],
+          'vendor': ['vue', 'vue-router'],
           'tdesign': ['tdesign-vue-next'],
         }
       }
