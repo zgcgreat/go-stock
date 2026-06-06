@@ -41,7 +41,16 @@
           </div>
           <div v-show="reasoningExpandedMap[index] || (item.reasoning && item.reasoning.length > 0)" class="reasoning-content">
             <t-chat-loading v-if="isStreamLoad && (!item.reasoning || item.reasoning.length === 0)" text="" />
-            <t-chat-content v-if="item.reasoning && item.reasoning.length > 0" :content="item.reasoning" />
+            <MdPreview
+              v-if="item.reasoning && item.reasoning.length > 0"
+              :model-value="item.reasoning"
+              :theme="mdTheme"
+              :code-theme="codeTheme"
+              :editor-id="'agent-reasoning-' + index"
+              :style="{ textAlign: 'left' }"
+              class="msg-markdown"
+              @onHtmlChanged="onMdHtmlChanged"
+            />
           </div>
         </div>
         <div v-if="item.role === 'assistant' && item.jsonMarkdown" class="agent-json-md">
@@ -50,10 +59,27 @@
             <span class="agent-json-md-title">📊 分析报告</span>
           </div>
           <div v-show="jsonMdExpandedMap[index]" class="agent-json-md-content">
-            <t-chat-content :content="item.jsonMarkdown" />
+            <MdPreview
+              :model-value="item.jsonMarkdown"
+              :theme="mdTheme"
+              :code-theme="codeTheme"
+              :editor-id="'agent-json-md-' + index"
+              :style="{ textAlign: 'left' }"
+              class="msg-markdown"
+              @onHtmlChanged="onMdHtmlChanged"
+            />
           </div>
         </div>
-        <t-chat-content v-if="item.content.length > 0" :content="item.content" />
+        <MdPreview
+          v-if="item.content.length > 0"
+          :model-value="item.content"
+          :theme="mdTheme"
+          :code-theme="codeTheme"
+          :editor-id="'agent-msg-' + index"
+          :style="{ textAlign: 'left' }"
+          class="msg-markdown"
+          @onHtmlChanged="onMdHtmlChanged"
+        />
       </template>
       <template #actions="{ item, index }">
         <t-chat-action
@@ -109,8 +135,11 @@
   </div>
 </template>
 <script setup lang="ts">
-import {ref, onMounted, h, onBeforeUnmount, onBeforeMount, nextTick} from 'vue';
+import {ref, onMounted, h, onBeforeUnmount, onBeforeMount, nextTick, computed} from 'vue';
 import {ArrowDownIcon, CheckCircleIcon, SystemSumIcon} from 'tdesign-icons-vue-next';
+import { MdPreview } from 'md-editor-v3';
+import 'md-editor-v3/lib/preview.css';
+import { enhanceCodeBlocks, getCodeTheme } from '../utils/codeBlockEnhancer.js';
 const fetchCancel = ref(null);
 const loading = ref(false);
 
@@ -140,6 +169,24 @@ const agentModeOptions = [
 ]
 const jsonMdExpandedMap = ref({})
 const reasoningExpandedMap = ref({})
+
+// Markdown 渲染主题配置
+const darkThemeRef = ref(false)
+const mdTheme = computed(() => darkThemeRef.value ? 'dark' : 'light')
+const codeTheme = computed(() => getCodeTheme(darkThemeRef.value))
+
+function onMdHtmlChanged() {
+  nextTick(() => {
+    document.querySelectorAll('.msg-markdown').forEach(container => {
+      enhanceCodeBlocks(container, {
+        collapseThreshold: 8,
+        addLineNumbers: true,
+        addCopyButton: true,
+        addLanguageTag: true
+      })
+    })
+  })
+}
 
 function toggleJsonMd(index) {
   jsonMdExpandedMap.value = {
@@ -218,6 +265,36 @@ function formatMarkdown(content) {
 
     if (trimmed !== line && trimmed !== '') {
       line = trimmed
+    }
+
+    // 处理 ---##标题 或 ---#标题 等水平线紧贴标题的情况
+    const hrHeadingMatch = line.match(/^(---+|\*\*\*+|___+)(#{1,6}\s+.*)$/)
+    if (hrHeadingMatch) {
+      if (result.length > 0) {
+        const prev = result[result.length - 1]
+        if (prev !== '' && !isBlockElement(prev.replace(/^[\t ]+/, ''))) {
+          result.push('')
+        }
+      }
+      result.push(hrHeadingMatch[1])
+      result.push('')
+      result.push(hrHeadingMatch[2])
+      continue
+    }
+
+    // 处理 ---### 或 ---** 等水平线紧贴其他块级元素的情况
+    const hrBlockMatch = line.match(/^(---+|\*\*\*+|___+)(#{1,6}\s+|[-*+]\s+|\|\s*|>\s+|```)/)
+    if (hrBlockMatch) {
+      if (result.length > 0) {
+        const prev = result[result.length - 1]
+        if (prev !== '' && !isBlockElement(prev.replace(/^[\t ]+/, ''))) {
+          result.push('')
+        }
+      }
+      result.push(hrBlockMatch[1])
+      result.push('')
+      result.push(line.substring(hrBlockMatch[1].length))
+      continue
     }
 
     if (i > 0 && isBlockElement(trimmed)) {
@@ -345,8 +422,14 @@ function findJsonEnd(content, start) {
 }
 
 function splitInlineHeading(line) {
+  // 处理文字---（水平线紧贴在文字后面）
+  const hrMatch = line.match(/^(.+?)(---+|\*\*\*+|___+)$/)
+  if (hrMatch && hrMatch[1].trim() !== '') {
+    return hrMatch[1] + '\n\n' + hrMatch[2]
+  }
+  // 处理文字##标题（标题紧贴在文字后面）
   const match = line.match(/(#{1,6}\s+\S)/)
-  if (!match) return line
+  if (!match || match.index === undefined) return line
   const idx = match.index
   if (idx === 0) return line
   const prefix = line.substring(0, idx)
@@ -480,6 +563,7 @@ onMounted(() => {
   //chatRef.value.scrollToBottom();
 
   GetConfig().then((res) => {
+    darkThemeRef.value = !!res.darkTheme
     if (res.darkTheme) {
       document.documentElement.setAttribute("theme-mode", "dark");
     } else {
@@ -954,6 +1038,114 @@ const inputEnter = function () {
   text-align: left;
   font-size: 13px;
   color: var(--td-text-color-secondary);
+}
+
+/* MdPreview 样式穿透 */
+.reasoning-content :deep(.md-editor-preview-wrapper),
+.agent-json-md-content :deep(.md-editor-preview-wrapper) {
+  padding: 0;
+}
+
+.reasoning-content :deep(.md-editor-preview),
+.agent-json-md-content :deep(.md-editor-preview) {
+  font-size: 13px;
+  color: var(--td-text-color-secondary);
+  background: transparent !important;
+}
+
+/* 代码块增强全局样式 */
+.msg-markdown :deep(.md-editor-code-block) {
+  position: relative;
+}
+
+.msg-markdown :deep(.code-lang-tag) {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #666;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.msg-markdown :deep(.code-copy-btn) {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 2;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #666;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.msg-markdown :deep(.md-editor-code-block:hover .code-copy-btn) {
+  opacity: 1;
+}
+
+.msg-markdown :deep(.code-copy-btn:hover) {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+.msg-markdown :deep(.code-copy-btn.copy-success) {
+  color: #67c23a;
+  border-color: #67c23a;
+}
+
+.msg-markdown :deep(.code-copy-btn.copy-error) {
+  color: #f56c6c;
+  border-color: #f56c6c;
+}
+
+.msg-markdown :deep(.code-collapse-btn) {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #666;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.msg-markdown :deep(.md-editor-code-block:hover .code-collapse-btn) {
+  opacity: 1;
+}
+
+.msg-markdown :deep(.md-editor-code-block.code-collapsed pre) {
+  max-height: 120px;
+  overflow: hidden;
+}
+
+.msg-markdown :deep(.md-editor-code-block.code-collapsed::after) {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(transparent, #fff);
+  pointer-events: none;
 }
 
 /* 动画定义 */

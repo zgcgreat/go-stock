@@ -102,3 +102,10 @@
   - 注册路由 `GET /market/uplimit-hot`
   - 前端 `wails-bridge.js` Web 模式调用后端 API
 - **编译**：`go build ./web/...` ✅
+
+## agent-chat.vue Markdown渲染修复（2026-06-04）
+- **问题**：桌面端 Agent 聊天组件使用 `t-chat-content`（marked库），但 style.css 的 Markdown 增强样式全部写给 `.md-editor-preview`，导致表格/标题/分隔线等样式全部失效
+- **修复**：将3处 `<t-chat-content>` 替换为 `<MdPreview>`（md-editor-v3），与 FloatingAgentAssistant.vue 和 ai-assistant-web/App.vue 统一
+- **同步修复**：`formatMarkdown` 中 `---##` 拆分问题（hrHeadingMatch/hrBlockMatch）、`splitInlineHeading` 中 hrMatch 修复
+- **新增**：darkThemeRef/mdTheme/codeTheme/onMdHtmlChanged、MdPreview样式穿透、代码块增强样式
+- **涉及提交**：e07e198(style.css增强)、acd3406(style.css优化) — CSS选择器与 t-chat-content 不匹配

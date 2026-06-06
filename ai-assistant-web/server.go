@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"go-stock/backend/agent"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
@@ -72,6 +73,7 @@ func Start() error {
 	mux.HandleFunc("/api/prompts", middleware.RequireVipRole(http.HandlerFunc(a.getPrompts)).ServeHTTP)
 	mux.HandleFunc("/api/session", middleware.RequireVipRole(http.HandlerFunc(a.session)).ServeHTTP)
 	mux.HandleFunc("/api/chat/summary-stream", middleware.RequireVipRole(http.HandlerFunc(a.summaryChatStream)).ServeHTTP)
+	mux.HandleFunc("/api/chat/agent-chat", middleware.RequireVipRole(http.HandlerFunc(a.agentChatStream)).ServeHTTP)
 	mux.HandleFunc("/api/share", middleware.RequireVipRole(http.HandlerFunc(a.shareText)).ServeHTTP)
 
 	subFS, err := fs.Sub(staticFS, "static")
@@ -364,6 +366,99 @@ func parseHistory(historyJSON string) []map[string]interface{} {
 func (a *app) chatStream(w http.ResponseWriter, r *http.Request) {
 	// 保留旧接口兼容，转发到新的 summary 接口能力
 	a.summaryChatStream(w, r)
+}
+
+// agentChatStream 使用 Agent 模式（带工具调用的 React Agent）进行对话
+func (a *app) agentChatStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req chatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	req.Question = strings.TrimSpace(req.Question)
+	if req.Question == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "question is required"})
+		return
+	}
+
+	if req.AIConfigID <= 0 {
+		cfgs := data.GetSettingConfig().AiConfigs
+		if len(cfgs) == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no ai config found"})
+			return
+		}
+		req.AIConfigID = int(cfgs[0].ID)
+	}
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "stream not supported"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	var sysPromptID *int
+	if req.SysPromptID > 0 {
+		sysPromptID = &req.SysPromptID
+	}
+
+	aiAgent := agent.NewStockAiAgentApi()
+	msgCh := aiAgent.ChatWithContext(ctx, req.Question, req.AIConfigID, sysPromptID, false, 10, req.Thinking, "")
+
+	for msg := range msgCh {
+		if msg == nil {
+			continue
+		}
+
+		// 创建符合前端期望的消息对象
+		responseData := make(map[string]interface{})
+		responseData["role"] = "assistant"
+
+		// 同时发送 reasoning_content 和 content（修复原 agent-chat 只发一个的问题）
+		if msg.ReasoningContent != "" {
+			responseData["reasoning_content"] = msg.ReasoningContent
+		}
+		if msg.Content != "" {
+			responseData["content"] = msg.Content
+		}
+
+		// 检查是否有工具调用
+		if len(msg.ToolCalls) > 0 {
+			var toolCalls []map[string]interface{}
+			for _, tc := range msg.ToolCalls {
+				toolCall := map[string]interface{}{
+					"id":   tc.ID,
+					"type": tc.Type,
+					"function": map[string]interface{}{
+						"name":      tc.Function.Name,
+						"arguments": tc.Function.Arguments,
+					},
+				}
+				toolCalls = append(toolCalls, toolCall)
+			}
+			responseData["tool_calls"] = toolCalls
+		}
+
+		// 发送消息给客户端（使用与 summary-stream 相同的格式：data: {...}\n\n）
+		raw, _ := json.Marshal(responseData)
+		_, _ = w.Write([]byte("data: " + string(raw) + "\n\n"))
+		flusher.Flush()
+	}
+
+	// 发送完成信号
+	_, _ = w.Write([]byte("event: done\ndata: [DONE]\n\n"))
+	flusher.Flush()
 }
 
 func autoMigrate() {

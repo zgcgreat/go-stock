@@ -936,6 +936,9 @@ function formatMarkdown(content) {
   const lines = cleaned.split('\n')
   const result = []
 
+  const hrHeadingRe = /^(---+|\*\*\*+|___+)(#{1,6}\s+.*)$/
+  const hrBlockRe = /^(---+|\*\*\*+|___+)(#{1,6}\s+|[-*+]\s+|\|\s*|>\s+)/
+
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i]
     const trimmed = line.replace(/^[\t ]+/, '')
@@ -955,6 +958,36 @@ function formatMarkdown(content) {
 
     if (trimmed !== line && trimmed !== '') {
       line = trimmed
+    }
+
+    // 处理 ---##标题 或 ---#标题 等水平线紧贴标题的情况
+    const hrHeadingMatch = line.match(hrHeadingRe)
+    if (hrHeadingMatch) {
+      if (result.length > 0) {
+        const prev = result[result.length - 1]
+        if (prev !== '' && !isBlockElement(prev.replace(/^[\t ]+/, ''))) {
+          result.push('')
+        }
+      }
+      result.push(hrHeadingMatch[1])  // 水平线
+      result.push('')                  // 空行
+      result.push(hrHeadingMatch[2])   // 标题
+      continue
+    }
+
+    // 处理 ---### 或 ---** 等水平线紧贴其他块级元素的情况
+    const hrBlockMatch = line.match(hrBlockRe)
+    if (hrBlockMatch) {
+      if (result.length > 0) {
+        const prev = result[result.length - 1]
+        if (prev !== '' && !isBlockElement(prev.replace(/^[\t ]+/, ''))) {
+          result.push('')
+        }
+      }
+      result.push(hrBlockMatch[1])  // 水平线
+      result.push('')               // 空行
+      result.push(line.substring(hrBlockMatch[1].length))  // 剩余内容
+      continue
     }
 
     if (i > 0 && isBlockElement(trimmed)) {
@@ -1082,6 +1115,12 @@ function findJsonEnd(content, start) {
 }
 
 function splitInlineHeading(line) {
+  // 处理文字---（水平线紧贴在文字后面）
+  const hrMatch = line.match(/^(.+?)(---+|\*\*\*+|___+)$/)
+  if (hrMatch && hrMatch[1].trim() !== '') {
+    return hrMatch[1] + '\n\n' + hrMatch[2]
+  }
+  // 处理文字##标题（标题紧贴在文字后面）
   const match = line.match(/(#{1,6}\s+\S)/)
   if (!match) return line
   const idx = match.index

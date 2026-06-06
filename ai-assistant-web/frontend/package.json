@@ -11,9 +11,11 @@
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",
     "html2canvas": "^1.4.1",
+    "katex": "^0.17.0",
     "md-editor-v3": "^5.8.4",
     "naive-ui": "^2.43.1",
-    "vue": "^3.5.22"
+    "vue": "^3.5.22",
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",

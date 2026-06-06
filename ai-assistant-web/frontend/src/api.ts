@@ -19,6 +19,7 @@ export type SessionMessage = {
   role: Role;
   content: string;
   reasoning?: string;
+  jsonMarkdown?: string;
   time?: string;
 };
 

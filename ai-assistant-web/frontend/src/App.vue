@@ -48,15 +48,44 @@
                       {{ getBubblePreview(m) }}
                     </div>
                     <div v-else>
-                      <div v-if="m.reasoning" class="reasoning">
-                        {{ m.reasoning }}
-                      </div>
+                        <details v-if="m.reasoning" class="reasoning-details">
+                        <summary class="reasoning-summary">
+                          <svg class="reasoning-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>
+                          思考过程
+                        </summary>
+                        <MdPreview
+                          :model-value="m.reasoning"
+                          :theme="'light'"
+                          :code-theme="codeTheme"
+                          :editor-id="'reasoning-' + (fromIndex + idx)"
+                          :style="{ textAlign: 'left' }"
+                          class="msg-markdown reasoning-md"
+                        />
+                      </details>
+                      <details v-if="m.jsonMarkdown" class="json-md-details">
+                        <summary class="json-md-summary">
+                          <svg class="reasoning-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                          JSON 分析报告
+                        </summary>
+                        <MdPreview
+                          :model-value="m.jsonMarkdown"
+                          :theme="'light'"
+                          :code-theme="codeTheme"
+                          :editor-id="'json-md-' + (fromIndex + idx)"
+                          :style="{ textAlign: 'left' }"
+                          class="msg-markdown"
+                          @onHtmlChanged="onMdHtmlChanged"
+                        />
+                      </details>
                       <MdPreview
                         v-if="m.content"
                         :model-value="m.content"
                         :theme="'light'"
+                        :code-theme="codeTheme"
                         :editor-id="'msg-' + (fromIndex + idx)"
-                        class="md"
+                        :style="{ textAlign: 'left' }"
+                        class="msg-markdown"
+                        @onHtmlChanged="onMdHtmlChanged"
                       />
                     </div>
                   </template>
@@ -94,7 +123,7 @@
                   </NAvatar>
                 </div>
               </div>
-              <div v-if="isStreaming" class="streaming">
+              <div v-if="isStreaming && !lastAssistantHasContent" class="streaming">
                 <NSpin size="small" />
                 <span>思考中...</span>
               </div>
@@ -203,6 +232,7 @@ const isStreaming = ref(false);
 const shareLoading = ref(false);
 const controller = ref<AbortController | null>(null);
 const saveImageLoading = ref<number | null>(null);
+let formatTimer: ReturnType<typeof setInterval> | null = null;
 
 const authLoading = ref(true);
 const isAuthenticated = ref(false);
@@ -270,6 +300,25 @@ const memoryCountOptions: SelectOption[] = [
 ];
 
 const canSend = computed(() => inputValue.value.trim().length > 0);
+const lastAssistantHasContent = computed(() => {
+  const last = messages.value[messages.value.length - 1];
+  return last?.role === 'assistant' && !!last.content?.trim();
+});
+
+const codeTheme = computed(() => 'atom-one-light');
+
+function onMdHtmlChanged() {
+  nextTick(() => {
+    document.querySelectorAll('.msg-markdown').forEach(container => {
+      enhanceCodeBlocks(container as HTMLElement, {
+        collapseThreshold: 8,
+        addLineNumbers: true,
+        addCopyButton: true,
+        addLanguageTag: true
+      })
+    })
+  })
+}
 
 const fromIndex = computed(() => Math.max(0, messages.value.length - visibleCount.value));
 const hiddenCount = computed(() => Math.max(0, messages.value.length - visibleCount.value));
@@ -465,8 +514,26 @@ async function send() {
   isStreaming.value = true;
   controller.value = new AbortController();
 
+  // 流式原始内容，定时格式化后赋值给 content
+  let rawContent = "";
+  let rawReasoning = "";
+  formatTimer = setInterval(() => {
+    const assistant = messages.value[assistantIndex];
+    if (!assistant || assistant.role !== "assistant") return;
+    if (rawContent) {
+      const { content: formatted, jsonMarkdown } = formatMarkdown(rawContent);
+      assistant.content = formatted;
+      assistant.jsonMarkdown = jsonMarkdown;
+    }
+    if (rawReasoning) {
+      const { content: formattedReasoning } = formatMarkdown(rawReasoning);
+      assistant.reasoning = formattedReasoning;
+    }
+    scrollToBottom();
+  }, 1500);
+
   try {
-    const res = await fetch("/api/chat/summary-stream", {
+    const res = await fetch("/api/chat/agent-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal: controller.value.signal,
@@ -503,14 +570,11 @@ async function send() {
 
           try {
             const msg = JSON.parse(dataText) as any;
-            const assistant = messages.value[assistantIndex];
-            if (!assistant || assistant.role !== "assistant") continue;
-
-            if (msg?.reasoning_content) assistant.reasoning = (assistant.reasoning || "") + msg.reasoning_content;
-            if (msg?.content) assistant.content = (assistant.content || "") + msg.content;
+            if (msg?.reasoning_content) rawReasoning += msg.reasoning_content;
+            if (msg?.content) rawContent += msg.content;
             if (Array.isArray(msg?.tool_calls)) {
               for (const t of msg.tool_calls) {
-                assistant.content += `\n[工具调用] ${t.function?.name || "unknown"}: ${t.function?.arguments || ""}\n`;
+                rawContent += `\n[工具调用] ${t.function?.name || "unknown"}: ${t.function?.arguments || ""}\n`;
               }
             }
           } catch {
@@ -523,6 +587,20 @@ async function send() {
   } catch (e: any) {
     if (e?.name !== "AbortError") message.error(`发送失败：${e?.message ?? e}`);
   } finally {
+    // 停止格式化定时器，最终格式化一次
+    if (formatTimer) { clearInterval(formatTimer); formatTimer = null; }
+    const assistant = messages.value[assistantIndex];
+    if (assistant && assistant.role === "assistant") {
+      if (rawContent) {
+        const { content: formatted, jsonMarkdown } = formatMarkdown(rawContent);
+        assistant.content = formatted;
+        assistant.jsonMarkdown = jsonMarkdown;
+      }
+      if (rawReasoning) {
+        const { content: formattedReasoning } = formatMarkdown(rawReasoning);
+        assistant.reasoning = formattedReasoning;
+      }
+    }
     isStreaming.value = false;
     controller.value = null;
     await saveSession(messages.value).catch(() => {});
@@ -605,10 +683,292 @@ onBeforeUnmount(() => {
     clearInterval(mottoTimer);
     mottoTimer = null;
   }
+  if (formatTimer) {
+    clearInterval(formatTimer);
+    formatTimer = null;
+  }
 });
 
 function goToLogin() {
   window.location.href = '/login';
+}
+
+// === Markdown 格式化工具函数 ===
+function isBlockElement(line: string): boolean {
+  if (!line || line.length === 0) return false
+  if (line[0] === '#') return true
+  if (line.startsWith('- ') || line.startsWith('* ') || line.startsWith('+ ')) return true
+  if (line.startsWith('```')) return true
+  if (line.startsWith('> ')) return true
+  if (line.length >= 2 && line[0] >= '1' && line[0] <= '9' && line[1] === '.') return true
+  if (line.startsWith('---') || line.startsWith('***') || line.startsWith('___')) return true
+  if (line.startsWith('|')) return true
+  return false
+}
+
+function splitInlineHeading(line: string): string {
+  // 处理文字---（水平线紧贴在文字后面）
+  const hrMatch = line.match(/^(.+?)(---+|\*\*\*+|___+)$/)
+  if (hrMatch && hrMatch[1].trim() !== '') {
+    return hrMatch[1] + '\n\n' + hrMatch[2]
+  }
+  // 处理文字##标题（标题紧贴在文字后面）
+  const match = line.match(/(#{1,6}\s+\S)/)
+  if (!match || match.index === undefined) return line
+  const idx = match.index
+  if (idx === 0) return line
+  const prefix = line.substring(0, idx)
+  if (prefix.trim() === '') return line
+  return prefix + '\n\n' + line.substring(idx)
+}
+
+function hasMarkdownContent(str: string): boolean {
+  if (!str || typeof str !== 'string') return false
+  return /(^|\n)\s*#{1,6}\s/.test(str) ||
+    /(^|\n)\s*\|/.test(str) ||
+    /(^|\n)\s*---/.test(str) ||
+    /(^|\n)\s*[-*+]\s/.test(str) ||
+    /(^|\n)\s*>\s/.test(str) ||
+    /(^|\n)\s*```/.test(str)
+}
+
+function extractMarkdownFromJson(obj: any): string | null {
+  if (typeof obj === 'string') return obj
+  if (Array.isArray(obj)) {
+    return obj.map((item: any) => typeof item === 'string' ? item : JSON.stringify(item, null, 2)).join('\n\n')
+  }
+  if (typeof obj === 'object' && obj !== null) {
+    for (const key of ['response', 'content', 'text', 'result', 'answer', 'message', 'output']) {
+      if (obj[key] != null) {
+        const val = obj[key]
+        if (typeof val === 'string' && hasMarkdownContent(val)) return val
+        if (typeof val === 'object') {
+          const extracted: string | null = extractMarkdownFromJson(val)
+          if (extracted) return extracted
+        }
+      }
+    }
+    const values = Object.values(obj).filter((v: any) => typeof v === 'string' && hasMarkdownContent(v)) as string[]
+    if (values.length > 0) return values.join('\n\n')
+  }
+  return null
+}
+
+function findJsonEnd(content: string, start: number): number {
+  let depth = 0, bracketDepth = 0, inStr = false, escape = false
+  for (let i = start; i < content.length; i++) {
+    const ch = content[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inStr) { escape = true; continue }
+    if (ch === '"') { inStr = !inStr; continue }
+    if (inStr) continue
+    if (ch === '[') bracketDepth++
+    else if (ch === ']') bracketDepth--
+    else if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0 && bracketDepth === 0) return i
+    }
+  }
+  return -1
+}
+
+function extractJsonMarkdown(content: string): { content: string; jsonMarkdown: string } {
+  if (!content) return { content: '', jsonMarkdown: '' }
+  const cleaned: string[] = []
+  const jsonParts: string[] = []
+  let i = 0
+  const len = content.length
+  let inCodeBlock = false
+
+  while (i < len) {
+    if (content.substring(i, i + 3) === '```') {
+      inCodeBlock = !inCodeBlock
+      cleaned.push('```')
+      i += 3
+      continue
+    }
+    if (inCodeBlock) { cleaned.push(content[i]); i++; continue }
+    if (content[i] === '{') {
+      const end = findJsonEnd(content, i)
+      if (end > i) {
+        const jsonStr = content.substring(i, end + 1)
+        try {
+          const obj = JSON.parse(jsonStr)
+          const md = extractMarkdownFromJson(obj)
+          if (md) { jsonParts.push(md) } else { cleaned.push('\n\n```json\n' + jsonStr + '\n```\n\n') }
+          i = end + 1
+          continue
+        } catch {}
+      }
+    }
+    cleaned.push(content[i])
+    i++
+  }
+  return { content: cleaned.join(''), jsonMarkdown: jsonParts.join('\n\n---\n\n') }
+}
+
+function formatMarkdown(content: string): { content: string; jsonMarkdown: string } {
+  if (!content) return { content: '', jsonMarkdown: '' }
+  const { content: cleaned, jsonMarkdown } = extractJsonMarkdown(content)
+  let inCodeBlock = false
+  const lines = cleaned.split('\n')
+  const result: string[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]
+    const trimmed = line.replace(/^[\t ]+/, '')
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock
+      if (!inCodeBlock) { result.push(trimmed); continue }
+    }
+    if (inCodeBlock) { result.push(line); continue }
+    if (trimmed !== line && trimmed !== '') { line = trimmed }
+
+    // 处理 ---##标题 或 ---#标题 等水平线紧贴标题的情况
+    const hrHeadingMatch = line.match(/^(---+|\*\*\*+|___+)(#{1,6}\s+.*)$/)
+    if (hrHeadingMatch) {
+      // 先确保水平线前有空行
+      if (result.length > 0) {
+        const prev = result[result.length - 1]
+        if (prev !== '' && !isBlockElement(prev.replace(/^[\t ]+/, ''))) {
+          result.push('')
+        }
+      }
+      result.push(hrHeadingMatch[1])  // 水平线
+      result.push('')                  // 空行
+      result.push(hrHeadingMatch[2])   // 标题
+      continue
+    }
+
+    // 处理 ---### 或 ---** 等水平线紧贴其他块级元素的情况
+    const hrBlockMatch = line.match(/^(---+|\*\*\*+|___+)(#{1,6}\s+|[-*+]\s+|\|\s*|>\s+|```)/)
+    if (hrBlockMatch) {
+      if (result.length > 0) {
+        const prev = result[result.length - 1]
+        if (prev !== '' && !isBlockElement(prev.replace(/^[\t ]+/, ''))) {
+          result.push('')
+        }
+      }
+      result.push(hrBlockMatch[1])  // 水平线
+      result.push('')               // 空行
+      result.push(line.substring(hrBlockMatch[1].length))  // 剩余内容
+      continue
+    }
+
+    if (i > 0 && isBlockElement(trimmed)) {
+      const prev = result.length > 0 ? result[result.length - 1] : ''
+      if (prev !== '' && !isBlockElement(prev.replace(/^[\t ]+/, ''))) { result.push('') }
+    }
+    line = splitInlineHeading(line)
+    result.push(line)
+  }
+  return { content: result.join('\n'), jsonMarkdown }
+}
+
+// === 代码块增强（内联，与桌面端 codeBlockEnhancer 一致）===
+function extractCodeLanguage(codeEl: HTMLElement): string {
+  const className = codeEl.className || ''
+  const match = className.match(/(?:language-|hljs)(\w+)/)
+  if (match) return match[1]
+  const pre = codeEl.parentElement
+  if (pre && pre.className) {
+    const preMatch = pre.className.match(/(?:language-)(\w+)/)
+    if (preMatch) return preMatch[1]
+  }
+  return ''
+}
+
+function enhanceCodeBlocks(container: HTMLElement, options: { collapseThreshold?: number; addLineNumbers?: boolean; addCopyButton?: boolean; addLanguageTag?: boolean } = {}): void {
+  const {
+    collapseThreshold = 8,
+    addLineNumbers = true,
+    addCopyButton = true,
+    addLanguageTag = true
+  } = options
+
+  const codeBlocks = container.querySelectorAll<HTMLElement>('.md-editor-code-block')
+
+  codeBlocks.forEach(block => {
+    if (block.dataset.enhanced === 'true') return
+
+    const codeEl = block.querySelector<HTMLElement>('code')
+    if (!codeEl) return
+
+    const lang = extractCodeLanguage(codeEl)
+    const text = codeEl.textContent || ''
+    const lineCount = text.split('\n').length
+
+    block.dataset.enhanced = 'true'
+
+    if (addLanguageTag && lang) {
+      const tag = document.createElement('span')
+      tag.className = 'code-lang-tag'
+      tag.textContent = lang.toUpperCase()
+      block.appendChild(tag)
+    }
+
+    if (addCopyButton) {
+      const btn = document.createElement('button')
+      btn.className = 'code-copy-btn'
+      btn.type = 'button'
+      btn.title = '复制代码'
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>'
+      btn.addEventListener('click', async (e: Event) => {
+        e.stopPropagation()
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text)
+          } else {
+            const textarea = document.createElement('textarea')
+            textarea.value = text
+            textarea.style.position = 'fixed'
+            textarea.style.opacity = '0'
+            document.body.appendChild(textarea)
+            textarea.select()
+            document.execCommand('copy')
+            document.body.removeChild(textarea)
+          }
+          btn.classList.add('copy-success')
+          btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>'
+          setTimeout(() => {
+            btn.classList.remove('copy-success')
+            btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>'
+          }, 2000)
+        } catch {
+          btn.classList.add('copy-error')
+          btn.title = '复制失败'
+          setTimeout(() => { btn.classList.remove('copy-error'); btn.title = '复制代码' }, 2000)
+        }
+      })
+      block.appendChild(btn)
+    }
+
+    if (addLineNumbers) {
+      const pre = codeEl.parentElement
+      if (pre) {
+        pre.classList.add('code-with-line-numbers')
+        block.dataset.lineCount = String(lineCount)
+        if (lineCount > 3) block.classList.add('show-line-numbers')
+      }
+    }
+
+    const shouldCollapse = lang === 'json' || lineCount > collapseThreshold
+    if (shouldCollapse) {
+      if (!block.querySelector('.code-collapse-btn')) {
+        block.classList.add('code-collapsed')
+        const cbtn = document.createElement('span')
+        cbtn.className = 'code-collapse-btn'
+        cbtn.textContent = '展开'
+        cbtn.addEventListener('click', (e: Event) => {
+          e.stopPropagation()
+          const collapsed = block.classList.toggle('code-collapsed')
+          cbtn.textContent = collapsed ? '展开' : '收起'
+        })
+        block.appendChild(cbtn)
+      }
+    }
+  })
 }
 </script>
 
@@ -777,27 +1137,83 @@ function goToLogin() {
   border-color: rgba(59, 130, 246, 0.3);
   color: #f8fafc;
 }
-.msg.user .bubble :deep(.md-editor-preview),
-.msg.user .bubble :deep(.md-editor-preview-wrapper) {
-  color: #f8fafc !important;
-  background: transparent !important;
-}
-.msg.user .bubble :deep(.md-editor-preview *) {
-  color: #f8fafc !important;
-}
-.msg.user .bubble :deep(code),
-.msg.user .bubble :deep(pre),
-.msg.user .bubble :deep(blockquote) {
-  color: #f8fafc !important;
-  border-color: rgba(248, 250, 252, 0.4) !important;
-}
-.reasoning {
-  font-size: 12px;
-  opacity: 0.75;
+.reasoning-details {
   margin-bottom: 8px;
-  white-space: pre-wrap;
-  border-bottom: 1px dashed rgba(0, 0, 0, 0.12);
-  padding-bottom: 8px;
+  border: 1px solid rgba(109, 93, 252, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.reasoning-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6d5dfc;
+  background: linear-gradient(135deg, rgba(109, 93, 252, 0.08) 0%, rgba(109, 93, 252, 0.03) 100%);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.reasoning-summary::-webkit-details-marker {
+  display: none;
+}
+.reasoning-summary::before {
+  content: '▶';
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.reasoning-details[open] .reasoning-summary::before {
+  transform: rotate(90deg);
+}
+.reasoning-icon {
+  flex-shrink: 0;
+}
+.reasoning-md {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #6b7280;
+  background: rgba(109, 93, 252, 0.02);
+  border-top: 1px dashed rgba(109, 93, 252, 0.15);
+}
+.reasoning-md :deep(.md-editor-preview-wrapper) {
+  padding: 0;
+}
+.reasoning-md :deep(.md-editor-preview) {
+  font-size: 13px;
+  color: #6b7280;
+}
+.json-md-details {
+  margin-bottom: 8px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.json-md-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3b82f6;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.03) 100%);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.json-md-summary::-webkit-details-marker {
+  display: none;
+}
+.json-md-summary::before {
+  content: '▶';
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.json-md-details[open] .json-md-summary::before {
+  transform: rotate(90deg);
 }
 .msg-content-collapsed {
   white-space: pre-wrap;
@@ -813,9 +1229,17 @@ function goToLogin() {
 .msg-expand-btn {
   font-size: 12px;
 }
-.msg.user .reasoning {
+.msg.user .meta {
   color: rgba(248, 250, 252, 0.92);
-  border-bottom-color: rgba(248, 250, 252, 0.42);
+}
+.msg.user .meta :deep(.n-button) {
+  color: #f8fafc;
+}
+.user-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #f8fafc;
+  line-height: 1.6;
 }
 .meta {
   display: flex;
@@ -829,18 +1253,6 @@ function goToLogin() {
   display: inline-flex;
   gap: 6px;
 }
-.msg.user .meta {
-  color: rgba(248, 250, 252, 0.92);
-}
-.msg.user .meta :deep(.n-button) {
-  color: #f8fafc;
-}
-.user-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #f8fafc;
-  line-height: 1.6;
-}
 .footer {
   margin-top: 10px;
   display: flex;
@@ -849,11 +1261,10 @@ function goToLogin() {
 }
 .footer-toolbar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   margin-bottom: 4px;
-  overflow-x: auto;
 }
 .toggle-stack {
   display: flex;
@@ -865,18 +1276,12 @@ function goToLogin() {
   width: max-content;
 }
 .footer-select {
-  min-width: 160px;
+  min-width: 140px;
+  flex: 1 1 140px;
+  max-width: 200px;
 }
 .footer-memory-select {
   width: 90px;
-}
-
-/* 隐藏横向滚动条（保证一行时仍可滚动） */
-.footer-toolbar::-webkit-scrollbar {
-  height: 0;
-}
-.footer-toolbar {
-  scrollbar-width: none;
 }
 .footer-actions {
   display: flex;
@@ -899,5 +1304,134 @@ function goToLogin() {
 }
 .msg-expand-btn {
   white-space: nowrap;
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .page {
+    padding: 10px;
+  }
+  .header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .motto {
+    order: 3;
+    width: 100%;
+    text-align: left;
+  }
+  .toolbar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .bubble {
+    width: calc(100% - 48px);
+    max-width: calc(100vw - 80px);
+  }
+  .footer-select {
+    min-width: 120px;
+    flex: 1 1 120px;
+  }
+  .chat-scroll {
+    height: calc(100vh - 280px);
+    min-height: 300px;
+  }
+}
+</style>
+
+<style>
+/* 代码块增强全局样式 */
+.msg-markdown .md-editor-code-block {
+  position: relative;
+}
+
+.msg-markdown .code-lang-tag {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #666;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.msg-markdown .code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 2;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #666;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.msg-markdown .md-editor-code-block:hover .code-copy-btn {
+  opacity: 1;
+}
+
+.msg-markdown .code-copy-btn:hover {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+.msg-markdown .code-copy-btn.copy-success {
+  color: #67c23a;
+  border-color: #67c23a;
+}
+
+.msg-markdown .code-copy-btn.copy-error {
+  color: #f56c6c;
+  border-color: #f56c6c;
+}
+
+.msg-markdown .code-collapse-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #666;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.msg-markdown .md-editor-code-block:hover .code-collapse-btn {
+  opacity: 1;
+}
+
+.msg-markdown .md-editor-code-block.code-collapsed pre {
+  max-height: 120px;
+  overflow: hidden;
+}
+
+.msg-markdown .md-editor-code-block.code-collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(transparent, #fff);
+  pointer-events: none;
 }
 </style>

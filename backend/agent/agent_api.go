@@ -299,7 +299,7 @@ func runReact(ctx context.Context, stockAiAgent *StockAiAgent, messages []*schem
 				break
 			}
 			if msg != nil {
-				// 实时发送流式消息到前端
+				// 实时发送流式消息到前端（原始内容，由前端负责格式化）
 				if msg.Content != "" {
 					fullResponse.WriteString(msg.Content)
 					// 发送增量内容
@@ -965,6 +965,9 @@ func formatMarkdown(content string) string {
 	lines := strings.Split(content, "\n")
 	var result []string
 
+	hrHeadingRe := regexp.MustCompile(`^(---+|\*\*\*+|___+)(#{1,6}\s+.*)$`)
+	hrBlockRe := regexp.MustCompile(`^(---+|\*\*\*+|___+)(#{1,6}\s+|[-*+]\s+|\|\s*|>\s+)`)
+
 	for i, line := range lines {
 		trimmed := strings.TrimLeft(line, " \t")
 
@@ -983,6 +986,34 @@ func formatMarkdown(content string) string {
 
 		if trimmed != line && trimmed != "" {
 			line = trimmed
+		}
+
+		// 处理 ---##标题 或 ---#标题 等水平线紧贴标题的情况
+		if m := hrHeadingRe.FindStringSubmatch(line); m != nil {
+			if len(result) > 0 {
+				prev := result[len(result)-1]
+				if prev != "" && !isBlockElement(strings.TrimLeft(prev, " \t")) {
+					result = append(result, "")
+				}
+			}
+			result = append(result, m[1]) // 水平线
+			result = append(result, "")   // 空行
+			result = append(result, m[2]) // 标题
+			continue
+		}
+
+		// 处理 ---### 或 ---** 等水平线紧贴其他块级元素的情况
+		if m := hrBlockRe.FindStringSubmatch(line); m != nil {
+			if len(result) > 0 {
+				prev := result[len(result)-1]
+				if prev != "" && !isBlockElement(strings.TrimLeft(prev, " \t")) {
+					result = append(result, "")
+				}
+			}
+			result = append(result, m[1])                       // 水平线
+			result = append(result, "")                         // 空行
+			result = append(result, line[len(m[1]):])           // 剩余内容
+			continue
 		}
 
 		if i > 0 && isBlockElement(trimmed) {
@@ -1004,8 +1035,16 @@ func formatMarkdown(content string) string {
 }
 
 var headingRe = regexp.MustCompile(`(#{1,6}\s+\S)`)
+var hrInlineRe = regexp.MustCompile(`^(.+?)(---+|\*\*\*+|___+)$`)
 
 func splitInlineHeading(line string) string {
+	// 处理文字---（水平线紧贴在文字后面）
+	if m := hrInlineRe.FindStringSubmatch(line); m != nil {
+		if strings.TrimSpace(m[1]) != "" {
+			return m[1] + "\n\n" + m[2]
+		}
+	}
+	// 处理文字##标题（标题紧贴在文字后面）
 	idx := headingRe.FindStringIndex(line)
 	if idx == nil {
 		return line

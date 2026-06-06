@@ -1025,7 +1025,7 @@ function updateMenuWithGroups() {
       if (!Array.isArray(item.children)) {
         item.children = []
       }
-      const existingKeys = item.children.map(c => c.key)
+      const existingKeys = item.children.map(c => c.key);
       (groupList.value || []).forEach(g => {
         if (!existingKeys.includes(g.ID)) {
           item.children.push({

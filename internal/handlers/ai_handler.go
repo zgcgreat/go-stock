@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -273,7 +274,7 @@ func GetAIConfigs(c *gin.Context) {
 	})
 }
 
-// AgentChat Agent模式聊天 - SSE流式
+// AgentChat Agent模式聊天 - SSE流式（与桌面端 ai-assistant-web/server.go 保持一致）
 func AgentChat(c *gin.Context) {
 	var req struct {
 		Question    string `json:"question" binding:"required"`
@@ -306,6 +307,9 @@ func AgentChat(c *gin.Context) {
 		aiConfigID = int(settingConfig.AiConfigs[0].ID)
 	}
 
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	defer cancel()
+
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -317,8 +321,14 @@ func AgentChat(c *gin.Context) {
 		return
 	}
 
+	// 使用 ChatWithContext（与桌面端一致，支持 context 取消和 thinking 模式）
 	aiAgent := agent.NewStockAiAgentApi()
-	msgCh := aiAgent.Chat(req.Question, aiConfigID, req.SysPromptID)
+	memoryMode := req.SessionID != ""
+	memoryCount := req.MemoryCount
+	if memoryCount <= 0 {
+		memoryCount = 10
+	}
+	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, "")
 
 	for msg := range msgCh {
 		if msg == nil {
@@ -329,11 +339,11 @@ func AgentChat(c *gin.Context) {
 		responseData := make(map[string]interface{})
 		responseData["role"] = "assistant"
 
-		// 检查是否有推理内容
+		// 同时发送 reasoning_content 和 content（与桌面端 ai-assistant-web/server.go 保持一致）
 		if msg.ReasoningContent != "" {
 			responseData["reasoning_content"] = msg.ReasoningContent
-		} else if msg.Content != "" {
-			// 如果没有推理内容，则直接使用内容字段
+		}
+		if msg.Content != "" {
 			responseData["content"] = msg.Content
 		}
 
@@ -354,18 +364,14 @@ func AgentChat(c *gin.Context) {
 			responseData["tool_calls"] = toolCalls
 		}
 
-		// 发送消息给客户端
-		fmt.Fprintf(c.Writer, "event: agent-message\ndata: %s\n\n", marshalEvent(responseData))
+		// 发送消息给客户端（与桌面端格式一致：data: {...}\n\n，无 event 行）
+		raw, _ := json.Marshal(responseData)
+		_, _ = c.Writer.Write([]byte("data: " + string(raw) + "\n\n"))
 		flusher.Flush()
 	}
 
-	// 发送完成信号
-	doneData := map[string]interface{}{
-		"response_meta": map[string]interface{}{
-			"finish_reason": "stop",
-		},
-	}
-	fmt.Fprintf(c.Writer, "event: agent-message\ndata: %s\n\n", marshalEvent(doneData))
+	// 发送完成信号（与桌面端格式保持一致：event: done + data: [DONE]）
+	_, _ = c.Writer.Write([]byte("event: done\ndata: [DONE]\n\n"))
 	flusher.Flush()
 }
 
