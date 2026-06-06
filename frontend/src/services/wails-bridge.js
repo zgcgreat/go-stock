@@ -962,7 +962,26 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
     }),
   }).then(response => {
     if (!response.ok) {
-      EventsEmit('agent-message', { content: 'agent-DONE' });
+      // HTTP 错误（401/400/500等），发送错误信息给前端
+      let errorMsg = `请求失败 (${response.status})`;
+      // 尝试读取错误响应体
+      response.text().then(text => {
+        try {
+          const errData = JSON.parse(text);
+          if (errData.error?.message) {
+            errorMsg = errData.error.message;
+          } else if (errData.message) {
+            errorMsg = errData.message;
+          } else if (errData.error) {
+            errorMsg = typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error);
+          }
+        } catch { /* ignore parse error */ }
+        EventsEmit('agent-message', { role: 'assistant', content: '', error: errorMsg });
+        EventsEmit('agent-message', { content: 'agent-DONE' });
+      }).catch(() => {
+        EventsEmit('agent-message', { role: 'assistant', content: '', error: errorMsg });
+        EventsEmit('agent-message', { content: 'agent-DONE' });
+      });
       return;
     }
     const reader = response.body.getReader();
@@ -1016,12 +1035,14 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
         read();
       }).catch(err => {
         console.error('ChatWithAgent SSE read error:', err);
+        EventsEmit('agent-message', { role: 'assistant', content: '', error: `流式读取错误: ${err.message || '连接中断'}` });
         EventsEmit('agent-message', { content: 'agent-DONE' });
       });
     }
     read();
   }).catch(err => {
     console.error('ChatWithAgent SSE connect error:', err);
+    EventsEmit('agent-message', { role: 'assistant', content: '', error: `连接失败: ${err.message || '网络错误'}` });
     EventsEmit('agent-message', { content: 'agent-DONE' });
   });
 

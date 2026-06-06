@@ -476,6 +476,25 @@ function parseStepText(text) {
 
 const handleAgentMessage = (data) => {
   console.log('handleAgentMessage received:', data)
+
+  // 处理错误消息
+  if (data && data['error']) {
+    isStreamLoad.value = false;
+    loading.value = false;
+    stopFormatTimer()
+    const lastItemIndex = chatList.value.findIndex(item => item.role === 'assistant')
+    if (lastItemIndex !== -1) {
+      const lastItem = chatList.value[lastItemIndex]
+      const updatedItem = { ...lastItem }
+      updatedItem.content = `❌ Agent 调用失败：${data['error']}`
+      updatedItem.rawContent = updatedItem.content
+      chatList.value[lastItemIndex] = updatedItem
+    }
+    // 在聊天消息中显示错误
+    chatList.value[lastItemIndex] = updatedItem
+    return
+  }
+
   if(data['role']==="assistant"){
     loading.value = false;
     // 使用更可靠的方式获取和更新最后一个 assistant 消息
