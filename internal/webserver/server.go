@@ -60,15 +60,10 @@ func (ws *WebServer) initRouter() {
 
 	v1 := ws.router.Group("/api/v1")
 	{
+		// 公开路由：无需认证即可访问
 		public := v1.Group("/public")
-		public.Use(middleware.AuthOptional()) // 支持可选认证，获取用户ID
 		{
 			public.GET("/health", handlers.HealthCheck)
-			public.GET("/stocks/search", handlers.SearchStocks)
-			public.GET("/stocks/realtime", handlers.GetStockRealTime)
-			public.POST("/ai/agent-chat", handlers.AgentChat)
-			public.GET("/stocks/:code/kline", handlers.GetStockKLine)
-			public.GET("/ai/configs", handlers.GetAIConfigs)
 		}
 
 		auth := v1.Group("/auth")
@@ -78,8 +73,9 @@ func (ws *WebServer) initRouter() {
 			auth.POST("/logout", middleware.AuthRequired(), handlers.Logout)
 		}
 
+		// 受保护路由：所有业务接口都需要登录
 		protected := v1.Group("/")
-		protected.Use(middleware.AuthOptional())
+		protected.Use(middleware.AuthRequired())
 		{
 			protected.GET("/user/profile", handlers.GetUserProfile)
 			protected.PUT("/user/profile", handlers.UpdateUserProfile)
@@ -89,8 +85,11 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/stocks/:code", handlers.GetStockByCode)
 			protected.GET("/stocks/:code/kline", handlers.GetStockKLine)
 			protected.GET("/stocks/:code/minute", handlers.GetStockRealTimePrice)
+			protected.GET("/stocks/search", handlers.SearchStocks)
 
 			protected.POST("/ai/analyze", handlers.AITradeAnalyze)
+			protected.POST("/ai/agent-chat", handlers.AgentChat)
+			protected.GET("/ai/configs", handlers.GetAIConfigs)
 			protected.GET("/ai/responses", handlers.GetAIResponses)
 			protected.DELETE("/ai/responses/:id", handlers.DeleteAIResponse)
 
@@ -128,7 +127,6 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/stocks/cost", handlers.SetCostPriceAndVolume)
 			protected.POST("/stocks/alarm", handlers.SetAlarmChangePercent)
 			protected.POST("/stocks/sort", handlers.SetStockSort)
-			protected.GET("/stocks/search", handlers.SearchStocks)
 
 			protected.GET("/groups", handlers.GetGroupList)
 			protected.POST("/groups", handlers.AddGroup)

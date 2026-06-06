@@ -13,15 +13,7 @@ import (
 )
 
 func FollowStock(c *gin.Context) {
-	// 获取用户ID
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var followReq struct {
 		StockCode string `json:"stockCode" binding:"required"`
@@ -69,14 +61,7 @@ func FollowStock(c *gin.Context) {
 }
 
 func UnfollowStock(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var stockCode string
 
@@ -134,15 +119,7 @@ func UnfollowStock(c *gin.Context) {
 }
 
 func GetFollowList(c *gin.Context) {
-	// 获取用户ID
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	// 获取groupId参数,默认为0(全部)
 	groupId, _ := strconv.Atoi(c.Query("groupId"))
@@ -200,14 +177,7 @@ func GetFollowList(c *gin.Context) {
 }
 
 func SetCostPriceAndVolume(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var costReq struct {
 		StockCode string  `json:"stockCode" binding:"required"`
@@ -246,14 +216,7 @@ func SetCostPriceAndVolume(c *gin.Context) {
 }
 
 func SetAlarmChangePercent(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var alarmReq struct {
 		StockCode          string  `json:"stockCode" binding:"required"`
@@ -288,14 +251,7 @@ func SetAlarmChangePercent(c *gin.Context) {
 }
 
 func SetStockSort(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var sortReq struct {
 		StockCode string `json:"stockCode" binding:"required"`

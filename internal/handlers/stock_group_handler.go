@@ -14,14 +14,7 @@ import (
 
 // GetGroupList 获取分组列表
 func GetGroupList(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	// DEBUG: 打印当前用户ID
 	fmt.Printf("[DEBUG] GetGroupList userID=%d\n", userID)
@@ -78,14 +71,7 @@ func GetGroupList(c *gin.Context) {
 
 // AddGroup 添加分组
 func AddGroup(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var groupReq struct {
 		Name string `json:"name" binding:"required"`
@@ -141,14 +127,7 @@ func AddGroup(c *gin.Context) {
 
 // RemoveGroup 删除分组
 func RemoveGroup(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	groupIDStr := c.Param("id")
 	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
@@ -197,14 +176,7 @@ func RemoveGroup(c *gin.Context) {
 
 // UpdateGroupSort 更新分组排序
 func UpdateGroupSort(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var sortReq struct {
 		Groups []struct {
@@ -266,14 +238,7 @@ func UpdateGroupSort(c *gin.Context) {
 
 // GetGroupStockList 获取分组股票列表
 func GetGroupStockList(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	groupIDStr := c.Param("groupId")
 	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
@@ -341,14 +306,7 @@ func GetGroupStockList(c *gin.Context) {
 
 // AddStockGroup 添加股票到分组
 func AddStockGroup(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	// 从URL路径获取分组ID
 	groupIDStr := c.Param("id")
@@ -427,14 +385,7 @@ func AddStockGroup(c *gin.Context) {
 
 // RemoveStockGroup 从分组中移除股票
 func RemoveStockGroup(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	groupIDStr := c.Param("id")
 	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)

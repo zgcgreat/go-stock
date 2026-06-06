@@ -13,14 +13,7 @@ import (
 
 // GetFundList 获取基金列表
 func GetFundList(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
@@ -82,14 +75,7 @@ func GetFundList(c *gin.Context) {
 
 // FollowFund 关注基金
 func FollowFund(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var followReq struct {
 		FundCode string `json:"fundCode" binding:"required"`
@@ -137,14 +123,7 @@ func FollowFund(c *gin.Context) {
 
 // UnFollowFund 取消关注基金
 func UnFollowFund(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var unfollowReq struct {
 		FundCode string `json:"fundCode" binding:"required"`
@@ -209,14 +188,7 @@ func GetFundRanking(c *gin.Context) {
 
 // GetFollowedFund 获取关注的基金列表
 func GetFollowedFund(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {

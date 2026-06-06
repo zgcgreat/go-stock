@@ -31,14 +31,7 @@ type AIAnalyzeRequest struct {
 
 // AITradeAnalyze AI交易分析 - SSE流式返回
 func AITradeAnalyze(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var req AIAnalyzeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -132,14 +125,7 @@ func AITradeAnalyze(c *gin.Context) {
 // GetAIResponses 获取AI分析结果列表
 func GetAIResponses(c *gin.Context) {
 	// 获取用户ID
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
@@ -210,14 +196,7 @@ func GetAIResponses(c *gin.Context) {
 
 // DeleteAIResponse 删除AI分析结果（用户隔离：禁止删除他人记录）
 func DeleteAIResponse(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

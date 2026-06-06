@@ -30,14 +30,7 @@ func (UserSetting) TableName() string {
 
 // GetUserSettings 获取用户设置列表
 func GetUserSettings(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
@@ -99,14 +92,7 @@ func GetUserSettings(c *gin.Context) {
 
 // SetUserSetting 设置用户设置
 func SetUserSetting(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var settingReq struct {
 		Type        string `json:"type" binding:"required"`
@@ -178,14 +164,7 @@ func SetUserSetting(c *gin.Context) {
 
 // UpdateUserSetting 更新用户设置
 func UpdateUserSetting(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	key := c.Param("key")
 	if key == "" {
@@ -262,14 +241,7 @@ func UpdateUserSetting(c *gin.Context) {
 
 // DeleteUserSetting 删除用户设置
 func DeleteUserSetting(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	key := c.Param("key")
 	if key == "" {

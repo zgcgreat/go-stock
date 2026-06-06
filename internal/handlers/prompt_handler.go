@@ -14,14 +14,7 @@ import (
 
 // GetPromptTemplates 获取提示模板列表
 func GetPromptTemplates(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
@@ -93,14 +86,7 @@ func GetPromptTemplates(c *gin.Context) {
 
 // CreatePromptTemplate 创建提示模板
 func CreatePromptTemplate(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	var templateReq struct {
 		Name     string `json:"name" binding:"required"`
@@ -152,14 +138,7 @@ func CreatePromptTemplate(c *gin.Context) {
 
 // UpdatePromptTemplate 更新提示模板
 func UpdatePromptTemplate(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -244,14 +223,7 @@ func UpdatePromptTemplate(c *gin.Context) {
 
 // DeletePromptTemplate 删除提示模板
 func DeletePromptTemplate(c *gin.Context) {
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "User ID not found in context",
-			"message": "用户信息异常",
-		})
-		return
-	}
+	userID, _ := middleware.GetUserIDFromContext(c)
 
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
