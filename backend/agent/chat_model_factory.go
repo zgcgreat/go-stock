@@ -69,7 +69,8 @@ func detectChatModelProvider(baseLower, modelName string) chatModelProvider {
 	if isGeminiGoogleAI(baseLower, modelLower) {
 		return providerGemini
 	}
-	if strings.Contains(baseLower, "api.deepseek.com") || strutil.ContainsAny(modelName, []string{"deepseek"}) {
+	if strings.Contains(baseLower, "api.deepseek.com") ||
+		strutil.ContainsAny(modelLower, []string{"deepseek", "deepseek-v", "deepseek-r", "deepseek-chat", "deepseek-coder", "deepseek-reasoner"}) {
 		return providerDeepSeek
 	}
 	return providerOpenAICompatible
@@ -136,6 +137,7 @@ func createHTTPClientWithProxy(proxyURL string, timeout time.Duration) *http.Cli
 	}
 }
 
+
 // createChatModel 按 Eino 生态组件路由（参见 https://www.cloudwego.io/zh/docs/eino/ecosystem_integration/chat_model/ ）
 // 未命中专用实现时回退到 OpenAI 兼容 ChatModel（硅基流动、LM Studio、Azure OpenAI 等）。
 func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCallingChatModel, error) {
@@ -151,13 +153,8 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		maxTok = 4096
 	}
 
-	var httpClient *http.Client
-	if aiConfig.HttpProxyEnabled && aiConfig.HttpProxy != "" {
-		httpClient = createHTTPClientWithProxy(aiConfig.HttpProxy, timeout)
-	}
-
 	p := detectChatModelProvider(baseLower, aiConfig.ModelName)
-	logger.SugaredLogger.Infof("createChatModel provider=%d base=%q model=%q proxy=%v", p, aiConfig.BaseUrl, aiConfig.ModelName, aiConfig.HttpProxyEnabled)
+	logger.SugaredLogger.Infof("createChatModel provider=%d base=%q model=%q", p, aiConfig.BaseUrl, aiConfig.ModelName)
 
 	switch p {
 	case providerVolcArk:
@@ -165,11 +162,7 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		if aiConfig.Thinking {
 			thinking = &ark.Thinking{Type: "enabled"}
 		}
-		arkClient := httpClient
-		if arkClient == nil {
-			arkClient = createHTTPClientWithProxy("", timeout)
-		}
-		cfg := &ark.ChatModelConfig{
+		return ark.NewChatModel(ctx, &ark.ChatModelConfig{
 			BaseURL:     baseURL,
 			Model:       aiConfig.ModelName,
 			APIKey:      aiConfig.ApiKey,
@@ -177,9 +170,7 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			Temperature: &temperature,
 			Thinking:    thinking,
 			Timeout:     &timeout,
-			HTTPClient:  arkClient,
-		}
-		return ark.NewChatModel(ctx, cfg)
+		})
 
 	case providerDashScope:
 		cfg := &qwen.ChatModelConfig{
@@ -194,9 +185,6 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		}
 		if aiConfig.Thinking {
 			cfg.EnableThinking = ptrBool(true)
-		}
-		if httpClient != nil {
-			cfg.HTTPClient = httpClient
 		}
 		return qwen.NewChatModel(ctx, cfg)
 
@@ -215,9 +203,6 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			enabled := true
 			cfg.Reasoning = &openrouter.Reasoning{Enabled: &enabled}
 		}
-		if httpClient != nil {
-			cfg.HTTPClient = httpClient
-		}
 		return openrouter.NewChatModel(ctx, cfg)
 
 	case providerAnthropic:
@@ -225,15 +210,13 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		if maxOut <= 0 {
 			maxOut = 8192
 		}
-		anthropicClient := httpClient
-		if anthropicClient == nil {
-			anthropicClient = createHTTPClientWithProxy("", timeout)
-		}
 		cfg := &claude.Config{
-			APIKey:     aiConfig.ApiKey,
-			Model:      aiConfig.ModelName,
-			MaxTokens:  maxOut,
-			HTTPClient: anthropicClient,
+			APIKey:    aiConfig.ApiKey,
+			Model:     aiConfig.ModelName,
+			MaxTokens: maxOut,
+			HTTPClient: &http.Client{
+				Timeout: timeout,
+			},
 		}
 		if aiConfig.Temperature > 0 {
 			cfg.Temperature = ptrFloat32(temperature)
@@ -265,21 +248,13 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			tv := ollamaapi.ThinkValue{Value: true}
 			cfg.Thinking = &tv
 		}
-		if httpClient != nil {
-			cfg.HTTPClient = httpClient
-		}
 		return ollama.NewChatModel(ctx, cfg)
 
 	case providerGemini:
-		geminiClient := httpClient
-		if geminiClient == nil {
-			geminiClient = createHTTPClientWithProxy("", timeout)
-		}
 		cc := &genai.ClientConfig{APIKey: aiConfig.ApiKey}
 		if b := baseURL; b != "" {
 			cc.HTTPOptions = genai.HTTPOptions{BaseURL: b}
 		}
-		cc.HTTPClient = geminiClient
 		client, err := genai.NewClient(ctx, cc)
 		if err != nil {
 			return nil, fmt.Errorf("gemini genai client: %w", err)
@@ -300,7 +275,7 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 		return gemini.NewChatModel(ctx, gcfg)
 
 	case providerDeepSeek:
-		cfg := &deepseek.ChatModelConfig{
+		deepseekCfg := &deepseek.ChatModelConfig{
 			BaseURL:     baseURL,
 			Model:       aiConfig.ModelName,
 			APIKey:      aiConfig.ApiKey,
@@ -308,10 +283,10 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			Temperature: temperature,
 			Timeout:     timeout,
 		}
-		if httpClient != nil {
-			cfg.HTTPClient = httpClient
+		if proxyClient := buildProxyHTTPClient(timeout); proxyClient != nil {
+			deepseekCfg.HTTPClient = proxyClient
 		}
-		return deepseek.NewChatModel(ctx, cfg)
+		return deepseek.NewChatModel(ctx, deepseekCfg)
 
 	default:
 		extraFields := map[string]any{}
@@ -327,9 +302,28 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			Temperature: &temperature,
 			ExtraFields: extraFields,
 		}
-		if httpClient != nil {
-			cfg.HTTPClient = httpClient
+		if proxyClient := buildProxyHTTPClient(timeout); proxyClient != nil {
+			cfg.HTTPClient = proxyClient
 		}
 		return einoopenai.NewChatModel(ctx, cfg)
+	}
+}
+
+// buildProxyHTTPClient 构建带代理的HTTP客户端，若未配置代理则返回nil
+func buildProxyHTTPClient(timeout time.Duration) *http.Client {
+	config := data.GetSettingConfig()
+	if config == nil || !config.HttpProxyEnabled || config.HttpProxy == "" {
+		return nil
+	}
+	proxyURL, err := url.Parse(config.HttpProxy)
+	if err != nil {
+		logger.SugaredLogger.Warnf("解析HTTP代理失败: %v", err)
+		return nil
+	}
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		},
+		Timeout: timeout,
 	}
 }

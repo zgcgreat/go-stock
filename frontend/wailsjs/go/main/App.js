@@ -302,6 +302,10 @@ export function GetFollowedFund() {
   return window['go']['main']['App']['GetFollowedFund']();
 }
 
+export function GetFollowedFundPaged(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetFollowedFundPaged'](arg1, arg2, arg3);
+}
+
 export function GetFundHistoryNetValue(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetFundHistoryNetValue'](arg1, arg2, arg3, arg4);
 }
@@ -598,6 +602,10 @@ export function RemoveStockGroup(arg1, arg2, arg3) {
   return window['go']['main']['App']['RemoveStockGroup'](arg1, arg2, arg3);
 }
 
+export function RestartAsAdmin() {
+  return window['go']['main']['App']['RestartAsAdmin']();
+}
+
 export function SaveAIResponseResult(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SaveAIResponseResult'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -628,6 +636,10 @@ export function SaveWordFile(arg1, arg2) {
 
 export function SearchCronTasks(arg1) {
   return window['go']['main']['App']['SearchCronTasks'](arg1);
+}
+
+export function SearchFundCodes(arg1) {
+  return window['go']['main']['App']['SearchFundCodes'](arg1);
 }
 
 export function SearchStock(arg1) {

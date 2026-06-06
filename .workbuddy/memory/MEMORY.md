@@ -118,3 +118,10 @@
   - `ChatWithContext` 内部第二次配置查询也改为同样逻辑
   - `ai_handler.go`：`AgentChat` 和 `AITradeAnalyze` 调用时传入 `"", "", userIDStr`
 - **编译**：`go build ./web/...` ✅
+
+## Web端代码审查批量修复（2026-06-06）
+- **AuthRequired**：protected 组改用 `AuthRequired()`，所有业务接口必须登录；public 只保留 health
+- **路由整理**：`AgentChat`/`GetAIConfigs` 移到 protected；去掉重复路由
+- **addStockFollowData 共享**：提取到 `data/stock_follow_helper.go`，修复 Web 端缺少 `Groups` 字段
+- **统一 userID**：27 处 `if !exists { return }` 全部删除，统一为 `userID, _ := ...`
+- **设计原则**：Web 端所有功能需登录；公共数据（行情/市场）不按 userID 过滤；用户私有数据（持仓/交易/配置）按 userID 隔离

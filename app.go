@@ -13,7 +13,7 @@ import (
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
-	machineid "go-stock/backend/machineid"
+	"go-stock/backend/machineid"
 	"go-stock/backend/models"
 	"go-stock/backend/services"
 	"os"
@@ -27,7 +27,6 @@ import (
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/coocood/freecache"
 	"github.com/duke-git/lancet/v2/convertor"
 	"github.com/duke-git/lancet/v2/mathutil"
@@ -97,6 +96,15 @@ func (a *App) GetSponsorInfo() map[string]any {
 	return a.SponsorInfo
 }
 
+// GetEffectiveSponsorVip 从本地配置解密赞助信息并判断当前是否在 VIP 有效期内（与 ai-assistant-web / data.EffectiveSponsorVipLevel 一致）。
+func (a *App) GetEffectiveSponsorVip() map[string]any {
+	level, active := data.EffectiveSponsorVipLevel()
+	return map[string]any{
+		"vipLevel": level,
+		"active":   active,
+	}
+}
+
 func (a *App) GetMachineId() string {
 	return machineid.GetMachineId()
 }
@@ -150,15 +158,6 @@ func (a *App) QuitApp() {
 		runtime.Quit(a.ctx)
 	}
 }
-
-// GetEffectiveSponsorVip 从本地配置解密赞助信息并判断当前是否在 VIP 有效期内（与 ai-assistant-web / data.EffectiveSponsorVipLevel 一致）。
-func (a *App) GetEffectiveSponsorVip() map[string]any {
-	level, active := data.EffectiveSponsorVipLevel()
-	return map[string]any{
-		"vipLevel": level,
-		"active":   active,
-	}
-}
 func (a *App) CheckSponsorCode(sponsorCode string) map[string]any {
 	sponsorCode = strutil.Trim(sponsorCode)
 	if sponsorCode != "" {
@@ -200,7 +199,7 @@ func (a *App) CheckSponsorCode(sponsorCode string) map[string]any {
 			"msg":  "赞助码校验成功，感谢您的支持!",
 		}
 	} else {
-		return map[string]any{"code": 0, "msg": "赞助码不能为空,请输入正确的赞助码!"}
+		return map[string]any{"code": 0, "message": "赞助码不能为空,请输入正确的赞助码!"}
 	}
 }
 
@@ -230,23 +229,37 @@ func (a *App) CheckUpdate(flag int) {
 		updateChannel = "release"
 	}
 
+	githubApiHeaders := map[string]string{
+		"Accept":               "application/vnd.github+json",
+		"X-GitHub-Api-Version": "2022-11-28",
+	}
+
 	releaseVersion := &models.GitHubReleaseVersion{}
-	var err error
 	if updateChannel == "release" {
-		_, err = data.SharedHTTPClient.R().
+		resp, err := data.SharedHTTPClient.R().
+			SetHeaders(githubApiHeaders).
 			SetResult(releaseVersion).
 			Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases/latest")
 		if err != nil {
 			logger.SugaredLogger.Errorf("get github release version error:%s", err.Error())
 			return
 		}
+		if resp.StatusCode() != 200 {
+			logger.SugaredLogger.Errorf("get github release version failed, status:%d", resp.StatusCode())
+			return
+		}
 	} else {
 		var releases []models.GitHubReleaseVersion
-		_, err = data.SharedHTTPClient.R().
+		resp, err := data.SharedHTTPClient.R().
+			SetHeaders(githubApiHeaders).
 			SetResult(&releases).
 			Get("https://api.github.com/repos/ArvinLovegood/go-stock/releases")
 		if err != nil {
 			logger.SugaredLogger.Errorf("get github releases error:%s", err.Error())
+			return
+		}
+		if resp.StatusCode() != 200 {
+			logger.SugaredLogger.Errorf("get github releases failed, status:%d", resp.StatusCode())
 			return
 		}
 		if len(releases) == 0 {
@@ -267,7 +280,6 @@ func (a *App) CheckUpdate(flag int) {
 			releaseVersion = &releases[0]
 		}
 	}
-	//logger.SugaredLogger.Infof("releaseVersion:%+v", releaseVersion.TagName)
 
 	if _, vipLevel, ok := a.isVip(sponsorCode, "", releaseVersion); ok {
 		level, _ := convertor.ToInt(vipLevel)
@@ -279,56 +291,119 @@ func (a *App) CheckUpdate(flag int) {
 
 	if releaseVersion.TagName != Version {
 		tag := &models.Tag{}
-		_, err = data.SharedHTTPClient.R().
+		tagResp, tagErr := data.SharedHTTPClient.R().
+			SetHeaders(githubApiHeaders).
 			SetResult(tag).
 			Get("https://api.github.com/repos/ArvinLovegood/go-stock/git/ref/tags/" + releaseVersion.TagName)
-		if err == nil {
+		if tagErr == nil && tagResp.StatusCode() == 200 && tag.Object.Url != "" {
 			releaseVersion.Tag = *tag
+			commit := &models.Commit{}
+			commitResp, commitErr := data.SharedHTTPClient.R().
+				SetHeaders(githubApiHeaders).
+				SetResult(commit).
+				Get(tag.Object.Url)
+			if commitErr == nil && commitResp.StatusCode() == 200 {
+				releaseVersion.Commit = *commit
+			}
 		}
 
-		commit := &models.Commit{}
-		_, err = data.SharedHTTPClient.R().
-			SetResult(commit).
-			Get(tag.Object.Url)
-		if err == nil {
-			releaseVersion.Commit = *commit
+		commitMessage := releaseVersion.Body
+		if releaseVersion.Commit.Message != "" {
+			commitMessage = releaseVersion.Commit.Message
 		}
 
-		// 构建下载链接
-		downloadUrl := fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-windows-amd64.exe", releaseVersion.TagName)
-		if IsMacOS() {
-			downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-darwin-universal", releaseVersion.TagName)
+		downloadUrl := ""
+		assetName := ""
+		if IsWindows() {
+			if IsArm64() {
+				assetName = "go-stock-windows-arm64.exe"
+			} else {
+				assetName = "go-stock-windows-amd64.exe"
+			}
+		} else if IsMacOS() {
+			assetName = "go-stock-darwin-universal"
 		} else if IsLinux() {
-			downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-linux-amd64", releaseVersion.TagName)
+			assetName = "go-stock-linux-amd64"
 		}
-		downloadUrl, _, done := a.isVip(sponsorCode, downloadUrl, releaseVersion)
-		if !done {
-			return
+
+		for _, asset := range releaseVersion.Assets {
+			if asset.Name == assetName {
+				downloadUrl = asset.BrowserDownloadUrl
+				break
+			}
 		}
+
+		if downloadUrl == "" {
+			downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/%s", releaseVersion.TagName, assetName)
+		}
+
+		originalDownloadUrl := downloadUrl
+		downloadUrl, _, _ = a.isVip(sponsorCode, downloadUrl, releaseVersion)
+		mirrorDownloadUrl := "https://gh.927223.xyz/" + originalDownloadUrl
+		manualDownloadTip := fmt.Sprintf("\n手动下载链接(加速镜像): %s\n手动下载链接(原始地址): %s\n下载后请替换当前程序文件即可完成更新。", mirrorDownloadUrl, originalDownloadUrl)
+
 		go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
 			"time":    "发现新版本：" + releaseVersion.TagName,
 			"isRed":   true,
 			"source":  "go-stock",
-			"content": fmt.Sprintf("%s", commit.Message),
+			"content": commitMessage + "\n正在下载新版本，请耐心等待...",
 		})
-		resp, err := data.SharedHTTPClient.R().Get(downloadUrl)
+
+		tmpFile, err := os.CreateTemp("", "go-stock-update-*.tmp")
 		if err != nil {
+			logger.SugaredLogger.Errorf("create temp file error: %s", err.Error())
 			go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
 				"time":    "新版本：" + releaseVersion.TagName,
 				"isRed":   true,
 				"source":  "go-stock",
-				"content": commit.Message + "\n新版本下载失败,请稍后重试或请前往 https://github.com/ArvinLovegood/go-stock/releases 手动下载替换文件。",
+				"content": commitMessage + "\n新版本下载失败(无法创建临时文件)。" + manualDownloadTip,
 			})
 			return
 		}
-		body := resp.Body()
+		tmpPath := tmpFile.Name()
+		tmpFile.Close()
+		defer os.Remove(tmpPath)
 
-		if len(body) < 1024*500 {
+		downloadClient := data.CreateDownloadClient()
+
+		downloadUrls := []string{mirrorDownloadUrl, downloadUrl}
+		var downloadSuccess bool
+		for _, url := range downloadUrls {
+			_, err = downloadClient.R().
+				SetHeader("User-Agent", "go-stock-updater").
+				SetOutput(tmpPath).
+				Get(url)
+			if err != nil {
+				logger.SugaredLogger.Warnf("download from %s error: %s, trying next...", url, err.Error())
+				continue
+			}
+			fileInfo, statErr := os.Stat(tmpPath)
+			if statErr != nil || fileInfo.Size() < 1024*500 {
+				logger.SugaredLogger.Warnf("download from %s file size invalid, trying next...", url)
+				continue
+			}
+			downloadSuccess = true
+			break
+		}
+
+		if !downloadSuccess {
 			go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
 				"time":    "新版本：" + releaseVersion.TagName,
 				"isRed":   true,
 				"source":  "go-stock",
-				"content": commit.Message + "\n新版本下载失败,请稍后重试或请前往 https://github.com/ArvinLovegood/go-stock/releases 手动下载替换文件。",
+				"content": commitMessage + "\n新版本自动下载失败，请手动下载更新。" + manualDownloadTip,
+			})
+			return
+		}
+
+		body, err := os.ReadFile(tmpPath)
+		if err != nil {
+			logger.SugaredLogger.Errorf("read downloaded file error: %s", err.Error())
+			go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
+				"time":    "新版本：" + releaseVersion.TagName,
+				"isRed":   true,
+				"source":  "go-stock",
+				"content": commitMessage + "\n新版本下载失败(无法读取临时文件)。" + manualDownloadTip,
 			})
 			return
 		}
@@ -336,7 +411,14 @@ func (a *App) CheckUpdate(flag int) {
 		err = update.Apply(bytes.NewReader(body), update.Options{})
 		if err != nil {
 			logger.SugaredLogger.Error("更新失败: ", err.Error())
-			go runtime.EventsEmit(a.ctx, "updateVersion", releaseVersion)
+			if !IsRunningAsAdmin() {
+				go runtime.EventsEmit(a.ctx, "updateNeedAdmin", map[string]any{
+					"version": releaseVersion.TagName,
+					"message": commitMessage,
+				})
+			} else {
+				go runtime.EventsEmit(a.ctx, "updateVersion", releaseVersion)
+			}
 			return
 		} else {
 			go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
@@ -394,20 +476,24 @@ func (a *App) isVip(sponsorCode string, downloadUrl string, releaseVersion *mode
 		}
 
 		if IsWindows() {
+			winAssetName := "go-stock-windows-amd64.exe"
+			if IsArm64() {
+				winAssetName = "go-stock-windows-arm64.exe"
+			}
 			if isVip {
 				if a.SponsorInfo["winDownUrl"] == nil {
-					downloadUrl = fmt.Sprintf("https://gitproxy.click/https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-windows-amd64.exe", releaseVersion.TagName)
+					downloadUrl = fmt.Sprintf("https://gh.927223.xyz/https://github.com/ArvinLovegood/go-stock/releases/download/%s/%s", releaseVersion.TagName, winAssetName)
 				} else {
 					downloadUrl = a.SponsorInfo["winDownUrl"].(string)
 				}
 			} else {
-				downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-windows-amd64.exe", releaseVersion.TagName)
+				downloadUrl = fmt.Sprintf("https://github.com/ArvinLovegood/go-stock/releases/download/%s/%s", releaseVersion.TagName, winAssetName)
 			}
 		}
 		if IsMacOS() {
 			if isVip {
 				if a.SponsorInfo["macDownUrl"] == nil {
-					downloadUrl = fmt.Sprintf("https://gitproxy.click/https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-darwin-universal", releaseVersion.TagName)
+					downloadUrl = fmt.Sprintf("https://gh.927223.xyz/https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-darwin-universal", releaseVersion.TagName)
 				} else {
 					downloadUrl = a.SponsorInfo["macDownUrl"].(string)
 				}
@@ -418,7 +504,7 @@ func (a *App) isVip(sponsorCode string, downloadUrl string, releaseVersion *mode
 		if IsLinux() {
 			if isVip {
 				if a.SponsorInfo["linuxDownUrl"] == nil {
-					downloadUrl = fmt.Sprintf("https://gitproxy.click/https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-linux-amd64", releaseVersion.TagName)
+					downloadUrl = fmt.Sprintf("https://gh.927223.xyz/https://github.com/ArvinLovegood/go-stock/releases/download/%s/go-stock-linux-amd64", releaseVersion.TagName)
 				} else {
 					downloadUrl = a.SponsorInfo["linuxDownUrl"].(string)
 				}
@@ -696,17 +782,16 @@ func (a *App) domReady(ctx context.Context) {
 	//检查新版本
 	go func() {
 		a.CheckUpdate(0)
-		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
-			logger.SugaredLogger.Errorf("Checking for updates...")
-			a.CheckUpdate(0)
-		})
-
 		go a.CheckStockBaseInfo(a.ctx)
 		go syncAllStockInfo(a.ctx)
 
 		a.cron.AddFunc("0 0 2 * * *", func() {
 			logger.SugaredLogger.Errorf("Checking for updates...")
 			a.CheckStockBaseInfo(a.ctx)
+		})
+		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
+			logger.SugaredLogger.Errorf("Checking for updates...")
+			a.CheckUpdate(0)
 		})
 		a.cron.AddFunc("30 05 8,12,20 * * *", func() {
 			syncAllStockInfo(a.ctx)
@@ -907,24 +992,42 @@ func (a *App) AddCronTask(follow data.FollowedStock) func() {
 }
 
 func refreshTelegraphList() *[]string {
-	url := "https://www.cls.cn/telegraph"
+	clsURL := "https://www.cls.cn/api/cache?app=CailianpressWeb&name=telegraph&os=web&sv=8.7.9"
 	response, err := data.SharedHTTPClient.R().
 		SetHeader("Referer", "https://www.cls.cn/").
-		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
-		Get(url)
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0").
+		Get(clsURL)
 	if err != nil {
 		return &[]string{}
 	}
-	//logger.SugaredLogger.Info(string(response.Body()))
-	document, err := goquery.NewDocumentFromReader(strings.NewReader(string(response.Body())))
-	if err != nil {
+	res := map[string]any{}
+	if err := json.Unmarshal(response.Body(), &res); err != nil {
 		return &[]string{}
 	}
 	var telegraph []string
-	document.Find("div.telegraph-content-box").Each(func(i int, selection *goquery.Selection) {
-		//logger.SugaredLogger.Info(selection.Text())
-		telegraph = append(telegraph, selection.Text())
-	})
+	if v, _ := convertor.ToInt(res["errno"]); v == 0 {
+		if res["data"] == nil {
+			return &[]string{}
+		}
+		dataMap, ok := res["data"].(map[string]any)
+		if !ok {
+			return &[]string{}
+		}
+		rollData, ok := dataMap["roll_data"].([]any)
+		if !ok {
+			return &[]string{}
+		}
+		for _, v := range rollData {
+			news, ok := v.(map[string]any)
+			if !ok {
+				continue
+			}
+			content, _ := news["content"].(string)
+			if content != "" {
+				telegraph = append(telegraph, content)
+			}
+		}
+	}
 	return &telegraph
 }
 
@@ -960,8 +1063,6 @@ func isTradingDay(date time.Time) bool {
 }
 
 func checkHolidayAPI(date string) (isHoliday bool, apiOk bool) {
-	client := data.SharedHTTPClient
-	client.SetTimeout(3 * time.Second)
 	type holidayResp struct {
 		Code    int `json:"code"`
 		Holiday struct {
@@ -970,7 +1071,7 @@ func checkHolidayAPI(date string) (isHoliday bool, apiOk bool) {
 		} `json:"holiday"`
 	}
 	var result holidayResp
-	resp, err := client.R().SetResult(&result).Get(fmt.Sprintf("https://timor.tech/api/holiday/info/%s", date))
+	resp, err := data.SharedHTTPClient.R().SetResult(&result).Get(fmt.Sprintf("https://timor.tech/api/holiday/info/%s", date))
 	if err != nil || resp.StatusCode() != 200 {
 		return false, false
 	}
@@ -1083,8 +1184,6 @@ func isHKTradingDay(date time.Time) bool {
 }
 
 func checkHKHolidayAPI(date string) (isHoliday bool, apiOk bool) {
-	client := data.SharedHTTPClient
-	client.SetTimeout(5 * time.Second)
 	type klineResp struct {
 		Data struct {
 			Klines []string `json:"klines"`
@@ -1093,7 +1192,7 @@ func checkHKHolidayAPI(date string) (isHoliday bool, apiOk bool) {
 	var result klineResp
 	dateClean := strings.ReplaceAll(date, "-", "")
 	apiURL := fmt.Sprintf("https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=100.HSI&fields1=f1&fields2=f51&klt=101&fqt=0&beg=%s&end=%s", dateClean, dateClean)
-	resp, err := client.R().SetResult(&result).Get(apiURL)
+	resp, err := data.SharedHTTPClient.R().SetResult(&result).Get(apiURL)
 	if err != nil || resp.StatusCode() != 200 {
 		return false, false
 	}
@@ -1163,8 +1262,6 @@ func isUSTradingDay(estTime time.Time) bool {
 }
 
 func checkUSHolidayAPI(date string) (isHoliday bool, apiOk bool) {
-	client := data.SharedHTTPClient
-	client.SetTimeout(5 * time.Second)
 	type usHolidayResp struct {
 		IsHoliday    bool   `json:"is_holiday"`
 		IsEarlyClose bool   `json:"is_early_close"`
@@ -1173,7 +1270,7 @@ func checkUSHolidayAPI(date string) (isHoliday bool, apiOk bool) {
 	}
 	var result usHolidayResp
 	apiURL := fmt.Sprintf("https://fincalapi.com/v1/day_status?calendar=NYSE&date=%s", date)
-	resp, err := client.R().SetResult(&result).Get(apiURL)
+	resp, err := data.SharedHTTPClient.R().SetResult(&result).Get(apiURL)
 	if err != nil || resp.StatusCode() != 200 {
 		return false, false
 	}
@@ -1647,6 +1744,16 @@ func (a *App) SendDingDingMessageByType(message string, stockCode string, msgTyp
 }
 
 func (a *App) NewChatStream(stock, stockCode, question string, aiConfigId int, sysPromptId *int, enableTools bool, think bool) {
+	defer func() {
+		if err := recover(); err != nil {
+			logger.SugaredLogger.Errorf("NewChatStream panic: %v", err)
+			runtime.EventsEmit(a.ctx, "newChatStream", map[string]any{
+				"code":    0,
+				"content": fmt.Sprintf("AI分析异常: %v", err),
+			})
+			runtime.EventsEmit(a.ctx, "newChatStream", "DONE")
+		}
+	}()
 	var msgs <-chan map[string]any
 	if enableTools {
 		msgs = data.NewDeepSeekOpenAi(a.ctx, aiConfigId).NewChatStream(stock, stockCode, question, sysPromptId, a.AiTools, think)
@@ -1825,7 +1932,7 @@ func (a *App) ShareAnalysis(stockCode, stockName string) string {
 	if res != nil && len(res.Content) > 100 {
 		analysisTime := res.CreatedAt.Format("2006/01/02")
 		//logger.SugaredLogger.Infof("%s analysisTime:%s", res.CreatedAt, analysisTime)
-		response, err := data.SharedHTTPClient.SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
+		response, err := data.SharedHTTPClient.R().SetHeader("ua-x", "go-stock").SetFormData(map[string]string{
 			"text":         res.Content,
 			"stockCode":    stockCode,
 			"stockName":    stockName,
@@ -1851,7 +1958,7 @@ func (a *App) ShareText(text, title string) string {
 		title = "AI助手"
 	}
 	analysisTime := time.Now().Format("2006/01/02")
-	response, err := data.SharedHTTPClient.SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
+	response, err := data.SharedHTTPClient.R().SetHeader("ua-x", "go-stock").SetFormData(map[string]string{
 		"text":         text,
 		"stockCode":    title,
 		"stockName":    title,
@@ -1892,16 +1999,19 @@ func (a *App) GetFundTop10Holdings(fundCode string) []data.FundHoldingStock {
 	}
 	return res
 }
-
 func (a *App) GetFundRanking(marketType, fundType, sortField, sortOrder string, pageIndex, pageSize int) *data.FundRankingResult {
 	res, err := data.NewFundApi().GetFundRanking(marketType, fundType, sortField, sortOrder, pageIndex, pageSize)
-	if err != nil {
-		logger.SugaredLogger.Errorf("GetFundRanking error: %v", err)
+	if err != nil || res == nil {
 		return &data.FundRankingResult{}
 	}
 	return res
 }
-
+func (a *App) SearchFundCodes(keyword string) []data.FundSearchItem {
+	return data.NewFundApi().SearchFundCodes(keyword)
+}
+func (a *App) GetFollowedFundPaged(pageIndex, pageSize int, keyword string) *data.FollowedFundPagedResult {
+	return data.NewFundApi().GetFollowedFundPaged(pageIndex, pageSize, keyword)
+}
 func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
 	res := data.NewDeepSeekOpenAi(a.ctx, 0).GetAIResponseResult(stockCode)
 	if res != nil && len(res.Content) > 100 {
@@ -2400,10 +2510,10 @@ func (a *App) FetchAiModels(baseUrl, apiKey string) []string {
 
 	client := data.SharedHTTPClient
 	client.SetBaseURL(baseUrl)
-	client.SetHeader("Authorization", "Bearer "+apiKey)
-	client.SetHeader("Content-Type", "application/json")
 
 	resp, err := client.R().
+		SetHeader("Authorization", "Bearer "+apiKey).
+		SetHeader("Content-Type", "application/json").
 		SetResult(&respData).
 		Get("/models")
 	if err != nil {
@@ -2455,11 +2565,10 @@ func (a *App) FetchAiModelInfo(baseUrl, apiKey, modelName string) *AiModelInfo {
 
 		client := data.SharedHTTPClient
 		client.SetBaseURL(baseUrl)
-		client.SetHeader("Authorization", "Bearer "+apiKey)
-		client.SetHeader("Content-Type", "application/json")
-		client.SetTimeout(10 * time.Second)
 
 		resp, err := client.R().
+			SetHeader("Authorization", "Bearer "+apiKey).
+			SetHeader("Content-Type", "application/json").
 			SetResult(&detail).
 			Get("/models/" + modelName)
 

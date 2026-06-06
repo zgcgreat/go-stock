@@ -1,7 +1,16 @@
 <script setup>
-import {h, onBeforeMount, onBeforeUnmount, onMounted, ref, watch, computed} from "vue";
-import {RouterLink, useRouter, useRoute} from 'vue-router'
-import {createDiscreteApi, darkTheme, lightTheme, NIcon, NText, NButton, dateZhCN, zhCN} from 'naive-ui'
+import {
+  EventsEmit,
+  EventsOff,
+  EventsOn,
+  Quit,Hide ,
+  WindowFullscreen,
+  WindowUnfullscreen,
+  WindowSetTitle
+} from '../wailsjs/runtime'
+import {h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
+import {RouterLink, useRouter} from 'vue-router'
+import {createDiscreteApi,darkTheme,lightTheme , NIcon, NText,NButton,dateZhCN,zhCN} from 'naive-ui'
 import {
   AlarmOutline,
   AnalyticsOutline,
@@ -12,40 +21,27 @@ import {
   ChatbubblesOutline,
   NewspaperOutline,
   NewspaperSharp, Notifications,
-  PeopleOutline,
   PowerOutline, Pulse,
   ReorderTwoOutline,
   SettingsOutline, ServerOutline, Skull, SkullOutline, SkullSharp,
   SparklesOutline, FlashOutline, Star,
   StarOutline,
+  StatsChartOutline,
   Wallet, WarningOutline, TimeOutline, SearchOutline,
-  LogOutOutline
 } from '@vicons/ionicons5'
-import {AnalyzeSentiment, GetConfig, GetGroupList, GetVersionInfo} from "../wailsjs/go/main/App";
+import {AnalyzeSentiment, GetConfig, GetGroupList, GetVersionInfo, IsTradingTime, IsHKTradingTime, IsUSTradingTime} from "../wailsjs/go/main/App";
 import FloatingAiAssistant from "./components/FloatingAiAssistant.vue";
 import FloatingAgentAssistant from "./components/FloatingAgentAssistant.vue";
-import WebLayout from "./components/layout/WebLayout.vue";
-import { useIsWebMode } from "./composables/useResponsive.js";
 import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
 import {Prompt, ReportAnalytics, ReportMoney, ReportSearch, TrendingUp} from "@vicons/tabler";
 import {LocalFireDepartmentRound} from "@vicons/material";
 import {AppsList20Regular, BoxSearch20Regular,SlideHide24Filled, CommentNote20Filled} from "@vicons/fluent";
 import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} from "@vicons/antd";
-import apiService from './services/api.js'
-import {
-  EventsEmit as WailsBridgeEventsEmit,
-  EventsOn as WailsBridgeEventsOn,
-  EventsOff as WailsBridgeEventsOff,
-  IsTradingTime as WebIsTradingTime,
-  WindowFullscreen,
-  WindowUnfullscreen,
-  WindowSetTitle,
-  Quit,
-  Hide
-} from './services/wails-bridge.js'
+
+
+
 
 const router = useRouter()
-const route = useRoute()
 const loading = ref(true)
 const loadingMsg = ref("加载数据中...")
 const enableNews = ref(false)
@@ -53,22 +49,16 @@ const contentStyle = ref("")
 const enableFund = ref(false)
 const enableAgent = ref(false)
 const enableDarkTheme = ref(null)
-const content = ref('数据来源于网络,仅供参考;投资有风险,入市需谨慎')
+const content = ref('未经授权,禁止商业目的!\n\n数据来源于网络,仅供参考;投资有风险,入市需谨慎')
 const isFullscreen = ref(false)
 const activeKey = ref('stock')
 const containerRef = ref({})
 const realtimeProfit = ref(0)
 const telegraph = ref([])
 const groupList = ref([])
-const config = ref({})
-const isWebMode = ref(true)
-const officialStatement = ref("")
+const officialStatement= ref("")
 const marketStatus = ref('')
 let marketStatusTimer = null
-
-// Web 模式检测（用于响应式布局）
-const { isWebMode: isWebModeDetected } = useIsWebMode()
-const useNewLayout = computed(() => isWebMode.value && isWebModeDetected.value)
 
 const investmentMottos = [
   "投资有风险，入市需谨慎",
@@ -99,26 +89,15 @@ function refreshMotto() {
 }
 
 function updateMarketStatus() {
-  // Web 模式下显示休市，桌面端检查交易时间
-  const getMarketStatus = async () => {
-    if (!window.go) return ['A股休市', '港股休市', '美股休市']
-    try {
-      const app = await import("../wailsjs/go/main/App")
-      const [cn, hk, us] = await Promise.all([
-        app.IsTradingTime().catch(() => false),
-        app.IsHKTradingTime().catch(() => false),
-        app.IsUSTradingTime().catch(() => false)
-      ])
-      return [
-        cn ? 'A股交易中' : 'A股休市',
-        hk ? '港股交易中' : '港股休市',
-        us ? '美股交易中' : '美股休市'
-      ]
-    } catch {
-      return ['A股休市', '港股休市', '美股休市']
-    }
-  }
-  getMarketStatus().then(parts => {
+  Promise.all([
+    IsTradingTime().catch(() => false),
+    IsHKTradingTime().catch(() => false),
+    IsUSTradingTime().catch(() => false)
+  ]).then(([cn, hk, us]) => {
+    const parts = []
+    parts.push(cn ? 'A股交易中' : 'A股休市')
+    parts.push(hk ? '港股交易中' : '港股休市')
+    parts.push(us ? '美股交易中' : '美股休市')
     marketStatus.value = parts.join(' | ')
     WindowSetTitle("go-stock " + marketStatus.value + " " + officialStatement.value + "  「" + currentMotto.value + "」  [数据来源于网络，仅供参考；投资有风险，入市需谨慎]")
   })
@@ -163,7 +142,7 @@ const menuOptions = ref([
                         groupId: 0,
                       },
                     })
-                    WailsBridgeEventsEmit("changeTab", {ID: 0, name: '全部'})
+                    EventsEmit("changeTab", {ID: 0, name: '全部'})
                   },
                   to: {
                     name: 'stock',
@@ -191,7 +170,7 @@ const menuOptions = ref([
               },
               onClick: () => {
                 activeKey.value = 'market'
-                WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
+                EventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
               },
             },
             {default: () => '市场行情'}
@@ -213,7 +192,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '市场快讯'})
                   },
                 },
                 {default: () => '市场快讯',}
@@ -235,7 +214,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '全球股指'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '全球股指'})
                   },
                 },
                 {default: () => '全球股指',}
@@ -257,7 +236,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '重大指数'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '重大指数'})
                   },
                 },
                 {default: () => '重大指数',}
@@ -279,7 +258,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '行业排名'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '行业排名'})
                   },
                 },
                 {default: () => '行业排名',}
@@ -301,7 +280,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '个股资金流向'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '个股资金流向'})
                   },
                 },
                 {default: () => '个股资金流向',}
@@ -323,7 +302,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '龙虎榜'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '龙虎榜'})
                   },
                 },
                 {default: () => '龙虎榜',}
@@ -345,7 +324,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '个股研报'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '个股研报'})
                   },
                 },
                 {default: () => '个股研报',}
@@ -367,7 +346,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '公司公告'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '公司公告'})
                   },
                 },
                 {default: () => '公司公告',}
@@ -389,7 +368,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '行业研究'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '行业研究'})
                   },
                 },
                 {default: () => '行业研究',}
@@ -411,7 +390,7 @@ const menuOptions = ref([
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '当前热门'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '当前热门'})
                   },
                 },
                 {default: () => '当前热门',}
@@ -428,42 +407,37 @@ const menuOptions = ref([
                   to: {
                     name: 'market',
                     query: {
-                      name: "指标选股",
-                    }
-                  },
-                  onClick: () => {
-                    activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '指标选股'})
-                  },
-                },
-                {default: () => '指标选股',}
-            ),
-        key: 'market11',
-        icon: renderIcon(BoxSearch20Regular),
-      },
-      {
-        label: () =>
-            h(
-                RouterLink,
-                {
-                  href: '#',
-                  to: {
-                    name: 'market',
-                    query: {
                       name: "名站优选",
                     }
                   },
                   onClick: () => {
                     activeKey.value = 'market'
-                    WailsBridgeEventsEmit("changeMarketTab", {ID: 0, name: '名站优选'})
+                    EventsEmit("changeMarketTab", {ID: 0, name: '名站优选'})
                   },
                 },
                 {default: () => '名站优选',}
             ),
-        key: 'market12',
+        key: 'market11',
         icon: renderIcon(FirefoxBrowser),
       },
     ]
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'klineAnalysis',
+              },
+              onClick: () => {
+                activeKey.value = 'klineAnalysis'
+              },
+            },
+            {default: () => 'K线分析'}
+        ),
+    key: 'klineAnalysis',
+    icon: renderIcon(StatsChartOutline),
   },
   {
     label: () =>
@@ -487,10 +461,20 @@ const menuOptions = ref([
     icon: renderIcon(SparklesOutline),
     children: [
       {
-        label: () => h(NText, {type: realtimeProfit.value > 0 ? 'error' : 'success'}, {default: () => '功能完善中！'}),
-        key: 'realtimeProfit',
-        show: realtimeProfit.value,
-        icon: renderIcon(AlarmOutline),
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  to: {name: 'fund', query: {name: '基金自选'}},
+                  onClick: () => {
+                    activeKey.value = 'fund'
+                    EventsEmit("changeFundTab", {name: '基金自选'})
+                  },
+                },
+                {default: () => '基金自选'}
+            ),
+        key: 'fundFollow',
+        icon: renderIcon(StarOutline),
       },
       {
         label: () =>
@@ -500,7 +484,7 @@ const menuOptions = ref([
                   to: {name: 'fund', query: {name: '基金排行'}},
                   onClick: () => {
                     activeKey.value = 'fund'
-                    WailsBridgeEventsEmit("changeFundTab", {name: '基金排行'})
+                    EventsEmit("changeFundTab", {name: '基金排行'})
                   },
                 },
                 {default: () => '基金排行'}
@@ -545,7 +529,7 @@ const menuOptions = ref([
                 onClick: () => {
                   activeKey.value = 'research'
                   setTimeout(() => {
-                    WailsBridgeEventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
+                    EventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
                   }, 100)
                 },
               },
@@ -568,7 +552,7 @@ const menuOptions = ref([
                       onClick: () => {
                         activeKey.value = 'research'
                         setTimeout(() => {
-                          WailsBridgeEventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
+                          EventsEmit("changeResearchTab", {ID: 0, name: 'AI分析报告'})
                         }, 100)
                       },
                     },
@@ -591,7 +575,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 1, name: '股票推荐记录'})
+                        EventsEmit("changeResearchTab", {ID: 1, name: '股票推荐记录'})
                       }, 100)
                     },
                   },
@@ -614,7 +598,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 2, name: '异动监控'})
+                        EventsEmit("changeResearchTab", {ID: 2, name: '异动监控'})
                       }, 100)
                     },
                   },
@@ -637,7 +621,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 9, name: '涨停梯队'})
+                        EventsEmit("changeResearchTab", {ID: 9, name: '涨停梯队'})
                       }, 100)
                     },
                   },
@@ -660,7 +644,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 3, name: '提示词模板'})
+                        EventsEmit("changeResearchTab", {ID: 3, name: '提示词模板'})
                       }, 100)
                     },
                   },
@@ -683,7 +667,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 10, name: '提示词广场'})
+                        EventsEmit("changeResearchTab", {ID: 10, name: '提示词广场'})
                       }, 100)
                     },
                   },
@@ -706,7 +690,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 11, name: '问答广场'})
+                        EventsEmit("changeResearchTab", {ID: 11, name: '问答广场'})
                       }, 100)
                     },
                   },
@@ -729,7 +713,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 3, name: '形态选股'})
+                        EventsEmit("changeResearchTab", {ID: 3, name: '形态选股'})
                       }, 100)
                     },
                   },
@@ -752,7 +736,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 0, name: '指标选股'})
+                        EventsEmit("changeResearchTab", {ID: 0, name: '指标选股'})
                       }, 100)
                     },
                   },
@@ -775,7 +759,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 5, name: '定时任务'})
+                        EventsEmit("changeResearchTab", {ID: 5, name: '定时任务'})
                       }, 100)
                     },
                   },
@@ -798,7 +782,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 6, name: '交易日志'})
+                        EventsEmit("changeResearchTab", {ID: 6, name: '交易日志'})
                       }, 100)
                     },
                   },
@@ -818,7 +802,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 7, name: 'MCP服务'})
+                        EventsEmit("changeResearchTab", {ID: 7, name: 'MCP服务'})
                       }, 100)
                     },
                   },
@@ -838,7 +822,7 @@ const menuOptions = ref([
                     onClick: () => {
                       activeKey.value = 'research'
                       setTimeout(() => {
-                        WailsBridgeEventsEmit("changeResearchTab", {ID: 8, name: '技能管理'})
+                        EventsEmit("changeResearchTab", {ID: 8, name: '技能管理'})
                       }, 100)
                     },
                   },
@@ -871,14 +855,6 @@ const menuOptions = ref([
     icon: renderIcon(SettingsOutline),
   },
   {
-    label: () => h(RouterLink, {
-      to: {name: 'userManagement'},
-    }, {default: () => '用户管理'}),
-    key: 'admin',
-    show: false,
-    icon: renderIcon(PeopleOutline),
-  },
-  {
     label: () =>
         h(
             RouterLink,
@@ -897,6 +873,7 @@ const menuOptions = ref([
         ),
     key: 'about',
     icon: renderIcon(LogoGithub),
+    show: true,
   },
   {
     show:false,
@@ -920,13 +897,12 @@ const menuOptions = ref([
   {
     label: () => h("a", {
       href: '#',
-      onClick: isWebMode.value ? handleLogout : Hide,
-    }, {default: () => isWebMode.value ? '退出登录' : '隐藏至托盘区'}),
-    key: isWebMode.value ? 'logout' : 'hide',
-    icon: renderIcon(isWebMode.value ? LogOutOutline : SlideHide24Filled),
+      onClick: Hide,
+    }, {default: () => '隐藏至托盘区'}),
+    key: 'hide',
+    icon: renderIcon(SlideHide24Filled),
   },
   {
-    show: !isWebMode.value,
     label: () => h("a", {
       href: '#',
       onClick: Quit,
@@ -940,200 +916,218 @@ function renderIcon(icon) {
   return () => h(NIcon, null, {default: () => h(icon)})
 }
 
-function handleMenuSelect(key) {
-  activeKey.value = key
-}
-
 function toggleFullscreen(e) {
   activeKey.value = 'full'
+  //console.log(e)
   if (isFullscreen.value) {
-    if (document.exitFullscreen) document.exitFullscreen()
+    WindowUnfullscreen()
+    //e.target.innerHTML = '全屏'
   } else {
-    document.documentElement.requestFullscreen()
+    WindowFullscreen()
+    // e.target.innerHTML = '取消全屏'
   }
   isFullscreen.value = !isFullscreen.value
 }
 
-function handleLogout() {
-  localStorage.removeItem('token')
-  router.push('/login')
-}
+// const drag = ref(false)
+// const lastPos= ref({x:0,y:0})
+// function toggleStartMoveWindow(e) {
+//   drag.value=!drag.value
+//   lastPos.value={x:e.clientX,y:e.clientY}
+// }
+// function dragstart(e) {
+//   if (drag.value) {
+//     let x=e.clientX-lastPos.value.x
+//     let y=e.clientY-lastPos.value.y
+//     WindowGetPosition().then((pos) => {
+//       WindowSetPosition(pos.x+x,pos.y+y)
+//     })
+//   }
+// }
+// window.addEventListener('mousemove', dragstart)
 
-function handleQuit() {
-  if (isWebMode.value) {
-    window.close()
-  }
-}
+EventsOn("realtime_profit", (data) => {
+  realtimeProfit.value = data
+})
+EventsOn("telegraph", (data) => {
+  telegraph.value = data
+})
 
-// 加载配置
-async function loadConfig() {
-  if (!localStorage.getItem('token')) return
-  try {
-    const res = await apiService.getUserSettings()
-    if (res && res.data) {
-      config.value = res.data
-      enableFund.value = res.data.enableFund !== false
-      enableAgent.value = res.data.enableAgent !== false
-      enableNews.value = res.data.enableNews !== false
-      if (res.data.darkTheme) {
-        enableDarkTheme.value = darkTheme
-      } else {
-        enableDarkTheme.value = null
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load config:', e)
-    enableFund.value = true
-    enableAgent.value = true
-    enableNews.value = true
+EventsOn("loadingMsg", (data) => {
+  if(data==="done"){
+    loadingMsg.value = "加载完成..."
+    EventsEmit("loadingDone", "app")
+    loading.value  = false
+  }else{
+    loading.value  = true
+    loadingMsg.value = data
   }
-}
+})
+
+setTimeout(() => {
+  if (loading.value) {
+    loading.value = false
+    loadingMsg.value = "加载完成..."
+    EventsEmit("loadingDone", "app")
+  }
+}, 8000)
 
 onBeforeUnmount(() => {
   if (marketStatusTimer) {
     clearInterval(marketStatusTimer)
     marketStatusTimer = null
   }
-  WailsBridgeEventsOff("realtime_profit")
-  WailsBridgeEventsOff("loadingMsg")
-  WailsBridgeEventsOff("telegraph")
-  WailsBridgeEventsOff("newsPush")
+  EventsOff("realtime_profit")
+  EventsOff("loadingMsg")
+  EventsOff("telegraph")
+  EventsOff("newsPush")
 })
 
-// 加载分组列表
-async function loadGroupList() {
-  if (!localStorage.getItem('token')) return
-  try {
-    const res = await apiService.client.get('/groups')
-    if (res.data && res.data.code === 0) {
-      const data = res.data.data
-      const list = Array.isArray(data) ? data : (data?.list || [])
-      groupList.value = list
-      if (list.length > 0) {
-        updateMenuWithGroups()
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load groups:', e)
-  }
-}
-
-function updateMenuWithGroups() {
-  menuOptions.value.forEach((item) => {
-    if (item.key === 'stock') {
-      // 确保 children 是数组
-      if (!Array.isArray(item.children)) {
-        item.children = []
-      }
-      const existingKeys = item.children.map(c => c.key);
-      (groupList.value || []).forEach(g => {
-        if (!existingKeys.includes(g.ID)) {
-          item.children.push({
-            label: () => h('a', {
-              href: '#',
-              type: 'info',
-              onClick: () => {
-                router.push({name: 'stock', query: {groupName: g.name, groupId: g.ID}})
-                setTimeout(() => {
-                  window.dispatchEvent(new CustomEvent('changeTab', {detail: g}))
-                }, 100)
-              },
-            }, {default: () => g.name}),
-            key: g.ID,
-          })
-        }
-      })
-    }
-  })
-}
+window.onerror = function (msg, source, lineno, colno, error) {
+  // 将错误信息发送给后端
+  EventsEmit("frontendError", {
+    page: "App.vue",
+    message: msg,
+    source: source,
+    lineno: lineno,
+    colno: colno,
+    error: error ? error.stack : null,
+  });
+  return true;
+};
 
 onBeforeMount(() => {
   GetVersionInfo().then(result => {
     if(result.officialStatement){
       content.value = result.officialStatement+"\n\n"+content.value
-      officialStatement.value = result.officialStatement
-      if (!isWebMode.value) {
-        updateMarketStatus()
-      }
     }
     officialStatement.value = result.officialStatement || ""
     updateMarketStatus()
-  })
-})
-
-// 监听路由变化更新 activeKey
-watch(() => route.name, (newName) => {
-  if (newName) activeKey.value = newName
-})
-
-onBeforeMount(async () => {
-  officialStatement.value = "go-stock Web版"
-  content.value = officialStatement.value + "\n\n" + content.value
-
-  await Promise.all([loadConfig(), loadGroupList()])
-
-  // 设置普通菜单项的显示状态
-  menuOptions.value.forEach((item) => {
-    if (item.key === 'fund') item.show = enableFund.value
-    if (item.key === 'agent') item.show = enableAgent.value
+  }).catch(err => {
+    console.error("GetVersionInfo error:", err)
   })
 
-  // 检查用户权限以决定是否显示用户管理菜单
-  if (localStorage.getItem('token')) {
-    try {
-      const userProfile = await apiService.getUserProfile()
-      console.log('[DEBUG] API完整响应:', userProfile)
-      console.log('[DEBUG] userProfile.data:', userProfile.data)
-      
-      // axios返回的response.data就是后端返回的数据
-      const userData = userProfile.data || userProfile
-      console.log('[DEBUG] 实际用户数据:', userData)
-      
-      if (userData) {
-        const role = userData.role
-        console.log('[DEBUG] 用户角色:', role)
-        // admin 或 super_admin 可以访问用户管理
-        if (role === 'admin' || role === 'super_admin') {
-          console.log('[DEBUG] 显示用户管理菜单')
-          // 找到用户管理菜单项并设为显示
-          const adminMenuIndex = menuOptions.value.findIndex(item => item.key === 'admin')
-          if (adminMenuIndex !== -1) {
-            // 使用splice触发响应式更新
-            const updatedMenu = [...menuOptions.value]
-            updatedMenu[adminMenuIndex] = { ...updatedMenu[adminMenuIndex], show: true }
-            menuOptions.value = updatedMenu
-            console.log('[DEBUG] 菜单项已设置为显示, 当前菜单:', menuOptions.value[adminMenuIndex])
+  GetGroupList().then(result => {
+    groupList.value = result
+    menuOptions.value.map((item) => {
+      if (item.key === 'stock') {
+        item.children.push(...groupList.value.map(item => {
+          return {
+            label: () =>
+                h(
+                    'a',
+                    {
+                      href: '#',
+                      type: 'info',
+                      onClick: () => {
+                        router.push({
+                          name: 'stock',
+                          query: {
+                            groupName: item.name,
+                            groupId: item.ID,
+                          },
+                        })
+                        setTimeout(() => {
+                          EventsEmit("changeTab", item)
+                        }, 100)
+                      },
+                      to: {
+                        name: 'stock',
+                        query: {
+                          groupName: item.name,
+                          groupId: item.ID,
+                        },
+                      }
+                    },
+                    {default: () => item.name,}
+                ),
+            key: item.ID,
           }
-        } else {
-          console.log('[DEBUG] 用户角色不是admin或super_admin,不显示菜单')
-        }
+        }))
       }
-    } catch (error) {
-      console.error('[ERROR] 获取用户信息失败:', error)
-      // 出错时不显示用户管理菜单
-    }
-  }
+    })
+  }).catch(err => {
+    console.error("GetGroupList error:", err)
+  })
 
-  loading.value = false
-  loadingMsg.value = "加载完成..."
+
+  GetConfig().then((res) => {
+    enableFund.value = res.enableFund
+    enableAgent.value = res.enableAgent
+
+    menuOptions.value.filter((item) => {
+      if (item.key === 'fund') {
+        item.show = res.enableFund
+      }
+      if (item.key === 'agent') {
+        item.show = res.enableAgent
+      }
+    })
+
+    if (res.darkTheme) {
+      enableDarkTheme.value = darkTheme
+    } else {
+      enableDarkTheme.value = null
+    }
+  }).catch(err => {
+    console.error("GetConfig error:", err)
+  })
 })
 
 onMounted(() => {
-  if (!isWebMode.value) {
+  updateMarketStatus()
+  marketStatusTimer = setInterval(() => {
+    refreshMotto()
     updateMarketStatus()
-    marketStatusTimer = setInterval(() => {
-      refreshMotto()
-      updateMarketStatus()
-    }, 60000)
-  }
+  }, 60000)
   contentStyle.value = "max-height: calc(92vh);overflow: hidden"
-})
-
-onBeforeUnmount(() => {
-  // Clean up any event listeners
+  GetConfig().then((res) => {
+    if (res.enableNews) {
+      enableNews.value = true
+    }
+    enableFund.value = res.enableFund
+    enableAgent.value = res.enableAgent
+    const {notification } =createDiscreteApi(["notification"], {
+      configProviderProps: {
+        theme: enableDarkTheme.value ? darkTheme : lightTheme ,
+        max: 3,
+      },
+    })
+    EventsOn("newsPush", (data) => {
+      //console.log(data)
+      if(data.isRed){
+        notification.create({
+          //type:"error",
+         // avatar: () => h(NIcon,{component:Notifications,color:"red"}),
+          title: data.time,
+          content: () => h('div',{type:"error",style:{
+              "text-align":"left",
+              "font-size":"14px",
+              "color":"#f67979"
+            }}, { default: () => data.content }),
+          meta: () => h(NText,{type:"warning"}, { default: () => data.source}),
+          duration:1000*40,
+        })
+      }else{
+         notification.create({
+          //type:"info",
+          //avatar: () => h(NIcon,{component:Notifications}),
+          title: data.time,
+          content: () => h('div',{type:"info",style:{
+            "text-align":"left",
+              "font-size":"14px",
+              "color": data.source==="go-stock"?"#F98C24":"#549EC8"
+            }}, { default: () => data.content }),
+          meta: () => h(NText,{type:"warning"}, { default: () => data.source}),
+          duration:1000*30 ,
+        })
+      }
+    })
+  }).catch(err => {
+    console.error("GetConfig(onMounted) error:", err)
+  })
 })
 </script>
-
 <template>
   <n-config-provider ref="containerRef" :theme="enableDarkTheme" :locale="zhCN" :date-locale="dateZhCN">
     <n-message-provider>
@@ -1152,34 +1146,9 @@ onBeforeUnmount(() => {
                 :y-offset="150"
                 :rotate="-15"
             >
+<!--              <FloatingAiAssistant />-->
               <FloatingAgentAssistant />
-
-              <!-- Web 模式：使用新的响应式布局 -->
-              <WebLayout
-                v-if="useNewLayout"
-                :menu-options="menuOptions"
-                :active-key="activeKey"
-                @select="handleMenuSelect"
-              >
-                <n-spin :show="loading">
-                  <template #description>
-                    {{ loadingMsg }}
-                  </template>
-                  <n-marquee :speed="100" style="position: relative;top:0;z-index: 19;width: 100%"
-                             v-if="(telegraph.length>0)&&(enableNews)">
-                    <n-tag type="warning" v-for="item in telegraph" style="margin-right: 10px">
-                      {{ item }}
-                    </n-tag>
-                  </n-marquee>
-                  <n-scrollbar style="max-height: calc(100vh - 20px);overflow: hidden">
-                    <n-skeleton v-if="loading" height="calc(100vh)" />
-                    <RouterView/>
-                  </n-scrollbar>
-                </n-spin>
-              </WebLayout>
-
-              <!-- 桌面端模式：保持原有布局 -->
-              <n-flex v-else>
+              <n-flex>
                 <n-grid x-gap="12" :cols="1">
                   <n-gi>
                     <n-spin :show="loading">
@@ -1217,6 +1186,6 @@ onBeforeUnmount(() => {
     </n-message-provider>
   </n-config-provider>
 </template>
-
 <style>
+
 </style>
