@@ -109,3 +109,12 @@
 - **同步修复**：`formatMarkdown` 中 `---##` 拆分问题（hrHeadingMatch/hrBlockMatch）、`splitInlineHeading` 中 hrMatch 修复
 - **新增**：darkThemeRef/mdTheme/codeTheme/onMdHtmlChanged、MdPreview样式穿透、代码块增强样式
 - **涉及提交**：e07e198(style.css增强)、acd3406(style.css优化) — CSS选择器与 t-chat-content 不匹配
+
+## Web端 Agent Chat 配置查询用户隔离修复（2026-06-06）
+- **问题**：Web端 `AgentChat` 和 `AITradeAnalyze` 调用 `agent.ChatWithContext` 时，Agent 内部用 `GetSettingConfig()` 查 `user_id=0` 全局配置，登录用户找不到自己的AI配置
+- **修复**：
+  - `agent_api.go`：签名不变（桌面端不受影响），通过 `optsOverride[2]` 传递 userID 字符串
+  - `newStockAiAgent`：从 optsOverride[2] 解析 userID，`userID>0` 用 `GetSettingConfigByUserID(userID)`，`userID=0` 用 `GetSettingConfig()`
+  - `ChatWithContext` 内部第二次配置查询也改为同样逻辑
+  - `ai_handler.go`：`AgentChat` 和 `AITradeAnalyze` 调用时传入 `"", "", userIDStr`
+- **编译**：`go build ./web/...` ✅

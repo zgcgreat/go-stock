@@ -8,6 +8,7 @@ import (
 	"go-stock/backend/logger"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -27,16 +28,29 @@ func NewStockAiAgentApi() *StockAiAgent {
 	return &StockAiAgent{}
 }
 
-func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId int, thinkingMode bool, question string, agentMode string) *StockAiAgent {
+func (receiver StockAiAgent) newStockAiAgent(ctx *context.Context, aiConfigId int, thinkingMode bool, question string, agentMode string, optsOverride ...string) *StockAiAgent {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.SugaredLogger.Errorf("panic in newStockAiAgent: %v", r)
 		}
 	}()
 
-	settingConfig := data.GetSettingConfig()
+	// 从 optsOverride 提取 userID（Web 端传入），默认 0（桌面端）
+	var userID uint
+	if len(optsOverride) > 2 && optsOverride[2] != "" {
+		if uid, err := strconv.ParseUint(optsOverride[2], 10, 64); err == nil {
+			userID = uint(uid)
+		}
+	}
+
+	var settingConfig *data.SettingConfig
+	if userID > 0 {
+		settingConfig = data.GetSettingConfigByUserID(userID)
+	} else {
+		settingConfig = data.GetSettingConfig()
+	}
 	if settingConfig == nil {
-		logger.SugaredLogger.Errorf("settingConfig is nil")
+		logger.SugaredLogger.Errorf("settingConfig is nil for userID=%d", userID)
 		return nil
 	}
 
@@ -98,16 +112,16 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 			sessionIDOverride = optsOverride[1]
 		}
 
-		stockAiAgent := receiver.newStockAiAgent(&ctx, aiConfigId, thinkingMode, question, agentMode)
-		if stockAiAgent == nil {
-			logger.SugaredLogger.Errorf("stockAiAgent is nil")
-			ch <- &schema.Message{
-				Role:    schema.Assistant,
-				Content: "❌ AI 配置不存在或无效，请检查 AI 配置",
-			}
-			close(ch)
-			return
+		stockAiAgent := receiver.newStockAiAgent(&ctx, aiConfigId, thinkingMode, question, agentMode, optsOverride...)
+	if stockAiAgent == nil {
+		logger.SugaredLogger.Errorf("stockAiAgent is nil")
+		ch <- &schema.Message{
+			Role:    schema.Assistant,
+			Content: "❌ AI 配置不存在或无效，请检查 AI 配置",
 		}
+		close(ch)
+		return
+	}
 
 		if sessionIDOverride != "" {
 			stockAiAgent.sessionID = sessionIDOverride
@@ -134,7 +148,20 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 			sysPrompt = data.NewPromptTemplateApi().GetPromptTemplateByID(*sysPromptId)
 		}
 
-		settingConfig := data.GetSettingConfig()
+		// 从 optsOverride 提取 userID（Web 端传入），默认 0（桌面端）
+		var userIDForConfig uint
+		if len(optsOverride) > 2 && optsOverride[2] != "" {
+			if uid, err := strconv.ParseUint(optsOverride[2], 10, 64); err == nil {
+				userIDForConfig = uint(uid)
+			}
+		}
+
+		var settingConfig *data.SettingConfig
+		if userIDForConfig > 0 {
+			settingConfig = data.GetSettingConfigByUserID(userIDForConfig)
+		} else {
+			settingConfig = data.GetSettingConfig()
+		}
 		aiConfig, _ := lo.Find(settingConfig.AiConfigs, func(item *data.AIConfig) bool {
 			return uint(aiConfigId) == item.ID
 		})

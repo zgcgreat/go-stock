@@ -95,7 +95,8 @@ func AITradeAnalyze(c *gin.Context) {
 	flusher.Flush()
 
 	aiAgent := agent.NewStockAiAgentApi()
-	msgCh := aiAgent.Chat(question, aiConfigID, req.SysPromptID)
+	userIDStr := strconv.FormatUint(uint64(userID), 10)
+	msgCh := aiAgent.ChatWithContext(c.Request.Context(), question, aiConfigID, req.SysPromptID, false, 10, req.Thinking, "", "", "", userIDStr)
 
 	var fullContent strings.Builder
 
@@ -293,7 +294,9 @@ func AgentChat(c *gin.Context) {
 		return
 	}
 
-	settingConfig := data.GetSettingConfig()
+	// 用户隔离：登录用户获取自己的配置，未登录用户获取默认配置（user_id=0）
+	userID, _ := middleware.GetUserIDFromContext(c)
+	settingConfig := data.GetSettingConfigByUserID(userID)
 	if settingConfig == nil || len(settingConfig.AiConfigs) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "AI config not found",
@@ -328,7 +331,9 @@ func AgentChat(c *gin.Context) {
 	if memoryCount <= 0 {
 		memoryCount = 10
 	}
-	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, "")
+	// 传递 userID 作为 optsOverride[2]，使 Agent 内部查询用户自己的配置
+	userIDStr := strconv.FormatUint(uint64(userID), 10)
+	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, "", "", "", userIDStr)
 
 	for msg := range msgCh {
 		if msg == nil {
