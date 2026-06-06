@@ -336,7 +336,7 @@ export function GetAiConfigs() {
   if (isWailsMode()) {
     return window.go.main.App.GetAiConfigs();
   }
-  return apiService.client.get('/public/ai/configs', { headers: getAuthHeaders() })
+  return apiService.client.get('/ai/configs', { headers: getAuthHeaders() })
     .then(extractApiData)
     .catch(err => {
       console.warn('GetAiConfigs web fallback failed:', err.message);
@@ -930,7 +930,7 @@ export function CalculateNextRunTimes(arg1, arg2) {
 
 /**
  * ChatWithAgent - Agent 模式流式对话
- * Web 模式下：使用 SSE 连接 /api/v1/public/ai/agent-chat（无需认证）
+ * Web 模式下：使用 SSE 连接 /api/v1/ai/agent-chat
  * 事件通过 EventsEmit('agent-message') 分发，格式与桌面模式一致
  */
 export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
@@ -943,8 +943,8 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
   const token = localStorage.getItem('token');
   const origin = window.location.origin;
   const fullUrl = baseURL.startsWith('http')
-    ? `${baseURL}/public/ai/agent-chat`
-    : `${origin}${baseURL}/public/ai/agent-chat`;
+    ? `${baseURL}/ai/agent-chat`
+    : `${origin}${baseURL}/ai/agent-chat`;
 
   fetch(fullUrl, {
     method: 'POST',
@@ -1502,7 +1502,7 @@ export function GetSponsorInfo() {
 export function GetStockEastMoneyKLine(arg1, arg2, arg3, arg4) {
   if (isWailsMode()) return window.go.main.App.GetStockEastMoneyKLine(arg1, arg2, arg3, arg4);
   // arg1=code, arg2=stockName, arg3=klt, arg4=limit
-  return apiService.client.get(`/public/stocks/${arg1}/kline`, { params: { klt: arg3, days: arg4 }, headers: getAuthHeaders() })
+  return apiService.client.get(`/stocks/${arg1}/kline`, { params: { klt: arg3, days: arg4 }, headers: getAuthHeaders() })
     .then(res => res.data?.data?.kline || [])
     .catch(() => []);
 }
@@ -1510,7 +1510,7 @@ export function GetStockEastMoneyKLine(arg1, arg2, arg3, arg4) {
 export function GetStockEastMoneyKLinePage(arg1, arg2, arg3, arg4, arg5) {
   if (isWailsMode()) return window.go.main.App.GetStockEastMoneyKLinePage(arg1, arg2, arg3, arg4, arg5);
   // arg1=code, arg2=stockName, arg3=klt, arg4=limit, arg5=end
-  return apiService.client.get(`/public/stocks/${arg1}/kline`, { params: { klt: arg3, days: arg4, page: arg5 }, headers: getAuthHeaders() })
+  return apiService.client.get(`/stocks/${arg1}/kline`, { params: { klt: arg3, days: arg4, page: arg5 }, headers: getAuthHeaders() })
     .then(res => res.data?.data || { kline: [], total: 0 })
     .catch(() => ({ kline: [], total: 0 }));
 }
@@ -1918,9 +1918,9 @@ export function GetTradingRecordById(arg1) {
 
 export function GetUplimitHot(date, limit = 20) {
   if (isWailsMode()) return window.go.main.App.GetUplimitHot(date, limit);
-  // Web 模式：调用后端 API
-  return fetch(`/api/v1/market/uplimit-hot?date=${encodeURIComponent(date || '')}&limit=${limit}`)
-    .then(res => res.json());
+  return apiService.client.get('/market/uplimit-hot', { params: { date: date || '', limit }, headers: getAuthHeaders() })
+    .then(res => res.data)
+    .catch(() => null);
 }
 
 export function InitCronTasks() {
@@ -1953,7 +1953,35 @@ export function UpdateSkill(arg1) {
   return Promise.resolve();
 }
 
+// ========== 桌面端专用功能（Web 端 no-op） ==========
+
+export function RestartAsAdmin() {
+  if (isWailsMode()) return window.go.main.App.RestartAsAdmin();
+  // Web 模式下不支持以管理员身份重启
+  console.warn('Web 模式下不支持 RestartAsAdmin');
+  return Promise.resolve();
+}
+
 // ========== 基金相关新增 ==========
+
+export function GetFollowedFundPaged(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.GetFollowedFundPaged(arg1, arg2, arg3);
+  const params = {
+    page: arg1 || 1,
+    pageSize: arg2 || 20,
+    keyword: arg3 || '',
+  };
+  return apiService.client.get('/funds/follow/paged', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { list: [], total: 0 })
+    .catch(() => ({ list: [], total: 0 }));
+}
+
+export function SearchFundCodes(arg1) {
+  if (isWailsMode()) return window.go.main.App.SearchFundCodes(arg1);
+  return apiService.client.get('/funds/search', { params: { keyword: arg1 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
 
 export function GetFundKLine(arg1, arg2, arg3) {
   if (isWailsMode()) return window.go.main.App.GetFundKLine(arg1, arg2, arg3);
@@ -2006,6 +2034,18 @@ export function GetAllCustomStrategies() {
     .catch(() => []);
 }
 
+export function GetCustomStrategyList(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetCustomStrategyList(arg1);
+  const params = {
+    page: arg1?.page || 1,
+    pageSize: arg1?.pageSize || 10,
+  };
+  if (arg1?.name) params.name = arg1.name;
+  return apiService.client.get('/custom-strategies/list', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { list: [], total: 0 })
+    .catch(() => ({ list: [], total: 0 }));
+}
+
 export function SaveCustomStrategy(arg1) {
   if (isWailsMode()) return window.go.main.App.SaveCustomStrategy(arg1);
   return apiService.client.post('/custom-strategies', arg1, { headers: getAuthHeaders() })
@@ -2018,6 +2058,73 @@ export function DeleteCustomStrategy(arg1) {
   return apiService.client.delete(`/custom-strategies/${arg1}`, { headers: getAuthHeaders() })
     .then(res => res.data?.message || '删除成功')
     .catch(err => err.message || '删除失败');
+}
+
+// ========== 筹码分布相关 ==========
+
+export function GetChipDistribution(arg1, arg2, arg3, arg4) {
+  if (isWailsMode()) return window.go.main.App.GetChipDistribution(arg1, arg2, arg3, arg4);
+  return apiService.client.get(`/stocks/${arg1}/chip-distribution`, { params: { klt: arg2, limit: arg3, priceRange: arg4 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || {})
+    .catch(() => ({}));
+}
+
+// ========== 通达信数据相关 ==========
+
+export function GetTdxCallAuction(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.GetTdxCallAuction(arg1, arg2, arg3);
+  return apiService.client.get(`/stocks/${arg1}/tdx/call-auction`, { params: { arg2, arg3 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function GetTdxCompanyCategoryContent(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetTdxCompanyCategoryContent(arg1, arg2);
+  return apiService.client.get(`/stocks/${arg1}/tdx/category-content`, { params: { category: arg2 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || '')
+    .catch(() => '');
+}
+
+export function GetTdxCompanyCategoryList(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetTdxCompanyCategoryList(arg1);
+  return apiService.client.get(`/stocks/${arg1}/tdx/categories`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function GetTdxCompanyInfo(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetTdxCompanyInfo(arg1);
+  return apiService.client.get(`/stocks/${arg1}/tdx/company-info`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || {})
+    .catch(() => ({}));
+}
+
+export function GetTdxFinanceInfo(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetTdxFinanceInfo(arg1);
+  return apiService.client.get(`/stocks/${arg1}/tdx/finance-info`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || {})
+    .catch(() => ({}));
+}
+
+export function GetTdxXDXRInfo(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetTdxXDXRInfo(arg1);
+  return apiService.client.get(`/stocks/${arg1}/tdx/xdxr-info`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+// ========== 桌面端托盘功能（Web 端 no-op） ==========
+
+export function HideToTray() {
+  if (isWailsMode()) return window.go.main.App.HideToTray();
+  console.warn('Web 模式下不支持 HideToTray');
+  return Promise.resolve();
+}
+
+export function ShowFromTray() {
+  if (isWailsMode()) return window.go.main.App.ShowFromTray();
+  console.warn('Web 模式下不支持 ShowFromTray');
+  return Promise.resolve();
 }
 
 // ========== 设备绑定相关 ==========

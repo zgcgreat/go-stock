@@ -37,6 +37,10 @@ import {Prompt, ReportAnalytics, ReportMoney, ReportSearch, TrendingUp} from "@v
 import {LocalFireDepartmentRound} from "@vicons/material";
 import {AppsList20Regular, BoxSearch20Regular,SlideHide24Filled, CommentNote20Filled} from "@vicons/fluent";
 import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} from "@vicons/antd";
+import {useIsWebMode} from "./composables/useResponsive";
+import WebLayout from "./components/layout/WebLayout.vue";
+
+const {isWebMode} = useIsWebMode()
 
 
 
@@ -916,6 +920,21 @@ function renderIcon(icon) {
   return () => h(NIcon, null, {default: () => h(icon)})
 }
 
+// Web 模式下的菜单选择处理
+function handleWebSelect(key) {
+  activeKey.value = key
+  // 处理子菜单项的点击（如市场快讯、AI分析报告等）
+  for (const item of menuOptions.value) {
+    if (item.children) {
+      const child = item.children.find(c => c.key === key)
+      if (child && child.onClick) {
+        child.onClick()
+        return
+      }
+    }
+  }
+}
+
 function toggleFullscreen(e) {
   activeKey.value = 'full'
   //console.log(e)
@@ -1148,6 +1167,36 @@ onMounted(() => {
             >
 <!--              <FloatingAiAssistant />-->
               <FloatingAgentAssistant />
+
+              <!-- Web 模式：顶部 Tab 导航布局 -->
+              <template v-if="isWebMode">
+                <WebLayout
+                  :menu-options="menuOptions"
+                  :active-key="activeKey"
+                  :market-status="marketStatus"
+                  @select="handleWebSelect"
+                  @update:active-key="activeKey = $event"
+                >
+                  <n-spin :show="loading">
+                    <template #description>
+                      {{ loadingMsg }}
+                    </template>
+                    <n-marquee :speed="100" style="position: relative;top:0;z-index: 19;width: 100%"
+                               v-if="(telegraph.length>0)&&(enableNews)">
+                      <n-tag type="warning" v-for="item in telegraph" style="margin-right: 10px">
+                        {{ item }}
+                      </n-tag>
+                    </n-marquee>
+                    <n-scrollbar style="height: calc(100vh - 80px);">
+                      <n-skeleton v-if="loading" height="calc(100vh)" />
+                      <RouterView/>
+                    </n-scrollbar>
+                  </n-spin>
+                </WebLayout>
+              </template>
+
+              <!-- 桌面端 Wails 模式：底部水平菜单布局 -->
+              <template v-else>
               <n-flex>
                 <n-grid x-gap="12" :cols="1">
                   <n-gi>
@@ -1179,6 +1228,7 @@ onMounted(() => {
                   </n-gi>
                 </n-grid>
               </n-flex>
+              </template>
             </n-watermark>
           </n-dialog-provider>
         </n-modal-provider>
