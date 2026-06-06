@@ -154,7 +154,7 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 	}
 
 	p := detectChatModelProvider(baseLower, aiConfig.ModelName)
-	logger.SugaredLogger.Infof("createChatModel provider=%d base=%q model=%q", p, aiConfig.BaseUrl, aiConfig.ModelName)
+	logger.SugaredLogger.Infof("createChatModel provider=%d base=%q model=%q maxTokens=%d", p, aiConfig.BaseUrl, aiConfig.ModelName, maxTok)
 
 	switch p {
 	case providerVolcArk:
