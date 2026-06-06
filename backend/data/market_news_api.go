@@ -350,7 +350,10 @@ func (m MarketNewsApi) GlobalStockIndexes(crawlTimeOut uint) map[string]any {
 	js := string(response.Body())
 	res := make(map[string]any)
 	json.Unmarshal([]byte(js), &res)
-	return res["data"].(map[string]any)
+	if data, ok := res["data"].(map[string]any); ok {
+		return data
+	}
+	return map[string]any{}
 }
 
 // GlobalStockIndexesReadable 获取全球指数并转换为 AI 易读的 Markdown 文本。

@@ -53,6 +53,9 @@ func RefreshTelegraphList(c *gin.Context) {
 func GlobalStockIndexes(c *gin.Context) {
 	// 直接从API获取最新数据
 	apiData := data.NewMarketNewsApi().GlobalStockIndexes(30)
+	if apiData == nil {
+		apiData = map[string]any{}
+	}
 
 	// 返回与桌面端一致的格式
 	c.JSON(http.StatusOK, gin.H{
