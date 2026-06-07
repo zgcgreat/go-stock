@@ -4,6 +4,10 @@ import {GetConfig} from "../../wailsjs/go/main/App";
 import {useMessage, useDialog} from "naive-ui"
 import {MdPreview} from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
+import {useIsWebMode} from '../composables/useResponsive'
+import Auth from '../utils/auth'
+
+const {isWebMode} = useIsWebMode()
 
 const message = useMessage()
 const dialog = useDialog()
@@ -11,6 +15,7 @@ const dialog = useDialog()
 const darkTheme = ref(false)
 const editorTheme = ref('light')
 const apiBase = ref('http://go-stock.sparkmemory.top:1918/api')
+const localApiBase = ref('/api/v1/plaza') // Web 模式下本地 API
 const token = ref(localStorage.getItem('promptPlazaToken') || '')
 const currentUser = ref(null)
 const keyword = ref('')
@@ -42,6 +47,10 @@ const askModal = reactive({
 const isLoggedIn = computed(() => !!token.value)
 
 onBeforeMount(() => {
+  if (isWebMode.value) {
+    // Web 模式：从本地配置获取
+    return
+  }
   GetConfig().then(result => {
     if (result.darkTheme) {
       darkTheme.value = true
@@ -124,6 +133,7 @@ const apiAvailable = ref(true)
 async function loadQuestions() {
   loading.value = true
   try {
+    // 优先直连外部API
     const params = {page: pagination.page, pageSize: pagination.pageSize}
     if (keyword.value) params.keyword = keyword.value
     if (resolvedFilter.value) params.resolved = resolvedFilter.value
@@ -133,6 +143,43 @@ async function loadQuestions() {
     pagination.itemCount = data.total || 0
     pagination.pageCount = Math.ceil((data.total || 0) / pagination.pageSize) || 1
   } catch (e) {
+    // 外部API失败，Web模式降级查本地缓存
+    if (isWebMode.value) {
+      console.warn('外部API加载问题列表失败，尝试本地降级', e)
+      try {
+        const params = new URLSearchParams()
+        params.set('page', pagination.page)
+        params.set('pageSize', pagination.pageSize)
+        if (keyword.value) params.set('keyword', keyword.value)
+        if (resolvedFilter.value) params.set('resolved', resolvedFilter.value)
+
+        const resp = await fetch(localApiBase.value + '/questions?' + params.toString(), {
+          headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+        })
+        const json = await resp.json()
+        if (json.code === 0 && json.data) {
+          apiAvailable.value = true
+          questions.value = (json.data.list || []).map(q => ({
+            id: q.extId,
+            title: q.title,
+            content: q.content,
+            isResolved: q.isResolved,
+            userId: q.authorId,
+            user: { nickname: q.authorNickname, username: q.authorUsername },
+            answersCount: q.answersCount,
+            createdAt: q.extCreatedAt,
+            updatedAt: q.extUpdatedAt
+          }))
+          pagination.itemCount = json.data.total || 0
+          pagination.pageCount = json.data.totalPages || 1
+          message.warning('外部服务不可用，已切换到本地缓存数据')
+          loading.value = false
+          return
+        }
+      } catch (e2) {
+        console.warn('本地降级获取问题列表也失败', e2)
+      }
+    }
     if (e.message.includes('接口返回非JSON') || e.message.includes('404')) {
       apiAvailable.value = false
     } else {
@@ -161,12 +208,57 @@ function handlePageChange(page) {
 
 async function showDetail(questionId) {
   try {
+    // 优先直连外部API获取详情
     const data = await apiGet(`/questions/${questionId}`)
     detailModal.question = data.question
     detailModal.answers = data.answers || []
     detailModal.newAnswer = ''
     detailModal.show = true
   } catch (e) {
+    // 外部API失败，Web模式降级查本地缓存
+    if (isWebMode.value) {
+      console.warn('外部API加载问题详情失败，尝试本地降级', e)
+      try {
+        const resp = await fetch(localApiBase.value + '/questions/' + questionId, {
+          headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+        })
+        const json = await resp.json()
+        if (json.code === 0 && json.data) {
+          const q = json.data
+          detailModal.question = {
+            id: q.extId,
+            title: q.title,
+            content: q.content,
+            isResolved: q.isResolved,
+            userId: q.authorId,
+            user: { nickname: q.authorNickname, username: q.authorUsername },
+            answersCount: q.answersCount,
+            createdAt: q.extCreatedAt,
+            updatedAt: q.extUpdatedAt
+          }
+          try {
+            detailModal.answers = q.answersJson ? JSON.parse(q.answersJson).map(a => ({
+              id: a.id,
+              content: a.content,
+              isAccepted: a.isAccepted,
+              isLiked: a.isLiked || false,
+              likesCount: a.likesCount || 0,
+              userId: a.userId,
+              user: { nickname: a.user?.nickname, username: a.user?.username },
+              createdAt: a.createdAt
+            })) : []
+          } catch (e2) {
+            detailModal.answers = []
+          }
+          detailModal.newAnswer = ''
+          detailModal.show = true
+          message.warning('外部服务不可用，已切换到本地缓存数据')
+          return
+        }
+      } catch (e2) {
+        console.warn('本地降级获取问题详情也失败', e2)
+      }
+    }
     message.error('加载问题详情失败: ' + e.message)
   }
 }

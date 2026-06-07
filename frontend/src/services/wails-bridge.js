@@ -886,7 +886,10 @@ export function AddPromptTemplate(arg1) {
   if (isWailsMode()) return window.go.main.App.AddPromptTemplate(arg1);
   return apiService.client.post('/prompts/templates', arg1, { headers: getAuthHeaders() })
     .then(res => res.data?.message || '添加成功')
-    .catch(err => err.message || '添加失败');
+    .catch(err => {
+      const msg = err.response?.data?.message || err.response?.data?.error || err.message || '添加失败';
+      throw new Error(msg);
+    });
 }
 
 export function AddTradingRecord(arg1) {
@@ -1097,8 +1100,11 @@ export function DeleteCronTask(arg1) {
 export function DeletePromptTemplate(arg1) {
   if (isWailsMode()) return window.go.main.App.DeletePromptTemplate(arg1);
   return apiService.client.delete(`/prompts/templates/${arg1}`, { headers: getAuthHeaders() })
-    .then(() => true)
-    .catch(() => false);
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.response?.data?.error || err.message || '删除失败';
+      throw new Error(msg);
+    });
 }
 
 export function DeleteTradingRecord(arg1) {
@@ -1808,7 +1814,10 @@ export function UpdatePromptTemplate(arg1) {
   if (isWailsMode()) return window.go.main.App.UpdatePromptTemplate(arg1);
   return apiService.client.put(`/prompts/templates/${arg1.ID || arg1}`, arg1, { headers: getAuthHeaders() })
     .then(res => res.data?.message || '更新成功')
-    .catch(err => err.message || '更新失败');
+    .catch(err => {
+      const msg = err.response?.data?.message || err.response?.data?.error || err.message || '更新失败';
+      throw new Error(msg);
+    });
 }
 
 export function UpdateTradingRecord(arg1) {

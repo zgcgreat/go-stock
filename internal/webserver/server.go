@@ -107,6 +107,16 @@ func (ws *WebServer) initRouter() {
 			protected.PUT("/prompts/templates/:id", handlers.UpdatePromptTemplate)
 			protected.DELETE("/prompts/templates/:id", handlers.DeletePromptTemplate)
 
+			// 提示词广场（本地缓存查询）
+			protected.GET("/plaza/prompts", handlers.GetPlazaPrompts)
+			protected.GET("/plaza/prompts/:extId", handlers.GetPlazaPromptDetail)
+			protected.GET("/plaza/categories", handlers.GetPlazaCategories)
+			protected.GET("/plaza/questions", handlers.GetPlazaQuestions)
+			protected.GET("/plaza/questions/:extId", handlers.GetPlazaQuestionDetail)
+			protected.POST("/plaza/sync", handlers.SyncPlazaData)
+			protected.GET("/plaza/sync/status", handlers.GetPlazaSyncStatus)
+			protected.POST("/plaza/sync/cron-task", handlers.CreatePlazaSyncCronTask)
+
 			protected.GET("/trades", handlers.GetTradeRecords)
 			protected.POST("/trades", handlers.CreateTradeRecord)
 			protected.PUT("/trades/:id", handlers.UpdateTradeRecord)
@@ -328,6 +338,8 @@ func MigrateAllTables() {
 		&models.VersionInfo{},
 		&models.StockChangeHistory{},
 		&models.MarketStatistic{},
+		&models.PlazaPrompt{},
+		&models.PlazaQuestion{},
 		&handlers.UserSetting{},
 		&models.User{},
 	)

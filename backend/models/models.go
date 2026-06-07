@@ -1714,6 +1714,79 @@ type CustomStrategyPageData struct {
 	List       []CustomStrategy `json:"list"`
 	Total      int64            `json:"total"`
 	Page       int              `json:"page"`
-	PageSize   int              `json:"pageSize"`
+	PageSize   int              `json:"totalPages"`
 	TotalPages int              `json:"totalPages"`
+}
+
+// ==================== 提示词广场本地缓存 ====================
+
+// PlazaPrompt 提示词广场缓存表（定时从外部API同步）
+type PlazaPrompt struct {
+	ID              uint      `json:"id" gorm:"primarykey"`
+	ExtID           uint      `json:"extId" gorm:"uniqueIndex;not null"` // 外部广场的 prompt ID
+	Title           string    `json:"title" gorm:"size:500"`
+	Content         string    `json:"content" gorm:"type:text"`
+	Description     string    `json:"description" gorm:"size:1000"`
+	Summary         string    `json:"summary" gorm:"size:1000"`
+	Category        string    `json:"category" gorm:"size:100;index"`
+	Tags            string    `json:"tags" gorm:"size:500"`
+	IsPublic        bool      `json:"isPublic" gorm:"default:true"`
+	VipOnly         bool      `json:"vipOnly" gorm:"default:false"`
+	NeedVip         bool      `json:"needVip" gorm:"default:false"` // 需要 VIP 才能查看完整内容
+	AuthorID        uint      `json:"authorId"`
+	AuthorNickname  string    `json:"authorNickname" gorm:"size:100"`
+	AuthorUsername  string    `json:"authorUsername" gorm:"size:100"`
+	AuthorVipLevel  int       `json:"authorVipLevel" gorm:"default:0"`
+	ViewsCount      int       `json:"viewsCount" gorm:"default:0"`
+	LikesCount      int       `json:"likesCount" gorm:"default:0"`
+	FavoritesCount  int       `json:"favoritesCount" gorm:"default:0"`
+	DownloadsCount  int       `json:"downloadsCount" gorm:"default:0"`
+	CommentsCount   int       `json:"commentsCount" gorm:"default:0"`
+	HotScore        float64   `json:"hotScore" gorm:"default:0"`
+	ExtCreatedAt    time.Time `json:"extCreatedAt"` // 外部广场的创建时间
+	ExtUpdatedAt    time.Time `json:"extUpdatedAt"` // 外部广场的更新时间
+	SyncedAt        time.Time `json:"syncedAt"`     // 本地同步时间
+}
+
+func (PlazaPrompt) TableName() string {
+	return "plaza_prompts"
+}
+
+// PlazaQuestion 问答广场缓存表（定时从外部API同步）
+type PlazaQuestion struct {
+	ID             uint      `json:"id" gorm:"primarykey"`
+	ExtID          uint      `json:"extId" gorm:"uniqueIndex;not null"` // 外部广场的 question ID
+	Title          string    `json:"title" gorm:"size:500"`
+	Content        string    `json:"content" gorm:"type:text"`
+	IsResolved     bool      `json:"isResolved" gorm:"default:false"`
+	AuthorID       uint      `json:"authorId"`
+	AuthorNickname string    `json:"authorNickname" gorm:"size:100"`
+	AuthorUsername string    `json:"authorUsername" gorm:"size:100"`
+	AnswersCount   int       `json:"answersCount" gorm:"default:0"`
+	AnswersJSON    string    `json:"answersJson" gorm:"type:text"` // 序列化的回答列表
+	ExtCreatedAt   time.Time `json:"extCreatedAt"`
+	ExtUpdatedAt   time.Time `json:"extUpdatedAt"`
+	SyncedAt       time.Time `json:"syncedAt"`
+}
+
+func (PlazaQuestion) TableName() string {
+	return "plaza_questions"
+}
+
+// PlazaPromptQuery 提示词广场查询参数
+type PlazaPromptQuery struct {
+	Page     int    `form:"page" json:"page"`
+	PageSize int    `form:"pageSize" json:"pageSize"`
+	Category string `form:"category" json:"category"`
+	Keyword  string `form:"keyword" json:"keyword"`
+	Sort     string `form:"sort" json:"sort"`     // latest, hot, likes, favorites, downloads, comments
+	VipOnly  string `form:"vipOnly" json:"vipOnly"` // "true" 过滤VIP专属
+}
+
+// PlazaQuestionQuery 问答广场查询参数
+type PlazaQuestionQuery struct {
+	Page     int    `form:"page" json:"page"`
+	PageSize int    `form:"pageSize" json:"pageSize"`
+	Keyword  string `form:"keyword" json:"keyword"`
+	Resolved string `form:"resolved" json:"resolved"` // "true"/"false"
 }

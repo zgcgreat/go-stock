@@ -158,6 +158,7 @@ func (a *CronTaskApi) GetTaskTypes() []lo.Tuple2[string, string] {
 		{A: "market_analysis", B: "市场分析"},
 		{A: "global_stock_index_cache", B: "全球指数缓存"},
 		{A: "stock_change_save", B: "异动数据保存"},
+		{A: "prompt_plaza_sync", B: "提示词广场同步"},
 	}
 }
 
@@ -241,6 +242,8 @@ func (a *CronTaskApi) executeTaskByType(ctx context.Context, task *models.CronTa
 		return a.executeStockMonitor(ctx, task)
 	case "stock_change_save":
 		return a.executeStockChangeSave(ctx, task)
+	case "prompt_plaza_sync":
+		return a.executePromptPlazaSync(ctx, task)
 	case "custom":
 		return a.executeCustomTask(ctx, task)
 	default:
@@ -486,4 +489,51 @@ func isTradingTime() bool {
 	isAfternoon := currentTime >= afternoonStart && currentTime <= afternoonEnd
 
 	return isMorning || isAfternoon
+}
+
+func (a *CronTaskApi) executePromptPlazaSync(ctx context.Context, task *models.CronTask) error {
+	logger.SugaredLogger.Infof("执行提示词广场同步任务：%s", task.Name)
+
+	var params struct {
+		ApiBase  string `json:"apiBase"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if task.Params != "" {
+		if err := json.Unmarshal([]byte(task.Params), &params); err != nil {
+			logger.SugaredLogger.Errorf("解析任务参数失败：%v", err)
+			return err
+		}
+	}
+
+	// 默认账号
+	if params.Username == "" {
+		params.Username = "Joy"
+	}
+	if params.Password == "" {
+		params.Password = "zgc@202123"
+	}
+
+	sync := data.NewPlazaSyncService(params.ApiBase)
+
+	// 1. 登录
+	if err := sync.Login(params.Username, params.Password); err != nil {
+		return fmt.Errorf("登录提示词广场失败: %w", err)
+	}
+
+	// 2. 同步提示词
+	promptCount, err := sync.SyncPrompts()
+	if err != nil {
+		logger.SugaredLogger.Errorf("同步提示词失败：%v", err)
+		// 不直接返回，继续同步问答
+	}
+
+	// 3. 同步问答
+	questionCount, err := sync.SyncQuestions()
+	if err != nil {
+		logger.SugaredLogger.Errorf("同步问答失败：%v", err)
+	}
+
+	logger.SugaredLogger.Infof("提示词广场同步完成：提示词 %d 条，问答 %d 条", promptCount, questionCount)
+	return nil
 }

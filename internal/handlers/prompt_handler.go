@@ -107,8 +107,8 @@ func CreatePromptTemplate(c *gin.Context) {
 	result := db.Dao.Where("name = ? AND user_id = ?", templateReq.Name, userID).First(&existingTemplate)
 	if result.Error == nil {
 		c.JSON(http.StatusConflict, gin.H{
-			"error":   "Template name already exists",
-			"message": "模板名称已存在",
+			"code":    1,
+			"message": "该模板名称已存在，请更换名称后重试",
 		})
 		return
 	}

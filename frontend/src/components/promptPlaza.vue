@@ -6,6 +6,11 @@ import {MdPreview, MdEditor} from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import 'md-editor-v3/lib/style.css'
 import {EventsEmit} from '../../wailsjs/runtime'
+import {useIsWebMode} from '../composables/useResponsive'
+import Auth from '../utils/auth'
+import {GetEffectiveSponsorVip as GetEffectiveSponsorVipBridge, AddPromptTemplate as AddPromptTemplateBridge, GetConfig as GetConfigBridge} from '../services/wails-bridge.js'
+
+const {isWebMode} = useIsWebMode()
 
 const message = useMessage()
 const dialog = useDialog()
@@ -13,6 +18,7 @@ const dialog = useDialog()
 const darkTheme = ref(false)
 const editorTheme = ref('light')
 const apiBase = ref('http://go-stock.sparkmemory.top:1918/api')
+const localApiBase = ref('/api/v1/plaza') // Web 模式下本地 API
 const token = ref(localStorage.getItem('promptPlazaToken') || '')
 const currentUser = ref(null)
 const categories = ref([])
@@ -84,7 +90,89 @@ const editModal = reactive({
 const isLoggedIn = computed(() => !!token.value)
 const vipRequireLogin = ref(false)
 
+// Web 模式下：用本地 Web 端用户 VIP 信息判断，不依赖外部广场的 VIP 状态
+const isLocalVip = computed(() => {
+  if (!isWebMode.value) return false
+  const userInfo = Auth.getUserInfo()
+  const vipLevel = userInfo?.vipLevel || 0
+  const vipEndAt = userInfo?.vipEndAt || ''
+  const isAdmin = userInfo?.role === 'admin' || userInfo?.role === 'super_admin'
+  const isActive = vipLevel > 0 && vipEndAt && new Date(vipEndAt.replace(' ', 'T')) > new Date()
+  return isActive || isAdmin
+})
+
+// 判断某条提示词当前用户是否有权限查看完整内容（Web 端用本地 VIP，桌面端用外部 needVip）
+function canViewVipContent(prompt) {
+  if (isWebMode.value) {
+    // Web 端：本地 VIP 用户或管理员可查看
+    return isLocalVip.value
+  }
+  // 桌面端：外部 needVip 标记由外部 API 控制，不拦截展示
+  return true
+}
+
+// Web 模式下自动用 Web 端用户信息注册/登录提示词广场
+const webTokenInitialized = ref(false)
+async function initWebToken() {
+  if (!isWebMode.value) return
+  if (webTokenInitialized.value) return
+  webTokenInitialized.value = true
+
+  // 优先使用已保存的提示词广场 token
+  const savedToken = localStorage.getItem('promptPlazaToken')
+  if (savedToken) {
+    token.value = savedToken
+    return
+  }
+
+  // 没有 promptPlazaToken 时，用 Web 端用户信息自动注册/登录
+  const userInfo = Auth.getUserInfo()
+  if (!userInfo || !userInfo.username) return
+
+  const plazaUsername = `web_${userInfo.username}`
+  const plazaPassword = `gs_${userInfo.userId}_${userInfo.username}`
+
+  try {
+    const loginData = await apiPost('/auth/login', {
+      username: plazaUsername,
+      password: plazaPassword
+    })
+    token.value = loginData.token
+    localStorage.setItem('promptPlazaToken', loginData.token)
+    currentUser.value = loginData.user
+    syncVipInfo()
+  } catch (e) {
+    try {
+      const regData = await apiPost('/auth/register', {
+        username: plazaUsername,
+        password: plazaPassword,
+        nickname: userInfo.username
+      })
+      token.value = regData.token
+      localStorage.setItem('promptPlazaToken', regData.token)
+      currentUser.value = regData.user
+      syncVipInfo()
+    } catch (e2) {
+      console.warn('[promptPlaza] 自动注册提示词广场失败:', e2.message)
+    }
+  }
+}
+initWebToken()
+
 onBeforeMount(() => {
+  if (isWebMode.value) {
+    // Web 端用 wails-bridge 版本
+    GetConfigBridge().then(result => {
+      if (result.darkTheme) {
+        darkTheme.value = true
+        editorTheme.value = 'dark'
+      }
+      if (result.promptPlazaApiBase) {
+        apiBase.value = result.promptPlazaApiBase
+      }
+    }).catch(() => {})
+    return
+  }
   GetConfig().then(result => {
     if (result.darkTheme) {
       darkTheme.value = true
@@ -101,9 +189,11 @@ onMounted(() => {
   loadPrompts()
   if (token.value) {
     fetchCurrentUser()
-  } else {
+  } else if (!isWebMode.value) {
+    // 桌面端：没有提示词广场 token 时检查 VIP 弹登录
     checkVipAndPromptLogin()
   }
+  // Web 端：已有登录体系，不需要二次登录
 })
 
 function getHeaders() {
@@ -169,16 +259,34 @@ async function apiDelete(path) {
 
 async function loadCategories() {
   try {
+    // 优先直连外部API
     const data = await apiGet('/prompts/categories')
     categories.value = data || []
   } catch (e) {
-    console.warn('加载分类失败', e)
+    console.warn('外部API加载分类失败，尝试本地降级', e)
+    if (isWebMode.value) {
+      // Web模式降级：从本地缓存获取分类
+      try {
+        const resp = await fetch(localApiBase.value + '/categories', {
+          headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+        })
+        const json = await resp.json()
+        if (json.code === 0) {
+          categories.value = json.data || []
+          return
+        }
+      } catch (e2) {
+        console.warn('本地降级获取分类也失败', e2)
+      }
+    }
+    categories.value = []
   }
 }
 
 async function loadPrompts() {
   loading.value = true
   try {
+    // 优先直连外部API（桌面端和Web端都一样）
     const params = {
       page: pagination.page,
       pageSize: pagination.pageSize
@@ -192,6 +300,62 @@ async function loadPrompts() {
     pagination.itemCount = data.total || 0
     pagination.pageCount = Math.ceil((data.total || 0) / (data.pageSize || pagination.pageSize)) || 1
   } catch (e) {
+    // 外部API失败，Web模式降级查本地缓存
+    if (isWebMode.value) {
+      console.warn('外部API加载提示词列表失败，尝试本地降级', e)
+      try {
+        const params = new URLSearchParams()
+        params.set('page', pagination.page)
+        params.set('pageSize', pagination.pageSize)
+        if (activeCategory.value) params.set('category', activeCategory.value)
+        if (keyword.value) params.set('keyword', keyword.value)
+        params.set('sort', activeSort.value)
+        if (vipOnlyFilter.value) params.set('vipOnly', 'true')
+
+        const resp = await fetch(localApiBase.value + '/prompts?' + params.toString(), {
+          headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+        })
+        const json = await resp.json()
+        if (json.code === 0 && json.data) {
+          prompts.value = (json.data.list || []).map(p => ({
+            id: p.extId,
+            title: p.title,
+            content: p.content,
+            description: p.description,
+            summary: p.summary,
+            category: p.category,
+            tags: p.tags,
+            isPublic: p.isPublic,
+            vipOnly: p.vipOnly,
+            needVip: p.needVip,
+            userId: p.authorId,
+            user: {
+              id: p.authorId,
+              nickname: p.authorNickname,
+              username: p.authorUsername,
+              vipLevel: p.authorVipLevel
+            },
+            viewsCount: p.viewsCount,
+            likesCount: p.likesCount,
+            favoritesCount: p.favoritesCount,
+            downloadsCount: p.downloadsCount,
+            commentsCount: p.commentsCount,
+            hotScore: p.hotScore,
+            createdAt: p.extCreatedAt,
+            updatedAt: p.extUpdatedAt,
+            isLiked: false,
+            isFavorited: false
+          }))
+          pagination.itemCount = json.data.total || 0
+          pagination.pageCount = json.data.totalPages || 1
+          message.warning('外部服务不可用，已切换到本地缓存数据')
+          loading.value = false
+          return
+        }
+      } catch (e2) {
+        console.warn('本地降级获取提示词也失败', e2)
+      }
+    }
     message.error('加载提示词列表失败: ' + e.message)
   } finally {
     loading.value = false
@@ -212,6 +376,8 @@ async function fetchCurrentUser() {
 }
 
 async function checkVipAndPromptLogin() {
+  // Web 端已有登录体系，不弹二次登录
+  if (isWebMode.value) return
   try {
     const vipInfo = await GetEffectiveSponsorVip()
     if (vipInfo && vipInfo.vipLevel > 0 && vipInfo.active) {
@@ -226,6 +392,8 @@ async function checkVipAndPromptLogin() {
 }
 
 async function checkDeviceLimit() {
+  // Web 端不检查设备绑定
+  if (isWebMode.value) return
   if (!token.value) return
   try {
     const result = await CheckDeviceBinding(token.value, apiBase.value)
@@ -259,6 +427,30 @@ async function checkDeviceLimit() {
 
 async function syncVipInfo() {
   if (!token.value) return
+  // Web 端用本地用户信息同步 VIP
+  if (isWebMode.value) {
+    try {
+      const userInfo = Auth.getUserInfo()
+      const vipLevel = userInfo?.vipLevel || 0
+      const vipEndAt = userInfo?.vipEndAt || ''
+      const body = { vipLevel, uuid: '' }
+      if (vipLevel > 0 && vipEndAt) {
+        const d = new Date(vipEndAt.replace(' ', 'T'))
+        body.vipExpireAt = isNaN(d.getTime()) ? '' : d.toISOString()
+      } else {
+        body.vipExpireAt = ''
+      }
+      await apiPost('/user/vip', body)
+      if (currentUser.value) {
+        currentUser.value.vipLevel = vipLevel
+        currentUser.value.vipExpireAt = vipEndAt
+      }
+    } catch (e) {
+      console.warn('同步VIP信息失败(Web)', e)
+    }
+    return
+  }
+  // 桌面端原有逻辑
   try {
     const sponsorInfo = await GetSponsorInfo()
     const vipLevel = sponsorInfo?.vipLevel ? Number(sponsorInfo.vipLevel) : 0
@@ -380,6 +572,7 @@ function onSortChange() {
 
 async function showDetail(id) {
   try {
+    // 优先直连外部API获取详情
     const data = await apiGet(`/prompts/${id}`)
     detailModal.data = data
     detailModal.show = true
@@ -387,6 +580,55 @@ async function showDetail(id) {
     detailModal.replyTo = null
     loadComments(id)
   } catch (e) {
+    // 外部API失败，Web模式降级查本地缓存
+    if (isWebMode.value) {
+      console.warn('外部API加载详情失败，尝试本地降级', e)
+      try {
+        const resp = await fetch(localApiBase.value + '/prompts/' + id, {
+          headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+        })
+        const json = await resp.json()
+        if (json.code === 0 && json.data) {
+          const p = json.data
+          detailModal.data = {
+            id: p.extId,
+            title: p.title,
+            content: p.content,
+            description: p.description,
+            summary: p.summary,
+            category: p.category,
+            tags: p.tags,
+            isPublic: p.isPublic,
+            vipOnly: p.vipOnly,
+            needVip: p.needVip,
+            userId: p.authorId,
+            user: {
+              id: p.authorId,
+              nickname: p.authorNickname,
+              username: p.authorUsername,
+              vipLevel: p.authorVipLevel
+            },
+            viewsCount: p.viewsCount,
+            likesCount: p.likesCount,
+            favoritesCount: p.favoritesCount,
+            downloadsCount: p.downloadsCount,
+            commentsCount: p.commentsCount,
+            hotScore: p.hotScore,
+            createdAt: p.extCreatedAt,
+            updatedAt: p.extUpdatedAt,
+            isLiked: false,
+            isFavorited: false
+          }
+          detailModal.show = true
+          detailModal.newComment = ''
+          detailModal.replyTo = null
+          message.warning('外部服务不可用，已切换到本地缓存数据')
+          return
+        }
+      } catch (e2) {
+        console.warn('本地降级获取详情也失败', e2)
+      }
+    }
     message.error('加载详情失败: ' + e.message)
   }
 }
@@ -446,6 +688,11 @@ async function handleFavorite(prompt) {
 }
 
 async function handleDownload(prompt) {
+  // Web端：VIP专属提示词需本地VIP权限
+  if (prompt.vipOnly && isWebMode.value && !isLocalVip.value) {
+    message.warning('该提示词为VIP专属，请先开通VIP')
+    return
+  }
   try {
     const data = await apiGet(`/prompts/${prompt.id}/download`)
     const text = `${data.title}\n\n${data.content}\n\n分类: ${data.category || '无'}\n标签: ${data.tags || '无'}\n作者: ${data.author?.nickname || data.author?.username || '匿名'}\n创建时间: ${data.createdAt}`
@@ -468,6 +715,11 @@ async function handleDownload(prompt) {
 }
 
 async function handleCopyContent(content) {
+  // Web端：VIP专属提示词需本地VIP权限
+  if (detailModal.data?.vipOnly && isWebMode.value && !isLocalVip.value) {
+    message.warning('该提示词为VIP专属，请先开通VIP')
+    return
+  }
   try {
     if (navigator.clipboard) {
       await navigator.clipboard.writeText(content)
@@ -486,22 +738,34 @@ async function handleCopyContent(content) {
 }
 
 async function addPromptToTemplate(prompt) {
-  if (prompt.needVip) {
-    const vipInfo = await GetEffectiveSponsorVip()
-    if (!vipInfo || vipInfo.vipLevel <= 0 || !vipInfo.active) {
-      message.warning('该提示词为VIP专属，请先开通VIP')
-      return
+  if (prompt.vipOnly || prompt.needVip) {
+    if (isWebMode.value) {
+      // Web 端：用本地 VIP 信息判断，不依赖外部 needVip
+      if (!isLocalVip.value) {
+        message.warning('该提示词为VIP专属，请先开通VIP')
+        return
+      }
+    } else {
+      // 桌面端：用本地赞助者 VIP 信息判断
+      const vipInfo = await GetEffectiveSponsorVip()
+      if (!vipInfo || vipInfo.vipLevel <= 0 || !vipInfo.active) {
+        message.warning('该提示词为VIP专属，请先开通VIP')
+        return
+      }
     }
   }
   try {
-    const res = await AddPromptTemplate({
+    const addFunc = isWebMode.value ? AddPromptTemplateBridge : AddPromptTemplate
+    const res = await addFunc({
       name: prompt.title,
       content: prompt.content,
-      type: '模型系统Prompt'
+      type: prompt.category || '模型用户Prompt'
     })
-    if (res === '添加成功') {
+    if (res === '添加成功' || res?.message === '添加成功') {
       message.success('已添加到我的提示词模板')
-      EventsEmit('promptTemplatesChanged')
+      if (!isWebMode.value) {
+        EventsEmit('promptTemplatesChanged')
+      }
     } else {
       message.warning(res)
     }
@@ -627,7 +891,7 @@ async function showCreateModal() {
   createModal.category = ''
   createModal.tags = ''
   createModal.isPublic = true
-  createModal.vipOnly = !!(currentUser.value && currentUser.value.vipLevel > 0 && currentUser.value.vipExpireAt && new Date(currentUser.value.vipExpireAt) > new Date())
+  createModal.vipOnly = isWebMode.value ? isLocalVip.value : !!(currentUser.value && currentUser.value.vipLevel > 0 && currentUser.value.vipExpireAt && new Date(currentUser.value.vipExpireAt) > new Date())
   createModal.show = true
 }
 
@@ -661,9 +925,43 @@ async function showRanking(type = 'hot', range = 'all') {
   rankingModal.show = true
   rankingModal.loading = true
   try {
+    // 优先直连外部API获取排行榜
     const data = await apiGet('/prompts/ranking', {type, range, limit: 50})
     rankingModal.list = data.list || []
   } catch (e) {
+    // 外部API失败，Web模式降级查本地缓存
+    if (isWebMode.value) {
+      console.warn('外部API加载排行榜失败，尝试本地降级', e)
+      try {
+        const sortMap = { hot: 'hot', likes: 'likes', downloads: 'downloads', favorites: 'favorites' }
+        const params = new URLSearchParams()
+        params.set('pageSize', '50')
+        params.set('sort', sortMap[type] || 'hot')
+        const resp = await fetch(localApiBase.value + '/prompts?' + params.toString(), {
+          headers: { 'Authorization': 'Bearer ' + Auth.getToken() }
+        })
+        const json = await resp.json()
+        if (json.code === 0 && json.data) {
+          rankingModal.list = (json.data.list || []).map((p, idx) => ({
+            id: p.extId,
+            title: p.title,
+            vipOnly: p.vipOnly,
+            user: { nickname: p.authorNickname, username: p.authorUsername },
+            likesCount: p.likesCount,
+            downloadsCount: p.downloadsCount,
+            favoritesCount: p.favoritesCount,
+            commentsCount: p.commentsCount,
+            hotScore: p.hotScore,
+            rank: idx + 1
+          }))
+          message.warning('外部服务不可用，排行榜为本地缓存数据')
+          rankingModal.loading = false
+          return
+        }
+      } catch (e2) {
+        console.warn('本地降级获取排行榜也失败', e2)
+      }
+    }
     message.error('加载排行榜失败: ' + e.message)
   } finally {
     rankingModal.loading = false
@@ -706,9 +1004,9 @@ function timeAgo(timeStr) {
         <n-space>
           <n-button type="success" @click="showCreateModal">✏️ 发布提示词</n-button>
           <template v-if="isLoggedIn">
-            <n-tag :type="currentUser?.vipLevel >= 1 ? 'warning' : 'success'" size="medium" round>
-              {{ currentUser?.nickname || currentUser?.username || '已登录' }}
-              <template v-if="currentUser?.vipLevel >= 1"> · VIP{{ currentUser.vipLevel }}</template>
+            <n-tag :type="(isWebMode ? isLocalVip : currentUser?.vipLevel >= 1) ? 'warning' : 'success'" size="medium" round>
+              {{ currentUser?.nickname || currentUser?.username || (isWebMode ? Auth.getUserInfo()?.username : '已登录') }}
+              <template v-if="isWebMode ? isLocalVip : currentUser?.vipLevel >= 1"> · VIP</template>
             </n-tag>
             <n-button size="small" quaternary @click="handleLogout">退出</n-button>
           </template>
@@ -769,7 +1067,7 @@ function timeAgo(timeStr) {
                 <n-space justify="space-between" align="center">
                   <n-text depth="3" style="font-size: 12px">
                     {{ item.user?.nickname || item.user?.username || '匿名' }}
-                    <n-tag v-if="item.user?.vipLevel >= 1" type="warning" size="tiny" round style="margin-left: 2px">VIP{{ item.user.vipLevel }}</n-tag>
+                    <n-tag v-if="!isWebMode && item.user?.vipLevel >= 1" type="warning" size="tiny" round style="margin-left: 2px">VIP{{ item.user.vipLevel }}</n-tag>
                     · {{ timeAgo(item.createdAt) }}
                   </n-text>
                   <n-space :size="12" style="font-size: 12px">
@@ -884,12 +1182,12 @@ function timeAgo(timeStr) {
                   style="text-align: left"
                 />
                 <div
-                  v-if="detailModal.data.needVip"
+                  v-if="detailModal.data.vipOnly && (isWebMode ? !isLocalVip : detailModal.data.needVip)"
                   style="position: absolute; bottom: 0; left: 0; right: 0; height: 120px; background: linear-gradient(to bottom, transparent, var(--n-color)); display: flex; align-items: flex-end; justify-content: center; padding-bottom: 16px"
                 >
                   <n-space vertical align="center" :size="4">
                     <n-tag type="warning" size="medium" round>👑 VIP专属提示词</n-tag>
-                    <n-text depth="3" style="font-size: 12px">开通VIP查看完整内容</n-text>
+                    <n-text depth="3" style="font-size: 12px">{{ isWebMode ? '请开通VIP查看完整内容' : '开通VIP查看完整内容' }}</n-text>
                   </n-space>
                 </div>
               </div>

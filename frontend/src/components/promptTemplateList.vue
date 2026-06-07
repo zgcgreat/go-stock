@@ -11,6 +11,16 @@ import { EventsEmit } from "../../wailsjs/runtime";
 import {NButton, NInput, NTag, NText, NSwitch, useMessage, useNotification,useDialog, NModal, NCard, NForm, NFormItem, NSpace, NPopover} from "naive-ui";
 import { MdEditor, MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
+import {useIsWebMode} from '../composables/useResponsive'
+import {
+  GetPromptTemplateList as GetPromptTemplateListBridge,
+  AddPromptTemplate as AddPromptTemplateBridge,
+  DeletePromptTemplate as DeletePromptTemplateBridge,
+  UpdatePromptTemplate as UpdatePromptTemplateBridge,
+  GetConfig as GetConfigBridge
+} from '../services/wails-bridge.js'
+
+const {isWebMode} = useIsWebMode()
 
 const notify = useNotification()
 const message = useMessage()
@@ -21,6 +31,15 @@ const editorDataRef = reactive({
 const editorTheme = ref('light')
 
 onBeforeMount(() => {
+  if (isWebMode.value) {
+    GetConfigBridge().then(result => {
+      if (result?.darkTheme) {
+        editorDataRef.darkTheme = true
+        editorTheme.value = 'dark'
+      }
+    }).catch(() => {})
+    return
+  }
   GetConfig().then(result => {
     if (result.darkTheme) {
       editorDataRef.darkTheme = true
@@ -180,8 +199,9 @@ const shareDataRef = reactive({
 const promptPlazaApiBase = ref('http://go-stock.sparkmemory.top:1918/api')
 
 function query({ page, pageSize = 10, name = "", type = "", content = "" }) {
+  const listFunc = isWebMode.value ? GetPromptTemplateListBridge : GetPromptTemplateList
   return new Promise((resolve) => {
-    GetPromptTemplateList({
+    listFunc({
       "page": page,
       "pageSize": pageSize,
       "name": name,
@@ -217,7 +237,11 @@ function handlePageChange(currentPage) {
 }
 const promptTypeOptions = [
   {label: "模型系统Prompt", value: '模型系统Prompt'},
-  {label: "模型用户Prompt", value: '模型用户Prompt'},]
+  {label: "模型用户Prompt", value: '模型用户Prompt'},
+  {label: "A股筛选", value: 'A股筛选'},
+  {label: "数据分析", value: '数据分析'},
+  {label: "择时选股", value: '择时选股'},
+]
 const searchFormRef = reactive({
   name: "",
   type: null,
@@ -271,12 +295,23 @@ function savePromptTemplate() {
     return
   }
 
-  const apiCall = modalDataRef.isEdit ? UpdatePromptTemplate : AddPromptTemplate
+  const apiCall = modalDataRef.isEdit
+    ? (isWebMode.value ? UpdatePromptTemplateBridge : UpdatePromptTemplate)
+    : (isWebMode.value ? AddPromptTemplateBridge : AddPromptTemplate)
   apiCall(modalDataRef.formData).then((res) => {
-    message.info( res )
+    message.success( res )
     modalDataRef.visible = false
     handleSearch()
     EventsEmit('promptTemplatesChanged')
+  }).catch((err) => {
+    const msg = err?.message || ''
+    if (msg.includes('已存在') || msg.includes('already exists')) {
+      message.warning('该模板名称已存在，请更换名称后重试')
+    } else if (msg.includes('未找到') || msg.includes('not found')) {
+      message.error('模板不存在，可能已被删除，请刷新后重试')
+    } else {
+      message.error(msg || (modalDataRef.isEdit ? '保存失败，请稍后重试' : '添加失败，请稍后重试'))
+    }
   })
 }
 
@@ -288,10 +323,13 @@ function deletePromptTemplate(id) {
     positiveText: '确定',
     negativeText: '取消',
     onPositiveClick: () => {
-      DeletePromptTemplate(id).then((res) => {
-        message.info( res )
+      const delFunc = isWebMode.value ? DeletePromptTemplateBridge : DeletePromptTemplate
+      delFunc(id).then((res) => {
+        message.success('删除成功')
         handleSearch()
         EventsEmit('promptTemplatesChanged')
+      }).catch(() => {
+        message.error('删除失败')
       })
     }
   })
@@ -324,8 +362,8 @@ async function showShareModal(row) {
   shareDataRef.isPublic = true
   shareDataRef.vipOnly = false
   shareDataRef.visible = true
-  await GetConfig().then(result => {
-    if (result.promptPlazaApiBase) {
+  await (isWebMode.value ? GetConfigBridge() : GetConfig()).then(result => {
+    if (result?.promptPlazaApiBase) {
       promptPlazaApiBase.value = result.promptPlazaApiBase
     }
   })
