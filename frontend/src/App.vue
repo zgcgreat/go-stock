@@ -1180,8 +1180,8 @@ onMounted(() => {
                 :y-offset="150"
                 :rotate="-15"
             >
-              <FloatingAiAssistant />
-              <FloatingAgentAssistant />
+              <FloatingAiAssistant v-if="!isWebMode" />
+              <FloatingAgentAssistant v-if="!isWebMode" />
 
               <!-- Web 模式：顶部 Tab 导航布局（login/register 页面不显示导航） -->
               <template v-if="isWebMode && !isAuthPage">

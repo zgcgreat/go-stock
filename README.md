@@ -204,6 +204,54 @@
 ## 🤖 状态
 ![Alt](https://repobeats.axiom.co/api/embed/40b07d415a42c2264a18c4fe1b6f182ff1470687.svg "Repobeats analytics image")
 
+## 🐳 Docker 部署更新
+
+Docker 部署后，代码更新时无需重新走完整部署流程，按以下步骤更新即可（宿主机使用 5173 端口）：
+
+### 本地构建导出
+
+```bash
+# 拉取最新代码
+git pull origin dev-web
+
+# 构建前端（本地构建避免 VPS OOM）
+cd frontend && npm install && npm run build && cd ..
+
+# 构建新镜像
+docker build -t go-stock-web:latest .
+
+# 导出为压缩文件
+docker save go-stock-web:latest | gzip > go-stock-web.tar.gz
+```
+
+### 传输到 VPS
+
+```bash
+# 使用 scp 上传（替换为你的 VPS 地址）
+scp go-stock-web.tar.gz user@your-vps-ip:/opt/
+```
+
+### VPS 加载并重启
+
+```bash
+# 加载新镜像
+cd /opt
+docker load < go-stock-web.tar.gz
+
+# 重启服务（数据卷不会丢失）
+cd /opt/go-stock
+docker-compose down
+docker-compose up -d
+
+# 清理旧镜像和导出文件
+docker image prune -f
+rm /opt/go-stock-web.tar.gz
+```
+
+> 💡 数据持久化通过 volume 映射（`./data:/app/data`、`./logs:/app/logs`），更新镜像不影响已有数据。容器内部监听 8080，宿主机映射到 5173。
+
+详细部署方案请参考 [DEPLOY.md](DEPLOY.md)。
+
 ## 🐳 关于技术支持申明
 - 本软件基于开源技术构建，使用Wails、NaiveUI、Vue、AI大模型等开源项目。 技术上如有问题，可以先向对应的开源社区请求帮助。
 - 开源不易，本人精力和时间有限，如需一对一技术支持，请先赞助。联系QQ(备注 技术支持)：506808970

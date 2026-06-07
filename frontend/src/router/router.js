@@ -38,8 +38,31 @@ const router = createRouter({
     routes,
 })
 
-// Web 模式下路由守卫：未登录跳转 /login
-router.beforeEach((to, from, next) => {
+/**
+ * 检查 JWT token 是否过期
+ * @param {string} token
+ * @returns {boolean} true=已过期或无法解析, false=未过期
+ */
+function isTokenExpired(token) {
+    if (!token) return true
+    try {
+        const parts = token.split('.')
+        if (parts.length !== 3) return true
+        const payload = JSON.parse(atob(parts[1]))
+        if (!payload.exp) return false  // 没有 exp 字段，不判断过期
+        // exp 是秒级时间戳，预留 30 秒缓冲
+        return payload.exp * 1000 < Date.now() + 30000
+    } catch (e) {
+        return true  // 解析失败视为过期
+    }
+}
+
+// 上次远程验证 token 的时间戳，避免每次导航都请求
+let lastTokenCheckTime = 0
+const TOKEN_CHECK_INTERVAL = 5 * 60 * 1000  // 5 分钟内不重复远程校验
+
+// Web 模式下路由守卫：未登录或 token 过期时跳转 /login
+router.beforeEach(async (to, from, next) => {
     // 桌面端 Wails 模式不需要登录检查
     if (window.go && window.go.main && window.go.main.App) {
         next()
@@ -51,11 +74,48 @@ router.beforeEach((to, from, next) => {
         return
     }
     // Web 模式：需要登录的路由
-    if (!Auth.isLoggedIn()) {
+    const token = Auth.getToken()
+    if (!token) {
         next({ name: 'login', query: { redirect: to.fullPath } })
         return
     }
-    next()
+
+    // JWT 本地过期检查（快速，无需网络请求）
+    if (isTokenExpired(token)) {
+        Auth.clearToken()
+        window.dispatchEvent(new Event('user-info-updated'))
+        next({ name: 'login', query: { redirect: to.fullPath } })
+        return
+    }
+
+    // token 未过期：首次进入或距离上次校验超过 5 分钟时，远程验证一次
+    const userInfo = Auth.getUserInfo()
+    const needRemoteCheck = !userInfo || (Date.now() - lastTokenCheckTime > TOKEN_CHECK_INTERVAL)
+    if (needRemoteCheck) {
+        try {
+            const res = await fetch('/api/v1/user/profile', {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            if (res.ok) {
+                const data = await res.json()
+                if (data.data) {
+                    Auth.setUserInfo(data.data)
+                }
+                lastTokenCheckTime = Date.now()
+                next()
+            } else {
+                // token 无效（被撤销等），清除并跳转登录
+                Auth.clearToken()
+                window.dispatchEvent(new Event('user-info-updated'))
+                next({ name: 'login', query: { redirect: to.fullPath } })
+            }
+        } catch (e) {
+            // 网络错误时放行（不因网络问题阻止页面访问）
+            next()
+        }
+    } else {
+        next()
+    }
 })
 
 export default router

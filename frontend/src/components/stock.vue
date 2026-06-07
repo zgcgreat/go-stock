@@ -58,6 +58,8 @@ import {
   WindowReload,
   WindowUnfullscreen
 } from '../../wailsjs/runtime'
+import {useIsWebMode} from "../composables/useResponsive";
+import * as Bridge from '../services/wails-bridge.js'
 import {Add, ChatboxOutline,} from '@vicons/ionicons5'
 import {MdEditor, MdPreview} from 'md-editor-v3';
 // preview.css相比style.css少了编辑器那部分样式
@@ -78,6 +80,7 @@ import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
 
 const route = useRoute()
 const router = useRouter()
+const {isWebMode} = useIsWebMode()
 
 const danmus = ref([])
 const ws = ref(null)
@@ -316,6 +319,37 @@ function handleTabDragEnd(event) {
 }
 
 onBeforeMount(() => {
+  // --- Web 模式：用 wails-bridge.js HTTP API ---
+  if (isWebMode.value) {
+    Bridge.GetGroupList().then(result => {
+      groupList.value = result || []
+    }).catch(err => { console.error("GetGroupList web error:", err) })
+    Bridge.GetStockList("").then(result => {
+      stockList.value = result || []
+      options.value = (result || []).map(item => {
+        return { label: item.name + " - " + item.ts_code, value: item.ts_code }
+      })
+    }).catch(err => { console.error("GetStockList web error:", err) })
+    Bridge.GetConfig().then(result => {
+      if (result) {
+        if (result.openAiEnable) data.openAiEnable = true
+        if (result.enableDanmu) data.enableDanmu = true
+        if (result.darkTheme) data.darkTheme = true
+      }
+    }).catch(err => { console.error("GetConfig web error:", err) })
+    Bridge.GetPromptTemplates("", "").then(res => {
+      promptTemplates.value = res || []
+      sysPromptOptions.value = (res || []).filter(item => item.type === '模型系统Prompt')
+      userPromptOptions.value = (res || []).filter(item => item.type === '模型用户Prompt')
+    }).catch(err => { console.error("GetPromptTemplates web error:", err) })
+    Bridge.GetAiConfigs().then(res => {
+      aiConfigs.value = res || []
+      if (res && res.length > 0) data.aiConfigId = res[0].ID
+    }).catch(err => { console.error("GetAiConfigs web error:", err) })
+    return  // Web 模式不注册 Wails Events
+  }
+
+  // --- 桌面端：用 Wails 原生绑定 ---
   GetGroupList().then(result => {
     groupList.value = result
     const sorts = result.map(item => item.sort);
@@ -563,6 +597,33 @@ onMounted(() => {
     initDraggableTabs();
   });
 
+  // --- Web 模式：用 wails-bridge.js HTTP API ---
+  if (isWebMode.value) {
+    Bridge.GetFollowList(currentGroupId.value).then(result => {
+      followList.value = result || []
+      for (const followedStock of (result || [])) {
+        if (followedStock.StockCode.startsWith("us")) {
+          followedStock.StockCode = "gb_" + followedStock.StockCode.replace("us", "").toLowerCase()
+        }
+        if (!stocks.value.includes(followedStock.StockCode)) {
+          stocks.value.push(followedStock.StockCode)
+        }
+        Bridge.Greet(followedStock.StockCode).then(result => {
+          updateData(result)
+        })
+      }
+      message.destroyAll()
+    }).catch(err => { console.error("GetFollowList web error:", err) })
+    Bridge.GetVersionInfo().then((res) => {
+      if (res) {
+        icon.value = res.icon
+        refreshEffectiveVip()
+      }
+    }).catch(err => { console.error("GetVersionInfo web error:", err) })
+    return  // Web 模式不创建弹幕 WebSocket
+  }
+
+  // --- 桌面端：用 Wails 原生绑定 ---
   message.loading("Loading...")
   GetFollowList(currentGroupId.value).then(result => {
 

@@ -47,7 +47,7 @@ services:
     container_name: go-stock-web
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "5173:8080"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -95,6 +95,7 @@ docker save go-stock-web:latest | gzip > go-stock-web.tar.gz
 scp go-stock-web.tar.gz user@your-vps-ip:/opt/
 ```
 
+
 ### 4. VPS 加载并运行
 
 ```bash
@@ -114,7 +115,7 @@ services:
     container_name: go-stock-web
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "5173:8080"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -325,4 +326,6 @@ docker-compose pull && docker-compose up -d
 
 ## 访问应用
 
-启动后访问: `http://your-vps-ip:8080`
+启动后访问: `http://your-vps-ip:5173`
+
+> 💡 容器内部应用监听 8080 端口，通过 Docker 端口映射到宿主机 5173 端口。如需更改宿主机端口，修改 `docker-compose.yml` 中 `ports` 的左侧数字即可。
