@@ -40,6 +40,7 @@ import { useRouter } from 'vue-router'
 import { PersonOutline, LockClosedOutline } from '@vicons/ionicons5'
 import { NIcon, useMessage } from 'naive-ui'
 import apiService from '../services/api.js'
+import Auth from '../utils/auth.js'
 
 const router = useRouter()
 const message = useMessage()
@@ -69,9 +70,20 @@ const handleLogin = async () => {
     const res = await apiService.login(formData.value)
     if (res.token) {
       localStorage.setItem('token', res.token)
+      // 保存用户信息（含 role），用于权限判断
+      Auth.setUserInfo({
+        userId: res.userId,
+        username: res.username,
+        role: res.role,
+        vipLevel: res.vipLevel,
+        vipStartAt: res.vipStartAt,
+        vipEndAt: res.vipEndAt,
+      })
+      // 通知同 Tab 其他组件刷新用户信息
+      window.dispatchEvent(new Event('user-info-updated'))
       message.success('登录成功')
-      const redirect = sessionStorage.getItem('redirectAfterLogin') || '/'
-      sessionStorage.removeItem('redirectAfterLogin')
+      // 路由守卫可能带了 redirect 参数
+      const redirect = router.currentRoute.value.query.redirect || '/'
       router.push(redirect)
     }
   } catch (err) {

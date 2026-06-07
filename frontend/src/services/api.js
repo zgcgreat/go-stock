@@ -10,6 +10,9 @@ const apiClient = axios.create({
   },
 });
 
+// 401 跳转标记，防止多个并发请求重复跳转
+let isRedirecting = false;
+
 // 请求拦截器 - 用于添加认证令牌
 apiClient.interceptors.request.use(
   (config) => {
@@ -37,7 +40,15 @@ apiClient.interceptors.response.use(
       const url = error.config?.url || '';
       if (!url.includes('/auth/login') && !url.includes('/auth/register')) {
         localStorage.removeItem('token');
-        window.location.href = '/login';
+        localStorage.removeItem('user_info');
+        window.dispatchEvent(new Event('user-info-updated'));
+        // 防止并发请求重复跳转
+        if (!isRedirecting) {
+          isRedirecting = true;
+          // hash 模式下用 window.location.hash 跳转
+          window.location.hash = '#/login';
+          setTimeout(() => { isRedirecting = false; }, 1000);
+        }
       }
     }
 
@@ -81,6 +92,8 @@ export class ApiService {
     try {
       const response = await this.client.post('/auth/logout');
       localStorage.removeItem('token');
+      localStorage.removeItem('user_info');
+      window.dispatchEvent(new Event('user-info-updated'));
       return response.data;
     } catch (error) {
       throw this.handleError(error);

@@ -8,8 +8,8 @@ import {
   WindowUnfullscreen,
   WindowSetTitle
 } from '../wailsjs/runtime'
-import {h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
-import {RouterLink, useRouter} from 'vue-router'
+import {computed, h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
+import {RouterLink, useRouter, useRoute} from 'vue-router'
 import {createDiscreteApi,darkTheme,lightTheme , NIcon, NText,NButton,dateZhCN,zhCN} from 'naive-ui'
 import {
   AlarmOutline,
@@ -40,12 +40,15 @@ import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} fro
 import {useIsWebMode} from "./composables/useResponsive";
 import WebLayout from "./components/layout/WebLayout.vue";
 
+const router = useRouter()
+const route = useRoute()
+
 const {isWebMode} = useIsWebMode()
 
-
-
-
-const router = useRouter()
+// Web 模式下登录/注册页面不显示导航
+const isAuthPage = computed(() => {
+  return route.name === 'login' || route.name === 'register'
+})
 const loading = ref(true)
 const loadingMsg = ref("加载数据中...")
 const enableNews = ref(false)
@@ -1016,6 +1019,12 @@ window.onerror = function (msg, source, lineno, colno, error) {
 };
 
 onBeforeMount(() => {
+  // Web 模式下跳过桌面端 wailsjs 原生调用，避免 window.go 不存在报错
+  if (isWebMode.value) {
+    loading.value = false
+    return
+  }
+
   GetVersionInfo().then(result => {
     if(result.officialStatement){
       content.value = result.officialStatement+"\n\n"+content.value
@@ -1094,6 +1103,12 @@ onBeforeMount(() => {
 })
 
 onMounted(() => {
+  // Web 模式下跳过桌面端 wailsjs 原生调用
+  if (isWebMode.value) {
+    loading.value = false
+    return
+  }
+
   updateMarketStatus()
   marketStatusTimer = setInterval(() => {
     refreshMotto()
@@ -1165,11 +1180,11 @@ onMounted(() => {
                 :y-offset="150"
                 :rotate="-15"
             >
-<!--              <FloatingAiAssistant />-->
+              <FloatingAiAssistant />
               <FloatingAgentAssistant />
 
-              <!-- Web 模式：顶部 Tab 导航布局 -->
-              <template v-if="isWebMode">
+              <!-- Web 模式：顶部 Tab 导航布局（login/register 页面不显示导航） -->
+              <template v-if="isWebMode && !isAuthPage">
                 <WebLayout
                   :menu-options="menuOptions"
                   :active-key="activeKey"
@@ -1181,18 +1196,17 @@ onMounted(() => {
                     <template #description>
                       {{ loadingMsg }}
                     </template>
-                    <n-marquee :speed="100" style="position: relative;top:0;z-index: 19;width: 100%"
-                               v-if="(telegraph.length>0)&&(enableNews)">
-                      <n-tag type="warning" v-for="item in telegraph" style="margin-right: 10px">
-                        {{ item }}
-                      </n-tag>
-                    </n-marquee>
                     <n-scrollbar style="height: calc(100vh - 80px);">
                       <n-skeleton v-if="loading" height="calc(100vh)" />
                       <RouterView/>
                     </n-scrollbar>
                   </n-spin>
                 </WebLayout>
+              </template>
+
+              <!-- Web 模式：登录/注册页面（无导航） -->
+              <template v-else-if="isWebMode && isAuthPage">
+                <RouterView/>
               </template>
 
               <!-- 桌面端 Wails 模式：底部水平菜单布局 -->

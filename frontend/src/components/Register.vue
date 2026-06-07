@@ -54,6 +54,7 @@ import { useRouter } from 'vue-router'
 import { PersonOutline, LockClosedOutline, MailOutline } from '@vicons/ionicons5'
 import { NIcon, useMessage } from 'naive-ui'
 import apiService from '../services/api.js'
+import Auth from '../utils/auth.js'
 
 const router = useRouter()
 const message = useMessage()
@@ -103,8 +104,14 @@ const handleRegister = async () => {
     const { confirmPassword, ...registerData } = formData.value
     const res = await apiService.register(registerData)
     if (res.token) {
-      // 使用统一的 Auth 工具类来处理 token 存储
       localStorage.setItem('token', res.token)
+      // 保存用户信息，用于权限判断
+      Auth.setUserInfo({
+        userId: res.userId,
+        username: registerData.username,
+        role: res.role || 'user',
+      })
+      window.dispatchEvent(new Event('user-info-updated'))
       message.success('注册成功')
       router.push('/')
     }

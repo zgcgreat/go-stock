@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { h } from 'vue'
 import { NIcon } from 'naive-ui'
@@ -72,9 +72,12 @@ import {
   FlaskOutline,
   SettingsOutline,
   MenuOutline,
+  PeopleOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
+import Auth from '../../utils/auth'
+import apiService from '../../services/api.js'
 
 const props = defineProps({
   menuOptions: {
@@ -97,6 +100,51 @@ const router = useRouter()
 const { isMobile } = useResponsive()
 const showMoreDrawer = ref(false)
 
+// 响应式用户角色：登录后 setUserInfo 触发更新
+const userRole = ref('')
+const isAdmin = computed(() => {
+  const role = userRole.value
+  return role === 'admin' || role === 'super_admin'
+})
+
+// 初始化 + 监听 localStorage 变化（跨 Tab / 登录后刷新）
+function refreshUserRole() {
+  const userInfo = Auth.getUserInfo()
+  userRole.value = userInfo?.role || ''
+}
+
+// 如果 localStorage 没有 user_info 但有 token，主动获取用户信息
+async function ensureUserInfo() {
+  if (Auth.getUserInfo()) {
+    refreshUserRole()
+    return
+  }
+  if (!Auth.getToken()) return
+  try {
+    const res = await apiService.client.get('/user/profile')
+    const user = res.data || {}
+    Auth.setUserInfo({
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      vipLevel: user.vipLevel,
+      vipStartAt: user.vipStartAt,
+      vipEndAt: user.vipEndAt,
+    })
+    refreshUserRole()
+  } catch (e) {
+    console.warn('[WebLayout] 获取用户信息失败:', e)
+  }
+}
+ensureUserInfo()
+
+// 监听 storage 事件（其他 Tab 登录/退出时触发）
+onMounted(() => {
+  window.addEventListener('storage', refreshUserRole)
+  // 自定义事件：同 Tab 内 Login.vue 登录成功后触发
+  window.addEventListener('user-info-updated', refreshUserRole)
+})
+
 // 主Tab定义：只负责一级页面切换，子页面内部自己管Tab
 const mainTabs = [
   { key: 'stock', label: '自选', icon: StarOutline, route: { name: 'stock' } },
@@ -106,21 +154,24 @@ const mainTabs = [
   { key: 'agent', label: 'AI', icon: Robot, route: { name: 'agent' } },
   { key: 'research', label: '研究', icon: FlaskOutline, route: { name: 'research' } },
   { key: 'settings', label: '设置', icon: SettingsOutline, route: { name: 'settings' } },
+  { key: 'admin', label: '用户管理', icon: PeopleOutline, route: { name: 'userManagement' }, adminOnly: true },
 ]
 
 // 移动端只显示4个核心Tab
 const mobileVisibleCount = 4
 
 const visibleMainTabs = computed(() => {
+  const tabs = mainTabs.filter(tab => !tab.adminOnly || isAdmin.value)
   if (isMobile.value) {
-    return mainTabs.slice(0, mobileVisibleCount)
+    return tabs.slice(0, mobileVisibleCount)
   }
-  return mainTabs
+  return tabs
 })
 
 const overflowTabs = computed(() => {
   if (isMobile.value) {
-    return mainTabs.slice(mobileVisibleCount)
+    const tabs = mainTabs.filter(tab => !tab.adminOnly || isAdmin.value)
+    return tabs.slice(mobileVisibleCount)
   }
   return []
 })
@@ -143,6 +194,7 @@ const activeMainTab = computed(() => {
   if (key.startsWith('research') || ['uplimitLadder', 'promptPlaza', 'promptQa',
       'stockChanges', 'mcpServers', 'skills'].includes(key)) return 'research'
   if (['fundFollow', 'fundRanking'].includes(key)) return 'fund'
+  if (key === 'admin' || key === 'userManagement') return 'admin'
   return 'stock'
 })
 
