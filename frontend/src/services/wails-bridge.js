@@ -139,10 +139,11 @@ export function GetStockList(keyword) {
   if (isWailsMode()) {
     return window.go.main.App.GetStockList(keyword || '');
   }
-  if (!keyword) {
-    return Promise.resolve([]);
+  // Web 模式：空关键词获取全部股票（用于预加载后客户端 filter 搜索）
+  const params = {};
+  if (keyword) {
+    params.keyword = keyword;
   }
-  const params = { keyword };
   return apiService.client.get('/stocks/search', { params, headers: getAuthHeaders() })
     .then(res => {
       if (res.data && res.data.data) {
