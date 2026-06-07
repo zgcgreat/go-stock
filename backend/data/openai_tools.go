@@ -878,8 +878,13 @@ func AskAiWithToolsDepth(o *OpenAi, err error, messages []map[string]interface{}
 	}
 }
 
-func (o *OpenAi) SaveAIResponseResult(stockCode, stockName, result, chatId, question string) {
+func (o *OpenAi) SaveAIResponseResult(stockCode, stockName, result, chatId, question string, userID ...uint) {
+	uid := uint(0)
+	if len(userID) > 0 {
+		uid = userID[0]
+	}
 	err := db.Dao.Create(&models.AIResponseResult{
+		UserID:    uid,
 		StockCode: stockCode,
 		StockName: stockName,
 		ModelName: o.Model,

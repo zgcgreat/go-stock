@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 
 	"go-stock/backend/agent"
 	"go-stock/backend/data"
@@ -71,6 +72,15 @@ func AITradeAnalyze(c *gin.Context) {
 		aiConfigID = int(settingConfig.AiConfigs[0].ID)
 	}
 
+	// 获取真实模型名称
+	modelName := ""
+	aiConfig, found := lo.Find(settingConfig.AiConfigs, func(item *data.AIConfig) bool {
+		return int(item.ID) == aiConfigID
+	})
+	if found {
+		modelName = aiConfig.ModelName
+	}
+
 	chatID := fmt.Sprintf("web-%d-%d", userID, time.Now().Unix())
 
 	c.Header("Content-Type", "text/event-stream")
@@ -111,7 +121,7 @@ func AITradeAnalyze(c *gin.Context) {
 	go func() {
 		aiResult := &models.AIResponseResult{
 			ChatId:    chatID,
-			ModelName: fmt.Sprintf("config-%d", aiConfigID),
+			ModelName: modelName,
 			StockCode: req.StockCode,
 			StockName: req.StockName,
 			Question:  req.Question,
@@ -163,7 +173,14 @@ func GetAIResponses(c *gin.Context) {
 		query = query.Where("created_at >= ?", startDate)
 	}
 	if endDate := c.Query("endDate"); endDate != "" {
-		query = query.Where("created_at <= ?", endDate)
+		// endDate 加一天，用 < 比较，确保包含 endDate 当天全部时间
+		endDateParsed, err := time.Parse("2006-01-02", endDate)
+		if err == nil {
+			nextDay := endDateParsed.AddDate(0, 0, 1).Format("2006-01-02")
+			query = query.Where("created_at < ?", nextDay)
+		} else {
+			query = query.Where("created_at <= ?", endDate+" 23:59:59")
+		}
 	}
 
 	query.Count(&total)

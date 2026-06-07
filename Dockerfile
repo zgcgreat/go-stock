@@ -5,7 +5,7 @@
 # ============================================
 
 # 阶段1: 构建后端
-FROM golang:1.23-alpine AS backend-builder
+FROM golang:1.26-alpine AS backend-builder
 
 # 安装必要工具
 RUN apk add --no-cache git ca-certificates gcc musl-dev

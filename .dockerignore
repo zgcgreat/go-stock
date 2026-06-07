@@ -17,7 +17,8 @@
 frontend/node_modules
 
 # Build artifacts (will be built in container)
-frontend/dist
+# Note: frontend/dist is NOT ignored — Dockerfile expects pre-built frontend assets
+# frontend/dist
 
 # Go build cache
 *.exe
