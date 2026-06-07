@@ -38,6 +38,18 @@
             <n-icon><MenuOutline /></n-icon>
           </template>
         </n-button>
+
+        <!-- 用户信息 + 退出登录 -->
+        <div class="user-area" v-if="isWebMode">
+          <n-dropdown :options="userMenuOptions" @select="handleUserMenuSelect">
+            <n-button quaternary size="small" class="user-btn">
+              <template #icon>
+                <n-icon><PersonCircleOutline /></n-icon>
+              </template>
+              <span class="user-name">{{ displayName }}</span>
+            </n-button>
+          </n-dropdown>
+        </div>
       </div>
     </header>
 
@@ -73,11 +85,15 @@ import {
   SettingsOutline,
   MenuOutline,
   PeopleOutline,
+  LogOutOutline,
+  PersonCircleOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
+import { useIsWebMode } from '../../composables/useResponsive'
 import Auth from '../../utils/auth'
 import apiService from '../../services/api.js'
+import { useMessage, useDialog } from 'naive-ui'
 
 const props = defineProps({
   menuOptions: {
@@ -98,7 +114,30 @@ const emit = defineEmits(['select', 'update:activeKey'])
 
 const router = useRouter()
 const { isMobile } = useResponsive()
+const { isWebMode } = useIsWebMode()
+const message = useMessage()
+const dialog = useDialog()
 const showMoreDrawer = ref(false)
+
+// 退出登录
+function handleLogout() {
+  dialog.warning({
+    title: '退出登录',
+    content: '确定要退出登录吗？',
+    positiveText: '确定退出',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      Auth.clearToken()
+      window.dispatchEvent(new Event('user-info-updated'))
+      message.success('已退出登录')
+      router.push({ name: 'login' })
+    }
+  })
+}
+
+// 用户信息
+const userInfo = computed(() => Auth.getUserInfo())
+const displayName = computed(() => userInfo.value?.username || '用户')
 
 // 响应式用户角色：登录后 setUserInfo 触发更新
 const userRole = ref('')
@@ -222,6 +261,22 @@ const handleOverflowSelect = (key) => {
 watch(isMobile, () => {
   showMoreDrawer.value = false
 })
+
+// 用户下拉菜单
+const userMenuOptions = computed(() => {
+  const options = [
+    { label: displayName.value, key: 'info', disabled: true },
+    { type: 'divider', key: 'd1' },
+    { label: '退出登录', key: 'logout', icon: () => h(NIcon, null, { default: () => h(LogOutOutline) }) },
+  ]
+  return options
+})
+
+function handleUserMenuSelect(key) {
+  if (key === 'logout') {
+    handleLogout()
+  }
+}
 </script>
 
 <style scoped>
@@ -296,5 +351,24 @@ watch(isMobile, () => {
   flex: 1;
   overflow: auto;
   min-height: 0;
+}
+
+.user-area {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.user-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-name {
+  font-size: 13px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
