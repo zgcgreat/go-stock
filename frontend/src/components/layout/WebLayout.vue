@@ -304,6 +304,19 @@ function handleUserMenuSelect(key) {
   min-width: 0;
 }
 
+/* 移动端 Tab 支持左右滑动 */
+@media (max-width: 768px) {
+  .main-tabs :deep(.n-tabs-nav-scroll-wrapper) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  
+  .main-tabs :deep(.n-tabs-nav-scroll-wrapper::-webkit-scrollbar) {
+    display: none;
+  }
+}
+
 .main-tabs :deep(.n-tabs-nav) {
   justify-content: flex-start;
 }
