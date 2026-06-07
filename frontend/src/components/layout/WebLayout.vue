@@ -3,12 +3,6 @@
     <!-- 顶部导航栏：只有一级Tab -->
     <header class="web-header">
       <div class="header-inner">
-        <!-- Logo + 市场状态 -->
-        <div class="brand">
-          <span class="brand-text">go-stock</span>
-          <span class="brand-status" v-if="marketStatus">{{ marketStatus }}</span>
-        </div>
-
         <!-- 主 Tab 导航 -->
         <n-tabs
           :value="activeMainTab"
@@ -303,30 +297,6 @@ function handleUserMenuSelect(key) {
   padding: 0 12px;
   height: 44px;
   gap: 8px;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  margin-right: 4px;
-}
-
-.brand-text {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--n-text-color);
-  letter-spacing: -0.3px;
-}
-
-.brand-status {
-  font-size: 11px;
-  color: var(--n-text-color-3);
-  white-space: nowrap;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--n-color-hover, #f5f5f5);
 }
 
 .main-tabs {
