@@ -112,6 +112,7 @@ logs/
 /data/*.db*
 dist/
 ai-assistant-web/data/*.db*
+ai-assistant-web/static/
 *.exe
 /build/bin/*
 frontend/package.json.md5
