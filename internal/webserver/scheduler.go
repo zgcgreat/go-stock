@@ -47,6 +47,7 @@ func (s *Scheduler) Start() {
 	go s.initStockDataIfEmpty()
 
 	go s.runMarketStatisticTask()
+	go s.runBKFundFlowTask()
 	go s.runHotWordsTask()
 
 	log.Println("[Scheduler] Web定时任务调度器已启动")
@@ -96,6 +97,40 @@ func (s *Scheduler) fetchMarketStatistic() {
 		return
 	}
 	logger.SugaredLogger.Debugf("[Scheduler] 市场统计数据采集成功")
+}
+
+func (s *Scheduler) runBKFundFlowTask() {
+	s.fetchBKFundFlow()
+
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopChan:
+			log.Println("[Scheduler] 板块资金流向采集任务已停止")
+			return
+		case <-ticker.C:
+			if isTradingTime() {
+				s.fetchBKFundFlow()
+			}
+		}
+	}
+}
+
+func (s *Scheduler) fetchBKFundFlow() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.SugaredLogger.Errorf("[Scheduler] 获取板块资金流向失败: %v", r)
+		}
+	}()
+
+	count, err := data.NewBKFundFlowApi().FetchAndSave()
+	if err != nil {
+		logger.SugaredLogger.Errorf("[Scheduler] 获取板块资金流向失败: %v", err)
+		return
+	}
+	logger.SugaredLogger.Debugf("[Scheduler] 板块资金流向采集成功，保存 %d 条", count)
 }
 
 func (s *Scheduler) runHotWordsTask() {

@@ -1263,6 +1263,33 @@ export function GetMarketStatisticByDate(arg1) {
     .catch(() => []);
 }
 
+export function GetBKFundFlowTopListByDate(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetBKFundFlowTopListByDate(arg1, arg2);
+  return apiService.client.get('/market/bk-fund-flow/top', {
+    params: { date: arg1, topN: arg2 },
+    headers: getAuthHeaders(),
+  })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function GetBKFundFlowListByDate(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetBKFundFlowListByDate(arg1, arg2);
+  return apiService.client.get('/market/bk-fund-flow/list', {
+    params: { code: arg1, date: arg2 },
+    headers: getAuthHeaders(),
+  })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function FetchAndSaveBKFundFlow() {
+  if (isWailsMode()) return window.go.main.App.FetchAndSaveBKFundFlow?.();
+  return apiService.client.post('/market/bk-fund-flow/fetch', {}, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '获取成功')
+    .catch(err => err.response?.data?.message || err.message || '获取失败');
+}
+
 export function CreateMCPServer(arg1) {
   if (isWailsMode()) return window.go.main.App.CreateMCPServer(arg1);
   return apiService.client.post('/mcp/servers', arg1, { headers: getAuthHeaders() })

@@ -1023,11 +1023,11 @@ type StockConceptInfo struct {
 }
 
 type AiRecommendStocks struct {
-	ID        uint      `gorm:"primarykey"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	UserID   uint      `json:"userId" gorm:"column:user_id;index"`
-	DataTime *time.Time `json:"dataTime" gorm:"index;autoCreateTime" md:"推荐时间"`
+	ID                          uint `gorm:"primarykey"`
+	CreatedAt                   time.Time
+	UpdatedAt                   time.Time
+	UserID                      uint       `json:"userId" gorm:"column:user_id;index"`
+	DataTime                    *time.Time `json:"dataTime" gorm:"index;autoCreateTime" md:"推荐时间"`
 	ModelName                   string     `json:"modelName" md:"模型名称"`
 	Rating                      string     `json:"rating" md:"评级"`
 	StockCode                   string     `json:"stockCode" md:"股票代码"`
@@ -1463,7 +1463,7 @@ type SecuritiesCompanyOpinionData struct {
 
 type CronTask struct {
 	ID            uint       `json:"id" gorm:"primarykey"`
-	UserID        uint       `json:"userId" gorm:"index"`              // 用户隔离字段，0表示桌面端（不限制）
+	UserID        uint       `json:"userId" gorm:"index"` // 用户隔离字段，0表示桌面端（不限制）
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 	Name          string     `json:"name" gorm:"size:255;not null"`
@@ -1485,7 +1485,7 @@ func (CronTask) TableName() string {
 }
 
 type CronTaskQuery struct {
-	UserID   uint   `json:"userId"`   // 用户隔离，0表示桌面端（不过滤）
+	UserID   uint   `json:"userId"` // 用户隔离，0表示桌面端（不过滤）
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
 	Name     string `json:"name"`
@@ -1509,7 +1509,7 @@ type CronTaskPageData struct {
 // AiAssistantSession 悬浮 AI 助手会话表，保存最近一次对话
 type AiAssistantSession struct {
 	ID        uint      `json:"id" gorm:"primarykey"`
-	UserID    uint      `json:"userId" gorm:"index"`        // 用户隔离字段，0表示桌面端（不限制）
+	UserID    uint      `json:"userId" gorm:"index"`            // 用户隔离字段，0表示桌面端（不限制）
 	SessionId string    `json:"sessionId" gorm:"index;size:64"` // 会话ID，时间戳格式
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -1722,30 +1722,30 @@ type CustomStrategyPageData struct {
 
 // PlazaPrompt 提示词广场缓存表（定时从外部API同步）
 type PlazaPrompt struct {
-	ID              uint      `json:"id" gorm:"primarykey"`
-	ExtID           uint      `json:"extId" gorm:"uniqueIndex;not null"` // 外部广场的 prompt ID
-	Title           string    `json:"title" gorm:"size:500"`
-	Content         string    `json:"content" gorm:"type:text"`
-	Description     string    `json:"description" gorm:"size:1000"`
-	Summary         string    `json:"summary" gorm:"size:1000"`
-	Category        string    `json:"category" gorm:"size:100;index"`
-	Tags            string    `json:"tags" gorm:"size:500"`
-	IsPublic        bool      `json:"isPublic" gorm:"default:true"`
-	VipOnly         bool      `json:"vipOnly" gorm:"default:false"`
-	NeedVip         bool      `json:"needVip" gorm:"default:false"` // 需要 VIP 才能查看完整内容
-	AuthorID        uint      `json:"authorId"`
-	AuthorNickname  string    `json:"authorNickname" gorm:"size:100"`
-	AuthorUsername  string    `json:"authorUsername" gorm:"size:100"`
-	AuthorVipLevel  int       `json:"authorVipLevel" gorm:"default:0"`
-	ViewsCount      int       `json:"viewsCount" gorm:"default:0"`
-	LikesCount      int       `json:"likesCount" gorm:"default:0"`
-	FavoritesCount  int       `json:"favoritesCount" gorm:"default:0"`
-	DownloadsCount  int       `json:"downloadsCount" gorm:"default:0"`
-	CommentsCount   int       `json:"commentsCount" gorm:"default:0"`
-	HotScore        float64   `json:"hotScore" gorm:"default:0"`
-	ExtCreatedAt    time.Time `json:"extCreatedAt"` // 外部广场的创建时间
-	ExtUpdatedAt    time.Time `json:"extUpdatedAt"` // 外部广场的更新时间
-	SyncedAt        time.Time `json:"syncedAt"`     // 本地同步时间
+	ID             uint      `json:"id" gorm:"primarykey"`
+	ExtID          uint      `json:"extId" gorm:"uniqueIndex;not null"` // 外部广场的 prompt ID
+	Title          string    `json:"title" gorm:"size:500"`
+	Content        string    `json:"content" gorm:"type:text"`
+	Description    string    `json:"description" gorm:"size:1000"`
+	Summary        string    `json:"summary" gorm:"size:1000"`
+	Category       string    `json:"category" gorm:"size:100;index"`
+	Tags           string    `json:"tags" gorm:"size:500"`
+	IsPublic       bool      `json:"isPublic" gorm:"default:true"`
+	VipOnly        bool      `json:"vipOnly" gorm:"default:false"`
+	NeedVip        bool      `json:"needVip" gorm:"default:false"` // 需要 VIP 才能查看完整内容
+	AuthorID       uint      `json:"authorId"`
+	AuthorNickname string    `json:"authorNickname" gorm:"size:100"`
+	AuthorUsername string    `json:"authorUsername" gorm:"size:100"`
+	AuthorVipLevel int       `json:"authorVipLevel" gorm:"default:0"`
+	ViewsCount     int       `json:"viewsCount" gorm:"default:0"`
+	LikesCount     int       `json:"likesCount" gorm:"default:0"`
+	FavoritesCount int       `json:"favoritesCount" gorm:"default:0"`
+	DownloadsCount int       `json:"downloadsCount" gorm:"default:0"`
+	CommentsCount  int       `json:"commentsCount" gorm:"default:0"`
+	HotScore       float64   `json:"hotScore" gorm:"default:0"`
+	ExtCreatedAt   time.Time `json:"extCreatedAt"` // 外部广场的创建时间
+	ExtUpdatedAt   time.Time `json:"extUpdatedAt"` // 外部广场的更新时间
+	SyncedAt       time.Time `json:"syncedAt"`     // 本地同步时间
 }
 
 func (PlazaPrompt) TableName() string {
@@ -1779,7 +1779,7 @@ type PlazaPromptQuery struct {
 	PageSize int    `form:"pageSize" json:"pageSize"`
 	Category string `form:"category" json:"category"`
 	Keyword  string `form:"keyword" json:"keyword"`
-	Sort     string `form:"sort" json:"sort"`     // latest, hot, likes, favorites, downloads, comments
+	Sort     string `form:"sort" json:"sort"`       // latest, hot, likes, favorites, downloads, comments
 	VipOnly  string `form:"vipOnly" json:"vipOnly"` // "true" 过滤VIP专属
 }
 
@@ -1789,4 +1789,24 @@ type PlazaQuestionQuery struct {
 	PageSize int    `form:"pageSize" json:"pageSize"`
 	Keyword  string `form:"keyword" json:"keyword"`
 	Resolved string `form:"resolved" json:"resolved"` // "true"/"false"
+}
+
+// BKFundFlow 板块资金流向数据
+type BKFundFlow struct {
+	ID        uint      `json:"id" gorm:"primarykey"`
+	Code      string    `json:"code" gorm:"size:20;index:idx_bk_code_time"`     // 板块代码 BK0475
+	Name      string    `json:"name" gorm:"size:50"`                            // 板块名称
+	NetInflow int64     `json:"netInflow"`                                      // 主力净流入金额（元）
+	SnapTime  string    `json:"snapTime" gorm:"size:19;index:idx_bk_code_time"` // 快照时间 YYYY-MM-DD HH:MM:SS
+	CreatedAt time.Time `json:"createdAt" gorm:"autoCreateTime"`
+}
+
+func (BKFundFlow) TableName() string {
+	return "bk_fund_flow"
+}
+
+// BKFundFlowPoint 板块资金流向数据点（前端折线图用）
+type BKFundFlowPoint struct {
+	SnapTime  string `json:"snapTime"`
+	NetInflow int64  `json:"netInflow"`
 }

@@ -248,6 +248,11 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/statistic/recent", handlers.GetRecentDaysMarketStatistic)
 			protected.GET("/market/statistic/by-date", handlers.GetMarketStatisticByDate)
 
+			// 板块资金流向
+			protected.POST("/market/bk-fund-flow/fetch", handlers.FetchAndSaveBKFundFlow)
+			protected.GET("/market/bk-fund-flow/top", handlers.GetBKFundFlowTopListByDate)
+			protected.GET("/market/bk-fund-flow/list", handlers.GetBKFundFlowListByDate)
+
 			// 异动监控
 			protected.GET("/stock-changes", handlers.GetStockChanges)
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
@@ -353,6 +358,7 @@ func MigrateAllTables() {
 		&models.VersionInfo{},
 		&models.StockChangeHistory{},
 		&models.MarketStatistic{},
+		&models.BKFundFlow{},
 		&models.PlazaPrompt{},
 		&models.PlazaQuestion{},
 		&handlers.UserSetting{},

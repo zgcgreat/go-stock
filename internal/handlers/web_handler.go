@@ -751,6 +751,59 @@ func GetMarketStatisticByDate(c *gin.Context) {
 	})
 }
 
+// FetchAndSaveBKFundFlow 获取并保存板块资金流向数据
+func FetchAndSaveBKFundFlow(c *gin.Context) {
+	count, err := data.NewBKFundFlowApi().FetchAndSave()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    -1,
+			"message": "获取板块资金流向失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "获取成功",
+		"data": gin.H{
+			"count": count,
+		},
+	})
+}
+
+// GetBKFundFlowTopListByDate 获取指定日期最新快照的板块资金排名
+func GetBKFundFlowTopListByDate(c *gin.Context) {
+	date := c.Query("date")
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	topN, _ := strconv.Atoi(c.DefaultQuery("topN", "20"))
+	list := data.NewBKFundFlowApi().GetBKFundFlowTopListByDate(date, topN)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    list,
+	})
+}
+
+// GetBKFundFlowListByDate 获取某个板块指定日期的资金流向历史数据
+func GetBKFundFlowListByDate(c *gin.Context) {
+	code := c.Query("code")
+	date := c.Query("date")
+	if code == "" || date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    -1,
+			"message": "code 和 date 参数不能为空",
+		})
+		return
+	}
+	points := data.NewBKFundFlowApi().GetBKFundFlowListByDate(code, date)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    points,
+	})
+}
+
 // IndicatorSearchStock 指标选股（从东方财富接口）
 func IndicatorSearchStock(c *gin.Context) {
 	keyword := c.Query("keyword")
