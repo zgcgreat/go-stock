@@ -228,3 +228,58 @@ body {
     color: #63e2b7;
 }
 
+/* Web 移动端通用兜底：集中处理 NaiveUI 常见溢出，减少逐页改动 */
+@media (max-width: 768px) {
+    #app {
+        height: 100dvh;
+        min-height: 100dvh;
+        overflow-x: hidden;
+    }
+
+    .n-data-table,
+    .n-data-table-wrapper,
+    .n-data-table-base-table,
+    .n-table-wrapper {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .n-modal,
+    .n-card {
+        max-width: calc(100vw - 24px);
+        box-sizing: border-box;
+    }
+
+    .n-form,
+    .n-form-item,
+    .n-input,
+    .n-input-number,
+    .n-select,
+    .n-date-picker,
+    .n-auto-complete,
+    .n-input-group {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .n-tabs-nav-scroll-wrapper {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .n-tabs-nav-scroll-wrapper::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+@supports not (height: 100dvh) {
+    @media (max-width: 768px) {
+        #app {
+            height: 100vh;
+            min-height: 100vh;
+        }
+    }
+}
+

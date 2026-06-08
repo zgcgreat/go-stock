@@ -490,7 +490,7 @@ function blinkBorder(findId) {
     />
   </n-modal>
 
-  <div style="position: fixed;bottom: 18px;right:5px;z-index: 10;width: 400px">
+  <div class="fund-floating-search">
     <n-input-group>
       <n-auto-complete
         v-model:value="data.name"
@@ -517,6 +517,23 @@ function blinkBorder(findId) {
 </template>
 
 <style scoped>
+.fund-floating-search {
+  position: fixed;
+  bottom: 18px;
+  right: 5px;
+  z-index: 10;
+  width: min(400px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+}
+
+@media (max-width: 768px) {
+  .fund-floating-search {
+    right: 8px;
+    bottom: 12px;
+    width: calc(100vw - 16px);
+  }
+}
+
 .blink-border {
   animation: blink-border 1s linear infinite;
   border: 4px solid transparent;

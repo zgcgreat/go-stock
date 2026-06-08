@@ -10,8 +10,8 @@
       <template #description>
         {{ loadingMsg }}
       </template>
-      <n-scrollbar style="height: calc(100vh - 80px);">
-        <n-skeleton v-if="loading" height="calc(100vh)" />
+      <n-scrollbar class="web-main-scrollbar">
+        <n-skeleton v-if="loading" height="calc(100dvh - 44px)" />
         <RouterView />
       </n-scrollbar>
     </n-spin>
@@ -44,3 +44,15 @@ const route = useRoute()
 // Web 模式下登录/注册页面不显示导航。
 const isAuthPage = computed(() => route.name === 'login' || route.name === 'register')
 </script>
+
+<style scoped>
+.web-main-scrollbar {
+  height: calc(100dvh - 44px);
+}
+
+@supports not (height: 100dvh) {
+  .web-main-scrollbar {
+    height: calc(100vh - 44px);
+  }
+}
+</style>

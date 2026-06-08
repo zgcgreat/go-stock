@@ -128,15 +128,24 @@ const handleRegister = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 16px;
+  box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 .register-card {
-  width: 400px;
+  width: min(400px, 100%);
   padding: 40px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+@supports not (min-height: 100dvh) {
+  .register-container {
+    min-height: 100vh;
+  }
 }
 .register-header {
   text-align: center;

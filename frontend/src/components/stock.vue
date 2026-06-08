@@ -2705,7 +2705,7 @@ watch(modalShow6, (newVal) => {
     </n-tab-pane>
   </n-tabs>
 
-  <div style="position: fixed;bottom: 18px;right:5px;z-index: 10;width: 400px">
+  <div class="stock-floating-search">
     <!--    <n-card :bordered="false">-->
     <n-input-group>
       <!--        <n-button  type="error" @click="addBTN=!addBTN" > <n-icon :component="Search"/>&nbsp;<n-text  v-if="addBTN">隐藏</n-text></n-button>-->
@@ -2973,6 +2973,23 @@ watch(modalShow6, (newVal) => {
 </template>
 
 <style scoped>
+.stock-floating-search {
+  position: fixed;
+  bottom: 18px;
+  right: 5px;
+  z-index: 10;
+  width: min(400px, calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+}
+
+@media (max-width: 768px) {
+  .stock-floating-search {
+    right: 8px;
+    bottom: 12px;
+    width: calc(100vw - 16px);
+  }
+}
+
 .md-editor-preview h3 {
   text-align: center !important;
 }

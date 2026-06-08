@@ -266,10 +266,18 @@ function handleUserMenuSelect(key) {
 <style scoped>
 .web-layout {
   width: 100%;
-  height: 100vh;
+  height: 100dvh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+@supports not (height: 100dvh) {
+  .web-layout {
+    height: 100vh;
+    min-height: 100vh;
+  }
 }
 
 .web-header {
@@ -287,6 +295,8 @@ function handleUserMenuSelect(key) {
   padding: 0 12px;
   height: 44px;
   gap: 8px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .main-tabs {

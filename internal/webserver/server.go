@@ -346,7 +346,6 @@ func MigrateAllTables() {
 		&models.StockInfoUS{},
 		&models.GlobalStockIndex{},
 		&models.LongTigerRankData{},
-		&models.OldSettings{},
 		&models.BKDict{},
 		&models.AiRecommendStocks{},
 		&models.AllStockInfo{},
