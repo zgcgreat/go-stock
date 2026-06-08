@@ -224,8 +224,8 @@ func main() {
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,
 			About: &mac.AboutInfo{
-				Title:   "go-stock",
-				Message: "go-stock：AI赋能股票分析✨ ",
+				Title:   "股海智擎",
+				Message: "股海智擎：AI驱动的智能投研决策中枢✨ ",
 				Icon:    icon,
 			},
 		},

@@ -265,12 +265,25 @@ body {
 
     .n-tabs-nav-scroll-wrapper {
         overflow-x: auto !important;
+        overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
     }
 
     .n-tabs-nav-scroll-wrapper::-webkit-scrollbar {
         display: none;
+    }
+
+    .n-tabs-nav-scroll-content {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        width: max-content !important;
+        min-width: max-content !important;
+    }
+
+    .n-tabs .n-tab {
+        flex: 0 0 auto !important;
+        white-space: nowrap;
     }
 }
 

@@ -422,13 +422,15 @@ function timeAgo(timeStr) {
         </n-space>
         <n-space>
           <n-button type="success" @click="showAskModal">❓ 提问</n-button>
-          <template v-if="isLoggedIn">
-            <n-tag type="success" size="medium" round>
-              {{ currentUser?.nickname || currentUser?.username || '已登录' }}
-            </n-tag>
-          </template>
-          <template v-else>
-            <n-text depth="3" style="font-size: 12px">请在"提示词广场"中登录</n-text>
+          <template v-if="!isWebMode">
+            <template v-if="isLoggedIn">
+              <n-tag type="success" size="medium" round>
+                {{ currentUser?.nickname || currentUser?.username || '已登录' }}
+              </n-tag>
+            </template>
+            <template v-else>
+              <n-text depth="3" style="font-size: 12px">请在"提示词广场"中登录</n-text>
+            </template>
           </template>
         </n-space>
       </n-space>

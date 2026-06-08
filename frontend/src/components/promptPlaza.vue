@@ -1002,15 +1002,17 @@ function timeAgo(timeStr) {
         </n-space>
         <n-space>
           <n-button type="success" @click="showCreateModal">✏️ 发布提示词</n-button>
-          <template v-if="isLoggedIn">
-            <n-tag :type="(isWebMode ? isLocalVip : currentUser?.vipLevel >= 1) ? 'warning' : 'success'" size="medium" round>
-              {{ currentUser?.nickname || currentUser?.username || (isWebMode ? Auth.getUserInfo()?.username : '已登录') }}
-              <template v-if="isWebMode ? isLocalVip : currentUser?.vipLevel >= 1"> · VIP</template>
-            </n-tag>
-            <n-button size="small" quaternary @click="handleLogout">退出</n-button>
-          </template>
-          <template v-else>
-            <n-button type="info" size="small" @click="loginModal.show = true; loginModal.tab = 'login'">登录 / 注册</n-button>
+          <template v-if="!isWebMode">
+            <template v-if="isLoggedIn">
+              <n-tag :type="currentUser?.vipLevel >= 1 ? 'warning' : 'success'" size="medium" round>
+                {{ currentUser?.nickname || currentUser?.username || '已登录' }}
+                <template v-if="currentUser?.vipLevel >= 1"> · VIP</template>
+              </n-tag>
+              <n-button size="small" quaternary @click="handleLogout">退出</n-button>
+            </template>
+            <template v-else>
+              <n-button type="info" size="small" @click="loginModal.show = true; loginModal.tab = 'login'">登录 / 注册</n-button>
+            </template>
           </template>
         </n-space>
       </n-space>
