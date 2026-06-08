@@ -26,6 +26,7 @@ func ApplyWebCompatibilityMigrations() {
 	})
 
 	migrateSettingsMissingColumns()
+	migrateAIConfigMissingColumns()
 }
 
 func migrateUserIDColumns(tableNames []string) {
@@ -59,8 +60,29 @@ func migrateSettingsMissingColumns() {
 		"em_api_key":                "VARCHAR(255) DEFAULT ''",
 		"window_width":              "INTEGER DEFAULT 0",
 		"window_height":             "INTEGER DEFAULT 0",
+		"http_proxy":                "TEXT DEFAULT ''",
+		"http_proxy_enabled":        "INTEGER DEFAULT 0",
+		"enable_agent":              "INTEGER DEFAULT 0",
 	}
 
+	migrateMissingColumns(tableName, columns)
+}
+
+// migrateAIConfigMissingColumns ensures ai_config includes fields added after early deployments.
+func migrateAIConfigMissingColumns() {
+	tableName := "ai_config"
+	columns := map[string]string{
+		"user_id":            "INTEGER DEFAULT 0",
+		"http_proxy":         "TEXT DEFAULT ''",
+		"http_proxy_enabled": "INTEGER DEFAULT 0",
+		"session_id":         "VARCHAR(64) DEFAULT ''",
+		"thinking":           "INTEGER DEFAULT 0",
+	}
+
+	migrateMissingColumns(tableName, columns)
+}
+
+func migrateMissingColumns(tableName string, columns map[string]string) {
 	for colName, colType := range columns {
 		var count int64
 		db.Dao.Raw("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?", tableName, colName).Scan(&count)
