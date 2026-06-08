@@ -36,7 +36,7 @@ import {
   ShareAnalysis,
   UnFollow,
   UpdateGroupSort
-} from '../../wailsjs/go/main/App'
+} from '../services/wails-bridge.js'
 import {
   NAvatar,
   NButton,
@@ -57,7 +57,7 @@ import {
   WindowFullscreen,
   WindowReload,
   WindowUnfullscreen
-} from '../../wailsjs/runtime'
+} from '../services/wails-bridge.js'
 import {useIsWebMode} from "../composables/useResponsive";
 import * as Bridge from '../services/wails-bridge.js'
 import {Add, ChatboxOutline,} from '@vicons/ionicons5'

@@ -1,6 +1,5 @@
 <script setup>
-import { GetStockList, GetConfig, GetEffectiveSponsorVip } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime'
+import { GetStockList, GetConfig, GetEffectiveSponsorVip, EventsOn } from '../services/wails-bridge.js'
 import StockLightweightKlineChart from './StockLightweightKlineChart.vue'
 import { NAutoComplete, NButton, NFlex, NText, NInputGroup, NModal, NCard } from 'naive-ui'
 import { useMessage } from 'naive-ui'

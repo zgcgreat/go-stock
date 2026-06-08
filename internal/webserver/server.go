@@ -2,7 +2,6 @@ package webserver
 
 import (
 	"embed"
-	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -18,6 +17,7 @@ import (
 	"go-stock/backend/models"
 	"go-stock/internal/handlers"
 	"go-stock/internal/middleware"
+	"go-stock/internal/migrations"
 )
 
 // WebAssets 嵌入的前端静态资源（由 cmd/web/main.go 注入）
@@ -191,8 +191,23 @@ func (ws *WebServer) initRouter() {
 
 			// 技能管理
 			protected.GET("/skills", handlers.GetSkillList)
+			protected.POST("/skills", handlers.CreateSkill)
 			protected.GET("/skills/all", handlers.GetAllSkills)
 			protected.GET("/skills/:id", handlers.GetSkillByID)
+			protected.PUT("/skills/:id", handlers.UpdateSkill)
+			protected.DELETE("/skills/:id", handlers.DeleteSkill)
+			protected.POST("/skills/:id/enable", handlers.EnableSkill)
+
+			// MCP 服务器管理
+			protected.GET("/mcp/servers", handlers.GetMCPServerList)
+			protected.POST("/mcp/servers", handlers.CreateMCPServer)
+			protected.GET("/mcp/servers/:id", handlers.GetMCPServerByID)
+			protected.PUT("/mcp/servers/:id", handlers.UpdateMCPServer)
+			protected.DELETE("/mcp/servers/:id", handlers.DeleteMCPServer)
+			protected.POST("/mcp/servers/:id/enable", handlers.EnableMCPServer)
+			protected.POST("/mcp/servers/:id/test", handlers.TestMCPServer)
+			protected.GET("/mcp/servers/:id/tools", handlers.GetMCPToolsByServerID)
+			protected.GET("/mcp/tools", handlers.GetAllMCPTools)
 
 			// 定时任务
 			protected.GET("/cron-task/types", handlers.GetCronTaskTypes)
@@ -345,65 +360,6 @@ func MigrateAllTables() {
 		&models.User{},
 	)
 
-	// 显式添加 user_id 列（SQLite AutoMigrate 可能不完整）
-	// 所有带用户隔离的表：首次部署时自动添加缺失列
-	userIDTables := []string{
-		"settings",              // data.Settings
-		"ai_config",             // data.AIConfig
-		"followed_stock",        // data.FollowedStock
-		"trading_records",       // data.TradingRecord
-		"cron_tasks",           // models.CronTask
-		"ai_assistant_sessions", // models.AiAssistantSession
-		"ai_recommend_stocks",   // models.AiRecommendStocks
-		"followed_fund",         // data.FollowedFund
-		"stock_groups",          // data.Group
-		"group_stock_info",      // data.GroupStock
-		"ai_response_result",    // models.AIResponseResult
-	}
-	for _, table := range userIDTables {
-		migrateUserIDColumn(table)
-	}
-
-	// 迁移 settings 表新增字段（AutoMigrate 在 SQLite 下有时不会自动加列）
-	migrateSettingsMissingColumns()
-}
-
-// migrateUserIDColumn 确保表中存在 user_id 列
-func migrateUserIDColumn(tableName string) {
-	// 检查列是否存在
-	var count int64
-	db.Dao.Raw("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?", tableName, "user_id").Scan(&count)
-	if count == 0 {
-		// 列不存在，添加它
-		db.Dao.Exec("ALTER TABLE " + tableName + " ADD COLUMN user_id INTEGER DEFAULT 0")
-		log.Printf("Migrated: Added user_id column to %s", tableName)
-	}
-}
-
-// migrateSettingsMissingColumns 确保 settings 表包含所有新字段
-// GORM AutoMigrate 在 SQLite 下有时不会自动添加新增列
-func migrateSettingsMissingColumns() {
-	tableName := "settings"
-	// 需要检查的列：字段名 → SQL 类型及默认值
-	columns := map[string]string{
-		"update_channel":       "VARCHAR(20) DEFAULT ''",
-		"prompt_plaza_api_base": "VARCHAR(255) DEFAULT ''",
-		"browser_pool_size":    "INTEGER DEFAULT 0",
-		"enable_push_news":     "INTEGER DEFAULT 0",
-		"enable_only_push_red_news": "INTEGER DEFAULT 0",
-		"qgqp_b_id":           "VARCHAR(100) DEFAULT ''",
-		"iwencai_api_key":     "VARCHAR(255) DEFAULT ''",
-		"em_api_key":          "VARCHAR(255) DEFAULT ''",
-		"window_width":        "INTEGER DEFAULT 0",
-		"window_height":       "INTEGER DEFAULT 0",
-	}
-	for colName, colType := range columns {
-		var count int64
-		db.Dao.Raw("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?", tableName, colName).Scan(&count)
-		if count == 0 {
-			sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, colName, colType)
-			db.Dao.Exec(sql)
-			log.Printf("Migrated: Added column %s to %s", colName, tableName)
-		}
-	}
+	// Web 端 SQLite 兼容迁移：用户隔离列与历史 settings 缺列补丁。
+	migrations.ApplyWebCompatibilityMigrations()
 }

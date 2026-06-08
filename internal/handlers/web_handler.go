@@ -59,10 +59,10 @@ func GlobalStockIndexes(c *gin.Context) {
 
 	// 返回与桌面端一致的格式
 	c.JSON(http.StatusOK, gin.H{
-		"code":      0,
-		"msg":       "success",
-		"data":      apiData,
-		"message":   "success",
+		"code":    0,
+		"msg":     "success",
+		"data":    apiData,
+		"message": "success",
 	})
 }
 
@@ -1096,6 +1096,12 @@ func GetSkillList(c *gin.Context) {
 		Name:     name,
 		Category: category,
 	}
+	if enable := c.Query("enable"); enable != "" {
+		parsed, err := strconv.ParseBool(enable)
+		if err == nil {
+			query.Enable = &parsed
+		}
+	}
 
 	result := data.NewSkillApi().List(query)
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
@@ -1116,4 +1122,220 @@ func GetSkillByID(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": skill})
+}
+
+// CreateSkill 创建技能
+func CreateSkill(c *gin.Context) {
+	var skill models.Skill
+	if err := c.ShouldBindJSON(&skill); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+	if err := data.NewSkillApi().Create(&skill); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "创建技能失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建成功", "data": skill})
+}
+
+// UpdateSkill 更新技能
+func UpdateSkill(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的技能ID"})
+		return
+	}
+	var skill models.Skill
+	if err := c.ShouldBindJSON(&skill); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+	skill.ID = uint(id)
+	if err := data.NewSkillApi().Update(&skill); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "更新技能失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "更新成功"})
+}
+
+// DeleteSkill 删除技能
+func DeleteSkill(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的技能ID"})
+		return
+	}
+	if err := data.NewSkillApi().Delete(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "删除技能失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除成功"})
+}
+
+// EnableSkill 启用或禁用技能
+func EnableSkill(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的技能ID"})
+		return
+	}
+	var req struct {
+		Enable bool `json:"enable"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+	if err := data.NewSkillApi().EnableSkill(uint(id), req.Enable); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "操作失败: " + err.Error()})
+		return
+	}
+	message := "已禁用"
+	if req.Enable {
+		message = "已启用"
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": message})
+}
+
+// GetMCPServerList 获取 MCP 服务器列表
+func GetMCPServerList(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	query := &models.MCPServerQuery{
+		Page:     page,
+		PageSize: pageSize,
+		Name:     c.Query("name"),
+		Status:   c.Query("status"),
+	}
+	if enable := c.Query("enable"); enable != "" {
+		parsed, err := strconv.ParseBool(enable)
+		if err == nil {
+			query.Enable = &parsed
+		}
+	}
+	result := data.NewMCPServerApi().List(query)
+	if result == nil {
+		result = &models.MCPServerPageResp{Total: 0, Data: []models.MCPServer{}}
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetMCPServerByID 根据 ID 获取 MCP 服务器
+func GetMCPServerByID(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的服务器ID"})
+		return
+	}
+	server, err := data.NewMCPServerApi().GetByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "服务器不存在", "data": nil})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": server})
+}
+
+// CreateMCPServer 创建 MCP 服务器
+func CreateMCPServer(c *gin.Context) {
+	var server models.MCPServer
+	if err := c.ShouldBindJSON(&server); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+	if err := data.NewMCPServerApi().Create(&server); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "创建服务器失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建成功", "data": server})
+}
+
+// UpdateMCPServer 更新 MCP 服务器
+func UpdateMCPServer(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的服务器ID"})
+		return
+	}
+	var server models.MCPServer
+	if err := c.ShouldBindJSON(&server); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+	server.ID = uint(id)
+	if err := data.NewMCPServerApi().Update(&server); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "更新服务器失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "更新成功"})
+}
+
+// DeleteMCPServer 删除 MCP 服务器
+func DeleteMCPServer(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的服务器ID"})
+		return
+	}
+	if err := data.NewMCPServerApi().Delete(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "删除服务器失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除成功"})
+}
+
+// EnableMCPServer 启用或禁用 MCP 服务器
+func EnableMCPServer(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的服务器ID"})
+		return
+	}
+	var req struct {
+		Enable bool `json:"enable"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+	if err := data.NewMCPServerApi().EnableServer(uint(id), req.Enable); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "操作失败: " + err.Error()})
+		return
+	}
+	message := "已禁用"
+	if req.Enable {
+		message = "已启用"
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": message})
+}
+
+// TestMCPServer 测试 MCP 服务器连接
+func TestMCPServer(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的服务器ID"})
+		return
+	}
+	result, err := data.NewMCPServerApi().TestConnection(uint(id))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": err.Error(), "data": result})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": result, "data": result})
+}
+
+// GetMCPToolsByServerID 获取指定 MCP 服务器工具
+func GetMCPToolsByServerID(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的服务器ID"})
+		return
+	}
+	tools := data.NewMCPServerApi().GetToolsByServerID(uint(id))
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": tools})
+}
+
+// GetAllMCPTools 获取所有 MCP 工具
+func GetAllMCPTools(c *gin.Context) {
+	tools := data.NewMCPServerApi().GetAllTools()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": tools})
 }

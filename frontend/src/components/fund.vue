@@ -1,6 +1,6 @@
 <script setup>
 import {ref, onBeforeUnmount} from "vue";
-import {EventsOn, EventsOff} from "../../wailsjs/runtime";
+import {EventsOn, EventsOff} from "../services/wails-bridge.js";
 import {useRoute} from 'vue-router'
 import FundFollow from "./FundFollow.vue";
 import FundRanking from "./FundRanking.vue";
@@ -31,3 +31,16 @@ onBeforeUnmount(() => {
     </n-tabs>
   </n-card>
 </template>
+
+<style scoped>
+@media (max-width: 768px) {
+  :deep(.n-tabs-nav-scroll-wrapper) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  :deep(.n-tabs-nav-scroll-wrapper::-webkit-scrollbar) {
+    display: none;
+  }
+}
+</style>

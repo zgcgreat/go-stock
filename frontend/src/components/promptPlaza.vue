@@ -1,11 +1,10 @@
 <script setup>
 import {computed, h, onBeforeMount, onMounted, ref, reactive} from 'vue'
-import {GetConfig, GetSponsorInfo, GetMachineId, CheckDeviceBinding, QuitApp, GetEffectiveSponsorVip, AddPromptTemplate} from "../../wailsjs/go/main/App";
+import {GetConfig, GetSponsorInfo, GetMachineId, CheckDeviceBinding, QuitApp, GetEffectiveSponsorVip, AddPromptTemplate, EventsEmit} from "../services/wails-bridge.js";
 import {useMessage, useDialog} from "naive-ui";
 import {MdPreview, MdEditor} from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import 'md-editor-v3/lib/style.css'
-import {EventsEmit} from '../../wailsjs/runtime'
 import {useIsWebMode} from '../composables/useResponsive'
 import Auth from '../utils/auth'
 import {GetEffectiveSponsorVip as GetEffectiveSponsorVipBridge, AddPromptTemplate as AddPromptTemplateBridge, GetConfig as GetConfigBridge} from '../services/wails-bridge.js'

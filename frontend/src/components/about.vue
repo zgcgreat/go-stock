@@ -2,8 +2,7 @@
 import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
 import {h, computed, nextTick, onBeforeUnmount, onMounted, ref} from 'vue';
-import {CheckUpdate, GetConfig, GetVersionInfo,GetSponsorInfo,GetUserManual,OpenURL,RestartAsAdmin} from "../../wailsjs/go/main/App";
-import {EventsOff, EventsOn,Environment} from "../../wailsjs/runtime";
+import {CheckUpdate, GetConfig, GetVersionInfo, GetSponsorInfo, GetUserManual, OpenURL, RestartAsAdmin, EventsOff, EventsOn, Environment} from "../services/wails-bridge.js";
 import {NAvatar, NButton, NTree, useNotification,NText} from "naive-ui";
 import { addMonths, format ,parse} from 'date-fns';
 import { zhCN } from 'date-fns/locale';

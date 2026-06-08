@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import {h, onBeforeMount, onMounted, onUnmounted, ref, reactive, computed} from 'vue'
-import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList, GetAllCustomStrategies, SaveCustomStrategy, DeleteCustomStrategy, GetEffectiveSponsorVip, GetConfig} from "../../wailsjs/go/main/App";
+import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList, GetAllCustomStrategies, SaveCustomStrategy, DeleteCustomStrategy, GetEffectiveSponsorVip, GetConfig, Environment, EventsEmit} from "../services/wails-bridge.js";
 import {useMessage, NText, NTag, NButton, NPopconfirm} from 'naive-ui'
-import {Environment} from "../../wailsjs/runtime"
 import {BookmarkOutline, TrashOutline, CreateOutline, AddOutline} from "@vicons/ionicons5";
-import {EventsEmit} from "../../wailsjs/runtime";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
 
 const message = useMessage()

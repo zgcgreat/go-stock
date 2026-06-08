@@ -342,8 +342,8 @@ import {
   AbortChatWithAgent,
   SaveAIResponseResult,
   SaveImage
-} from '../../wailsjs/go/main/App'
-import { EventsOff, EventsOn } from '../../wailsjs/runtime'
+} from '../services/wails-bridge.js'
+import { EventsOff, EventsOn } from '../services/wails-bridge.js'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import 'katex/dist/katex.min.css'

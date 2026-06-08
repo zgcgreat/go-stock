@@ -1,6 +1,5 @@
 <script setup>
 import {computed, h, onBeforeMount, onBeforeUnmount, onMounted,onUnmounted, ref,reactive} from 'vue'
-import {GetAIResponseResultList} from "../../wailsjs/go/main/App";
 import {NButton, NEllipsis, NText} from "naive-ui";
 import ResearchReport from "./researchReport.vue";
 import AiRecommendStocksList from "./aiRecommendStocksList.vue";
@@ -16,7 +15,7 @@ import UplimitLadder from "./uplimitLadder.vue";
 import PromptPlaza from "./promptPlaza.vue";
 import PromptQa from "./promptQa.vue";
 import SelectStock from "./SelectStock.vue";
-import {EventsOff, EventsOn} from "../../wailsjs/runtime";
+import {EventsOff, EventsOn} from "../services/wails-bridge.js";
 import {useRoute} from 'vue-router'
 
 
@@ -93,4 +92,14 @@ function updateTab(name) {
 </template>
 
 <style scoped>
+@media (max-width: 768px) {
+  :deep(.n-tabs-nav-scroll-wrapper) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  :deep(.n-tabs-nav-scroll-wrapper::-webkit-scrollbar) {
+    display: none;
+  }
+}
 </style>

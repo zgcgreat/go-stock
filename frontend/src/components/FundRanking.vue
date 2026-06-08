@@ -10,8 +10,8 @@ import {
   GetFundTop10Holdings,
   OpenURL,
   SearchFundCodes
-} from "../../wailsjs/go/main/App";
-import {Environment} from "../../wailsjs/runtime";
+} from "../services/wails-bridge.js";
+import {Environment} from "../services/wails-bridge.js";
 import {useMessage} from "naive-ui";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
 import StockSparkLine from "./stockSparkLine.vue";

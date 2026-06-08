@@ -90,21 +90,13 @@ import apiService from '../../services/api.js'
 import { useMessage, useDialog } from 'naive-ui'
 
 const props = defineProps({
-  menuOptions: {
-    type: Array,
-    default: () => []
-  },
   activeKey: {
-    type: String,
-    default: ''
-  },
-  marketStatus: {
     type: String,
     default: ''
   }
 })
 
-const emit = defineEmits(['select', 'update:activeKey'])
+const emit = defineEmits(['update:activeKey'])
 
 const router = useRouter()
 const { isMobile } = useResponsive()
@@ -237,7 +229,6 @@ const handleMainTabChange = (key) => {
   if (tab) {
     router.push(tab.route)
     emit('update:activeKey', key)
-    emit('select', key)
   }
 }
 
@@ -248,7 +239,6 @@ const handleOverflowSelect = (key) => {
   if (tab) {
     router.push(tab.route)
     emit('update:activeKey', key)
-    emit('select', key)
   }
 }
 

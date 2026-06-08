@@ -1,6 +1,7 @@
 // wails-bridge.js - 桥接 Wails 和 Web API，使应用同时支持桌面模式和浏览器模式
 
 import apiService from './api.js';
+import { asBlob } from 'html-docx-js-typescript';
 
 // 检测是否在 Wails 环境中
 function isWailsMode() {
@@ -44,6 +45,28 @@ function extractApiSingle(response) {
     return response.data;
   }
   return response;
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+}
+
+function normalizeBase64Payload(payload, mimeType) {
+  if (!payload) {
+    return '';
+  }
+  const text = String(payload);
+  const dataPrefix = `data:${mimeType};base64,`;
+  if (text.startsWith(dataPrefix)) {
+    return text;
+  }
+  return dataPrefix + text.replace(/^data:[^;]+;base64,/, '');
 }
 
 /**
@@ -684,29 +707,46 @@ export function SaveAsMarkdown(filename, content) {
   if (isWailsMode()) {
     return window.go.main.App.SaveAsMarkdown(filename, content);
   }
-  // Web 模式下下载 markdown 文件
-  const blob = new Blob([content], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename || 'export.md';
-  a.click();
-  URL.revokeObjectURL(url);
-  return Promise.resolve(true);
+  const safeName = String(filename || 'export').endsWith('.md') ? filename : `${filename || 'export'}.md`;
+  const blob = new Blob([content || ''], { type: 'text/markdown;charset=utf-8' });
+  downloadBlob(safeName, blob);
+  return Promise.resolve(`已下载：${safeName}`);
 }
 
 export function SaveImage(filename, imageData) {
   if (isWailsMode()) {
     return window.go.main.App.SaveImage(filename, imageData);
   }
-  return Promise.resolve(true);
+  const safeName = String(filename || 'export').endsWith('.png') ? filename : `${filename || 'export'}.png`;
+  const imgSrc = normalizeBase64Payload(imageData, 'image/png');
+  if (!imgSrc) {
+    return Promise.resolve('图片数据为空，无法导出');
+  }
+  const a = document.createElement('a');
+  a.href = imgSrc;
+  a.download = safeName;
+  a.click();
+  a.remove();
+  return Promise.resolve(safeName);
 }
 
-export function SaveWordFile(filename, content) {
+export async function SaveWordFile(filename, content) {
   if (isWailsMode()) {
     return window.go.main.App.SaveWordFile(filename, content);
   }
-  return Promise.resolve(true);
+  const safeName = String(filename || 'export').endsWith('.docx') ? filename : `${filename || 'export'}.docx`;
+  const html = (() => {
+    try {
+      const binary = atob(String(content || '').replace(/^data:[^;]+;base64,/, ''));
+      const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch {
+      return String(content || '');
+    }
+  })();
+  const blob = await asBlob(html || '<p></p>', { orientation: 'portrait' });
+  downloadBlob(safeName, blob);
+  return `已下载：${safeName}`;
 }
 
 export function ShareAnalysis(code, name) {
@@ -1225,55 +1265,74 @@ export function GetMarketStatisticByDate(arg1) {
 
 export function CreateMCPServer(arg1) {
   if (isWailsMode()) return window.go.main.App.CreateMCPServer(arg1);
-  return Promise.resolve({ id: 0 });
+  return apiService.client.post('/mcp/servers', arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '创建成功')
+    .catch(err => err.response?.data?.message || err.message || '创建失败');
 }
 
 export function UpdateMCPServer(arg1) {
   if (isWailsMode()) return window.go.main.App.UpdateMCPServer(arg1);
-  return Promise.resolve();
+  return apiService.client.put(`/mcp/servers/${arg1?.id || arg1?.ID}`, arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '更新成功')
+    .catch(err => err.response?.data?.message || err.message || '更新失败');
 }
 
 export function DeleteMCPServer(arg1) {
   if (isWailsMode()) return window.go.main.App.DeleteMCPServer(arg1);
-  return Promise.resolve();
+  return apiService.client.delete(`/mcp/servers/${arg1}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => err.response?.data?.message || err.message || '删除失败');
 }
 
 export function GetMCPServerByID(arg1) {
   if (isWailsMode()) return window.go.main.App.GetMCPServerByID(arg1);
-  return Promise.resolve(null);
+  return apiService.client.get(`/mcp/servers/${arg1}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || null)
+    .catch(() => null);
 }
 
 export function GetMCPServerList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetMCPServerList(arg1);
-  return Promise.resolve({
-    list: [],
-    total: 0,
-    page: 1,
+  const params = {
+    page: arg1?.page || 1,
     pageSize: arg1?.pageSize || 10,
-  });
+    name: arg1?.name || '',
+    status: arg1?.status || '',
+  };
+  if (arg1?.enable !== undefined && arg1?.enable !== null && arg1?.enable !== '') {
+    params.enable = arg1.enable;
+  }
+  return apiService.client.get('/mcp/servers', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { data: [], total: 0 })
+    .catch(() => ({ data: [], total: 0 }));
 }
 
 export function EnableMCPServer(arg1, arg2) {
   if (isWailsMode()) return window.go.main.App.EnableMCPServer(arg1, arg2);
-  return Promise.resolve();
+  return apiService.client.post(`/mcp/servers/${arg1}/enable`, { enable: arg2 }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || (arg2 ? '已启用' : '已禁用'))
+    .catch(err => err.response?.data?.message || err.message || '操作失败');
 }
 
 export function TestMCPServer(arg1) {
   if (isWailsMode()) return window.go.main.App.TestMCPServer(arg1);
-  return Promise.resolve({
-    success: false,
-    message: 'Web mode does not support MCP server test yet',
-  });
+  return apiService.client.post(`/mcp/servers/${arg1}/test`, {}, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || res.data?.message || '测试完成')
+    .catch(err => err.response?.data?.message || err.message || '测试失败');
 }
 
 export function GetMCPToolsByServerID(arg1) {
   if (isWailsMode()) return window.go.main.App.GetMCPToolsByServerID(arg1);
-  return Promise.resolve([]);
+  return apiService.client.get(`/mcp/servers/${arg1}/tools`, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function GetAllMCPTools() {
   if (isWailsMode()) return window.go.main.App.GetAllMCPTools();
-  return Promise.resolve([]);
+  return apiService.client.get('/mcp/tools', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 export function FollowFund(arg1) {
@@ -1577,14 +1636,18 @@ export function GetTradingRecordList(arg1) {
 
 export function GetTradingRecordStatistics() {
   if (isWailsMode()) return window.go.main.App.GetTradingRecordStatistics();
-  return apiService.client.get('/trades/statistics')
+  return apiService.client.get('/trades/statistics', { headers: getAuthHeaders() })
     .then(res => res.data?.data || {})
     .catch(() => ({}));
 }
 
 export function GlobalStockIndexesReadable() {
   if (isWailsMode()) return window.go.main.App.GlobalStockIndexesReadable();
-  return Promise.resolve([]);
+  return GlobalStockIndexes().then(data => {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    return Object.keys(data).map(key => ({ name: key, value: data[key] }));
+  });
 }
 
 export function HotStock(arg1) {
@@ -1847,17 +1910,22 @@ export function AddAllStockInfo(arg1) {
 
 export function AddCronTask(arg1) {
   if (isWailsMode()) return window.go.main.App.AddCronTask(arg1);
-  return Promise.resolve('Web mode not supported');
+  return CreateCronTask(arg1);
 }
 
 export function AnalyzeSentiment(arg1) {
   if (isWailsMode()) return window.go.main.App.AnalyzeSentiment(arg1);
-  return Promise.resolve(null);
+  return apiService.client.get('/market/sentiment', { params: { text: arg1 || '' }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? res.data)
+    .catch(() => null);
 }
 
 export function BatchDeleteAIResponseResult(arg1) {
   if (isWailsMode()) return window.go.main.App.BatchDeleteAIResponseResult(arg1);
-  return Promise.resolve('Web mode not supported');
+  const ids = Array.isArray(arg1) ? arg1 : [];
+  return Promise.all(ids.map(id => DeleteAIResponseResult(id)))
+    .then(results => results.every(Boolean) ? '删除成功' : '部分删除失败')
+    .catch(() => '删除失败');
 }
 
 export function BatchDeleteAllStockInfo(arg1) {
@@ -1872,7 +1940,9 @@ export function CheckStockBaseInfo() {
 
 export function CreateSkill(arg1) {
   if (isWailsMode()) return window.go.main.App.CreateSkill(arg1);
-  return Promise.resolve({ id: 0 });
+  return apiService.client.post('/skills', arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '创建成功')
+    .catch(err => err.response?.data?.message || err.message || '创建失败');
 }
 
 export function DeleteAllStockInfo(arg1) {
@@ -1882,7 +1952,9 @@ export function DeleteAllStockInfo(arg1) {
 
 export function DeleteSkill(arg1) {
   if (isWailsMode()) return window.go.main.App.DeleteSkill(arg1);
-  return Promise.resolve();
+  return apiService.client.delete(`/skills/${arg1}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => err.response?.data?.message || err.message || '删除失败');
 }
 
 export function DeleteStockChangeHistory() {
@@ -1892,7 +1964,9 @@ export function DeleteStockChangeHistory() {
 
 export function EnableSkill(arg1, arg2) {
   if (isWailsMode()) return window.go.main.App.EnableSkill(arg1, arg2);
-  return Promise.resolve();
+  return apiService.client.post(`/skills/${arg1}/enable`, { enable: arg2 }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || (arg2 ? '已启用' : '已禁用'))
+    .catch(err => err.response?.data?.message || err.message || '操作失败');
 }
 
 export function GetAllSkills() {
@@ -1925,11 +1999,14 @@ export function GetSkillList(arg1) {
     page: arg1?.page || 1,
     pageSize: arg1?.pageSize || 10,
     name: arg1?.name || '',
-    status: arg1?.status || '',
+    category: arg1?.category || '',
   };
+  if (arg1?.enable !== undefined && arg1?.enable !== null && arg1?.enable !== '') {
+    params.enable = arg1.enable;
+  }
   return apiService.client.get('/skills', { params, headers: getAuthHeaders() })
-    .then(res => res.data?.data || { list: [], total: 0 })
-    .catch(() => ({ list: [], total: 0 }));
+    .then(res => res.data?.data || { data: [], total: 0 })
+    .catch(() => ({ data: [], total: 0 }));
 }
 
 export function GetStockCommonKLine(arg1, arg2, arg3) {
@@ -1981,7 +2058,9 @@ export function NewsPush(arg1, arg2) {
 
 export function UpdateSkill(arg1) {
   if (isWailsMode()) return window.go.main.App.UpdateSkill(arg1);
-  return Promise.resolve();
+  return apiService.client.put(`/skills/${arg1?.id || arg1?.ID}`, arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '更新成功')
+    .catch(err => err.response?.data?.message || err.message || '更新失败');
 }
 
 // ========== 桌面端专用功能（Web 端 no-op） ==========

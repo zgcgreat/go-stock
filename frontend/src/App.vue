@@ -3,13 +3,21 @@ import {
   EventsEmit,
   EventsOff,
   EventsOn,
-  Quit,Hide ,
+  Quit,
+  Hide,
   WindowFullscreen,
   WindowUnfullscreen,
-  WindowSetTitle
-} from '../wailsjs/runtime'
-import {computed, h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
-import {RouterLink, useRouter, useRoute} from 'vue-router'
+  WindowSetTitle,
+  AnalyzeSentiment,
+  GetConfig,
+  GetGroupList,
+  GetVersionInfo,
+  IsTradingTime,
+  IsHKTradingTime,
+  IsUSTradingTime
+} from './services/wails-bridge.js'
+import {h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
+import {RouterLink, useRouter} from 'vue-router'
 import {createDiscreteApi,darkTheme,lightTheme , NIcon, NText,NButton,dateZhCN,zhCN} from 'naive-ui'
 import {
   AlarmOutline,
@@ -29,7 +37,6 @@ import {
   StatsChartOutline,
   Wallet, WarningOutline, TimeOutline, SearchOutline,
 } from '@vicons/ionicons5'
-import {AnalyzeSentiment, GetConfig, GetGroupList, GetVersionInfo, IsTradingTime, IsHKTradingTime, IsUSTradingTime} from "../wailsjs/go/main/App";
 import FloatingAiAssistant from "./components/FloatingAiAssistant.vue";
 import FloatingAgentAssistant from "./components/FloatingAgentAssistant.vue";
 import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
@@ -38,17 +45,12 @@ import {LocalFireDepartmentRound} from "@vicons/material";
 import {AppsList20Regular, BoxSearch20Regular,SlideHide24Filled, CommentNote20Filled} from "@vicons/fluent";
 import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} from "@vicons/antd";
 import {useIsWebMode} from "./composables/useResponsive";
-import WebLayout from "./components/layout/WebLayout.vue";
+import WebAppShell from "./components/layout/WebAppShell.vue";
 
 const router = useRouter()
-const route = useRoute()
 
 const {isWebMode} = useIsWebMode()
 
-// Web 模式下登录/注册页面不显示导航
-const isAuthPage = computed(() => {
-  return route.name === 'login' || route.name === 'register'
-})
 const loading = ref(true)
 const loadingMsg = ref("加载数据中...")
 const enableNews = ref(false)
@@ -923,21 +925,6 @@ function renderIcon(icon) {
   return () => h(NIcon, null, {default: () => h(icon)})
 }
 
-// Web 模式下的菜单选择处理
-function handleWebSelect(key) {
-  activeKey.value = key
-  // 处理子菜单项的点击（如市场快讯、AI分析报告等）
-  for (const item of menuOptions.value) {
-    if (item.children) {
-      const child = item.children.find(c => c.key === key)
-      if (child && child.onClick) {
-        child.onClick()
-        return
-      }
-    }
-  }
-}
-
 function toggleFullscreen(e) {
   activeKey.value = 'full'
   //console.log(e)
@@ -1183,31 +1170,14 @@ onMounted(() => {
               <FloatingAiAssistant />
               <FloatingAgentAssistant />
 
-              <!-- Web 模式：顶部 Tab 导航布局（login/register 页面不显示导航） -->
-              <template v-if="isWebMode && !isAuthPage">
-                <WebLayout
-                  :menu-options="menuOptions"
-                  :active-key="activeKey"
-                  :market-status="marketStatus"
-                  @select="handleWebSelect"
-                  @update:active-key="activeKey = $event"
-                >
-                  <n-spin :show="loading">
-                    <template #description>
-                      {{ loadingMsg }}
-                    </template>
-                    <n-scrollbar style="height: calc(100vh - 80px);">
-                      <n-skeleton v-if="loading" height="calc(100vh)" />
-                      <RouterView/>
-                    </n-scrollbar>
-                  </n-spin>
-                </WebLayout>
-              </template>
-
-              <!-- Web 模式：登录/注册页面（无导航） -->
-              <template v-else-if="isWebMode && isAuthPage">
-                <RouterView/>
-              </template>
+              <!-- Web 模式：顶部 Tab 导航布局 -->
+              <WebAppShell
+                v-if="isWebMode"
+                :active-key="activeKey"
+                :loading="loading"
+                :loading-msg="loadingMsg"
+                @update:active-key="activeKey = $event"
+              />
 
               <!-- 桌面端 Wails 模式：底部水平菜单布局 -->
               <template v-else>

@@ -204,7 +204,7 @@ import {
   TestMCPServer,
   GetMCPToolsByServerID,
   GetAllMCPTools
-} from '../../wailsjs/go/main/App'
+} from '../services/wails-bridge.js'
 
 const message = useMessage()
 

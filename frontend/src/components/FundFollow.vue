@@ -12,8 +12,8 @@ import {
   UnFollowFund,
   GetFundHistoryNetValue,
   GetFundTop10Holdings
-} from "../../wailsjs/go/main/App";
-import {Environment} from "../../wailsjs/runtime";
+} from "../services/wails-bridge.js";
+import {Environment} from "../services/wails-bridge.js";
 import vueDanmaku from 'vue3-danmaku'
 import FundKlineChart from "./FundKlineChart.vue";
 

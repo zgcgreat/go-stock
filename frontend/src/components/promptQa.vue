@@ -1,6 +1,6 @@
 <script setup>
 import {computed, onBeforeMount, onMounted, ref, reactive} from 'vue'
-import {GetConfig} from "../../wailsjs/go/main/App";
+import {GetConfig} from "../services/wails-bridge.js";
 import {useMessage, useDialog} from "naive-ui"
 import {MdPreview} from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'

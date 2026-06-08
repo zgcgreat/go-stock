@@ -5,9 +5,9 @@ import {
   GetConfig,
   AddPromptTemplate,
   DeletePromptTemplate,
-  UpdatePromptTemplate
-} from "../../wailsjs/go/main/App";
-import { EventsEmit } from "../../wailsjs/runtime";
+  UpdatePromptTemplate,
+  EventsEmit
+} from "../services/wails-bridge.js";
 import {NButton, NInput, NTag, NText, NSwitch, useMessage, useNotification,useDialog, NModal, NCard, NForm, NFormItem, NSpace, NPopover} from "naive-ui";
 import { MdEditor, MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'

@@ -866,4 +866,14 @@ function ReFlesh(source) {
 
 </template>
 <style scoped>
+@media (max-width: 768px) {
+  :deep(.n-tabs-nav-scroll-wrapper) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  :deep(.n-tabs-nav-scroll-wrapper::-webkit-scrollbar) {
+    display: none;
+  }
+}
 </style>
