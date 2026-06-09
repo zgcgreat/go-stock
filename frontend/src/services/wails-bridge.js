@@ -1290,6 +1290,36 @@ export function FetchAndSaveBKFundFlow() {
     .catch(err => err.response?.data?.message || err.message || '获取失败');
 }
 
+// 获取所有板块代码（供下拉选择）
+export function GetAllBKCodes() {
+  if (isWailsMode()) return window.go.main.App.GetAllBKCodes?.();
+  return apiService.client.get('/market/bk-fund-flow/codes', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+// 获取板块资金流向历史数据（折线图用，不指定日期）
+export function GetBKFundFlowList(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetBKFundFlowList?.(arg1, arg2);
+  return apiService.client.get('/market/bk-fund-flow/history', {
+    params: { code: arg1, limit: arg2 },
+    headers: getAuthHeaders(),
+  })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+// 获取最新板块资金排名（不指定日期）
+export function GetBKFundFlowTopList(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetBKFundFlowTopList?.(arg1);
+  return apiService.client.get('/market/bk-fund-flow/top-latest', {
+    params: { topN: arg1 },
+    headers: getAuthHeaders(),
+  })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
 export function CreateMCPServer(arg1) {
   if (isWailsMode()) return window.go.main.App.CreateMCPServer(arg1);
   return apiService.client.post('/mcp/servers', arg1, { headers: getAuthHeaders() })

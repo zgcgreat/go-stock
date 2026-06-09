@@ -804,6 +804,46 @@ func GetBKFundFlowListByDate(c *gin.Context) {
 	})
 }
 
+// GetAllBKCodes 获取所有板块代码和名称
+func GetAllBKCodes(c *gin.Context) {
+	codes := data.NewBKFundFlowApi().GetAllBKCodes()
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    codes,
+	})
+}
+
+// GetBKFundFlowList 获取板块资金流向历史数据（折线图用）
+func GetBKFundFlowList(c *gin.Context) {
+	code := c.Query("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    -1,
+			"message": "code 参数不能为空",
+		})
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "240"))
+	points := data.NewBKFundFlowApi().GetBKFundFlowList(code, limit)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    points,
+	})
+}
+
+// GetBKFundFlowTopList 获取最新板块资金排名
+func GetBKFundFlowTopList(c *gin.Context) {
+	topN, _ := strconv.Atoi(c.DefaultQuery("topN", "20"))
+	list := data.NewBKFundFlowApi().GetBKFundFlowTopList(topN)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    list,
+	})
+}
+
 // IndicatorSearchStock 指标选股（从东方财富接口）
 func IndicatorSearchStock(c *gin.Context) {
 	keyword := c.Query("keyword")

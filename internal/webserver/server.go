@@ -251,7 +251,10 @@ func (ws *WebServer) initRouter() {
 			// 板块资金流向
 			protected.POST("/market/bk-fund-flow/fetch", handlers.FetchAndSaveBKFundFlow)
 			protected.GET("/market/bk-fund-flow/top", handlers.GetBKFundFlowTopListByDate)
+			protected.GET("/market/bk-fund-flow/top-latest", handlers.GetBKFundFlowTopList)
 			protected.GET("/market/bk-fund-flow/list", handlers.GetBKFundFlowListByDate)
+			protected.GET("/market/bk-fund-flow/history", handlers.GetBKFundFlowList)
+			protected.GET("/market/bk-fund-flow/codes", handlers.GetAllBKCodes)
 
 			// 异动监控
 			protected.GET("/stock-changes", handlers.GetStockChanges)
