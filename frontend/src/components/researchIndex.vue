@@ -93,13 +93,15 @@ function updateTab(name) {
 
 <style scoped>
 @media (max-width: 768px) {
-  :deep(.n-tabs-nav-scroll-wrapper) {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+  /* 移动端去掉 Tab 导航两侧 scroll-padding 空白 */
+  :deep(.n-tabs-scroll-padding) {
+    display: none !important;
+    width: 0 !important;
   }
-  :deep(.n-tabs-nav-scroll-wrapper::-webkit-scrollbar) {
-    display: none;
+  /* 移动端去掉阴影遮罩，避免遮挡触摸点击 */
+  :deep(.n-tabs-nav-scroll-wrapper::before),
+  :deep(.n-tabs-nav-scroll-wrapper::after) {
+    display: none !important;
   }
 }
 </style>
