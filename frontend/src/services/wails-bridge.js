@@ -973,12 +973,22 @@ export function AnalyzeSentimentWithFreqWeight(arg1) {
 
 export function CalculateNextRunTime(arg1) {
   if (isWailsMode()) return window.go.main.App.CalculateNextRunTime(arg1);
-  return Promise.resolve('');
+  return apiService.client.get('/cron-task/calculate-next-run', {
+    params: { expr: arg1 },
+    headers: getAuthHeaders(),
+  })
+    .then(res => res.data?.data || '')
+    .catch(() => '');
 }
 
 export function CalculateNextRunTimes(arg1, arg2) {
   if (isWailsMode()) return window.go.main.App.CalculateNextRunTimes(arg1, arg2);
-  return Promise.resolve([]);
+  return apiService.client.get('/cron-task/calculate-next-runs', {
+    params: { expr: arg1, count: arg2 || 5 },
+    headers: getAuthHeaders(),
+  })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
 }
 
 /**

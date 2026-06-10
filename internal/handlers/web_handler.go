@@ -1070,6 +1070,37 @@ func ValidateCronExpr(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "Cron 表达式有效", "valid": true})
 }
 
+// CalculateNextRunTimes 计算未来 N 次执行时间
+func CalculateNextRunTimes(c *gin.Context) {
+	expr := c.DefaultQuery("expr", "")
+	if expr == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []string{}})
+		return
+	}
+	count, _ := strconv.Atoi(c.DefaultQuery("count", "5"))
+	if count <= 0 {
+		count = 5
+	}
+	times := agent.NewCronTaskApi().CalculateNextRunTimes(expr, count)
+	// 将 time.Time 转为字符串
+	result := make([]string, 0, len(times))
+	for _, t := range times {
+		result = append(result, t.Format("2006-01-02 15:04:05"))
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// CalculateNextRunTime 计算下次执行时间
+func CalculateNextRunTime(c *gin.Context) {
+	expr := c.DefaultQuery("expr", "")
+	if expr == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": ""})
+		return
+	}
+	next := agent.NewCronTaskApi().CalculateNextRunTime(expr)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": next.Format("2006-01-02 15:04:05")})
+}
+
 // GetUplimitHot 获取涨停梯队数据（与桌面端 GetUplimitHot 一致）
 func GetUplimitHot(c *gin.Context) {
 	date := c.DefaultQuery("date", "")
