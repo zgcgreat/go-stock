@@ -1,12 +1,15 @@
 package webserver
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/robfig/cron/v3"
 
+	"go-stock/backend/agent"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
@@ -14,9 +17,11 @@ import (
 )
 
 type Scheduler struct {
-	mu        sync.Mutex
-	isRunning bool
-	stopChan  chan struct{}
+	mu         sync.Mutex
+	isRunning  bool
+	stopChan   chan struct{}
+	cron       *cron.Cron
+	cronEntrys map[uint]cron.EntryID // key: CronTask.ID
 }
 
 var (
@@ -26,8 +31,11 @@ var (
 
 func GetScheduler() *Scheduler {
 	schedulerOnce.Do(func() {
+		c := cron.New(cron.WithSeconds(), cron.WithChain(cron.Recover(cron.DefaultLogger)))
 		scheduler = &Scheduler{
-			stopChan: make(chan struct{}),
+			stopChan:   make(chan struct{}),
+			cron:       c,
+			cronEntrys: make(map[uint]cron.EntryID),
 		}
 	})
 	return scheduler
@@ -50,6 +58,10 @@ func (s *Scheduler) Start() {
 	go s.runBKFundFlowTask()
 	go s.runHotWordsTask()
 
+	// 启动用户自定义定时任务调度器
+	s.initCronTasks()
+	s.cron.Start()
+
 	log.Println("[Scheduler] Web定时任务调度器已启动")
 }
 
@@ -60,9 +72,79 @@ func (s *Scheduler) Stop() {
 	if !s.isRunning {
 		return
 	}
+
+	// 停止 cron 调度器
+	if s.cron != nil {
+		s.cron.Stop()
+	}
+
 	close(s.stopChan)
 	s.isRunning = false
 	log.Println("[Scheduler] Web定时任务调度器已停止")
+}
+
+// initCronTasks 从数据库加载所有启用的用户定时任务并注册到 cron 调度器
+func (s *Scheduler) initCronTasks() {
+	cronApi := agent.NewCronTaskApi()
+	tasks := cronApi.GetAll() // 只返回 enable=true 的任务
+	for _, t := range tasks {
+		taskCopy := t
+		entryID, err := s.cron.AddFunc(taskCopy.CronExpr, func() {
+			err := agent.NewCronTaskApi().ExecuteTask(context.Background(), &taskCopy)
+			if err != nil {
+				logger.SugaredLogger.Errorf("[Scheduler] 执行定时任务失败：%v (%s)", err, taskCopy.Name)
+			}
+		})
+		if err != nil {
+			logger.SugaredLogger.Errorf("[Scheduler] 注册定时任务失败：%v (%s cron=%s)", err, taskCopy.Name, taskCopy.CronExpr)
+			continue
+		}
+		s.cronEntrys[taskCopy.ID] = entryID
+		logger.SugaredLogger.Infof("[Scheduler] 注册定时任务: %s (cron=%s entryID=%d)", taskCopy.Name, taskCopy.CronExpr, entryID)
+	}
+}
+
+// AddCronTask 动态添加定时任务到调度器（创建/启用任务时调用）
+func (s *Scheduler) AddCronTask(task *models.CronTask) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 如果已有旧的 entry，先移除
+	if oldID, exists := s.cronEntrys[task.ID]; exists {
+		s.cron.Remove(oldID)
+		delete(s.cronEntrys, task.ID)
+	}
+
+	if !task.Enable {
+		// 任务已禁用，只移除不添加
+		logger.SugaredLogger.Infof("[Scheduler] 任务已禁用，移除调度: %s (ID=%d)", task.Name, task.ID)
+		return nil
+	}
+
+	entryID, err := s.cron.AddFunc(task.CronExpr, func() {
+		err := agent.NewCronTaskApi().ExecuteTask(context.Background(), task)
+		if err != nil {
+			logger.SugaredLogger.Errorf("[Scheduler] 执行定时任务失败：%v (%s)", err, task.Name)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	s.cronEntrys[task.ID] = entryID
+	logger.SugaredLogger.Infof("[Scheduler] 添加定时任务: %s (cron=%s entryID=%d)", task.Name, task.CronExpr, entryID)
+	return nil
+}
+
+// RemoveCronTask 从调度器移除定时任务（删除/禁用任务时调用）
+func (s *Scheduler) RemoveCronTask(taskID uint) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if entryID, exists := s.cronEntrys[taskID]; exists {
+		s.cron.Remove(entryID)
+		delete(s.cronEntrys, taskID)
+		logger.SugaredLogger.Infof("[Scheduler] 移除定时任务调度 (ID=%d entryID=%d)", taskID, entryID)
+	}
 }
 
 func (s *Scheduler) runMarketStatisticTask() {

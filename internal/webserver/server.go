@@ -36,6 +36,11 @@ func NewWebServer(port string) *WebServer {
 	server := &WebServer{port: port}
 	gin.SetMode(gin.ReleaseMode)
 	server.initRouter()
+
+	// 注册定时任务调度器回调到 handlers（避免 handlers ↔ webserver 循环导入）
+	handlers.CronSchedulerHooks.AddCronTask = GetScheduler().AddCronTask
+	handlers.CronSchedulerHooks.RemoveCronTask = GetScheduler().RemoveCronTask
+
 	return server
 }
 

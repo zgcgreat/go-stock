@@ -19,6 +19,12 @@ import (
 	"go-stock/internal/middleware"
 )
 
+// CronSchedulerHooks 定时任务调度器回调（由 webserver 注册，避免循环导入）
+var CronSchedulerHooks struct {
+	AddCronTask    func(task *models.CronTask) error
+	RemoveCronTask func(taskID uint)
+}
+
 // GetTelegraphList 获取新闻电报列表
 func GetTelegraphList(c *gin.Context) {
 	source := c.DefaultQuery("source", "")
@@ -454,6 +460,12 @@ func CreateCronTask(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建失败：" + err.Error()})
 		return
 	}
+
+	// 同步添加到调度器
+	if task.Enable && CronSchedulerHooks.AddCronTask != nil {
+		CronSchedulerHooks.AddCronTask(&task)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建成功"})
 }
 
@@ -548,6 +560,12 @@ func UpdateCronTask(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "更新失败：" + err.Error()})
 		return
 	}
+
+	// 同步更新调度器（移除旧 entry，添加新 entry）
+	if CronSchedulerHooks.AddCronTask != nil {
+		CronSchedulerHooks.AddCronTask(&task)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "更新成功"})
 }
 
@@ -566,6 +584,12 @@ func DeleteCronTask(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除失败：" + err.Error()})
 		return
 	}
+
+	// 从调度器移除
+	if CronSchedulerHooks.RemoveCronTask != nil {
+		CronSchedulerHooks.RemoveCronTask(uint(id))
+	}
+
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除成功"})
 }
 
@@ -592,6 +616,19 @@ func EnableCronTask(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "操作失败：" + err.Error()})
 		return
 	}
+
+	// 同步调度器：启用则添加，禁用则移除
+	if req.Enable {
+		task, _ := agent.NewCronTaskApi().GetByID(uint(id), userID)
+		if task != nil && CronSchedulerHooks.AddCronTask != nil {
+			CronSchedulerHooks.AddCronTask(task)
+		}
+	} else {
+		if CronSchedulerHooks.RemoveCronTask != nil {
+			CronSchedulerHooks.RemoveCronTask(uint(id))
+		}
+	}
+
 	msg := "已暂停"
 	if req.Enable {
 		msg = "已启用"
