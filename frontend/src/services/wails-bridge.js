@@ -1935,7 +1935,8 @@ export function UpdateConfig(arg1) {
 
 export function UpdateCronTask(arg1) {
   if (isWailsMode()) return window.go.main.App.UpdateCronTask(arg1);
-  return apiService.client.put(`/cron-task/${arg1.ID}`, arg1, { headers: getAuthHeaders() })
+  const taskId = arg1.ID || arg1.id;
+  return apiService.client.put(`/cron-task/${taskId}`, arg1, { headers: getAuthHeaders() })
     .then(res => res.data?.message || '更新成功')
     .catch(err => err.message || '更新失败');
 }
