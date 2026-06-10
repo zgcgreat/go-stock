@@ -1507,3 +1507,67 @@ func GetAllMCPTools(c *gin.Context) {
 	tools := data.NewMCPServerApi().GetAllTools()
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": tools})
 }
+
+// ==================== 自定义选股策略 ====================
+
+// GetCustomStrategies 获取所有自定义策略（简化接口）
+func GetCustomStrategies(c *gin.Context) {
+	strategies := data.NewCustomStrategyApi().GetAllCustomStrategies()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": strategies})
+}
+
+// GetCustomStrategyList 分页获取自定义策略
+func GetCustomStrategyList(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	name := c.DefaultQuery("name", "")
+
+	query := &models.CustomStrategyQuery{
+		Page:     page,
+		PageSize: pageSize,
+		Name:     name,
+	}
+
+	result, err := data.NewCustomStrategyApi().GetCustomStrategyList(query)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": "查询失败: " + err.Error()})
+		return
+	}
+
+	_ = userID // CustomStrategy 目前为公共数据，不做用户隔离
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// SaveCustomStrategy 创建或更新自定义策略
+func SaveCustomStrategy(c *gin.Context) {
+	var strategy models.CustomStrategy
+	if err := c.ShouldBindJSON(&strategy); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	result := data.NewCustomStrategyApi().SaveCustomStrategy(strategy)
+	if result == "添加成功" || result == "更新成功" {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": result})
+	} else {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": result})
+	}
+}
+
+// DeleteCustomStrategy 删除自定义策略
+func DeleteCustomStrategy(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的策略ID"})
+		return
+	}
+
+	result := data.NewCustomStrategyApi().DeleteCustomStrategy(uint(id))
+	if result == "删除成功" {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": result})
+	} else {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "message": result})
+	}
+}

@@ -228,6 +228,12 @@ func (ws *WebServer) initRouter() {
 			protected.DELETE("/cron-task/:id", handlers.DeleteCronTask)
 			protected.POST("/cron-task/:id/enable", handlers.EnableCronTask)
 
+			// 自定义选股策略
+			protected.GET("/custom-strategies", handlers.GetCustomStrategies)
+			protected.GET("/custom-strategies/list", handlers.GetCustomStrategyList)
+			protected.POST("/custom-strategies", handlers.SaveCustomStrategy)
+			protected.DELETE("/custom-strategies/:id", handlers.DeleteCustomStrategy)
+
 			// 分享
 			protected.POST("/share/text", handlers.ShareText)
 			protected.POST("/share/analysis", handlers.ShareAnalysis)
@@ -371,6 +377,7 @@ func MigrateAllTables() {
 		&models.BKFundFlow{},
 		&models.PlazaPrompt{},
 		&models.PlazaQuestion{},
+		&models.CustomStrategy{},
 		&handlers.UserSetting{},
 		&models.User{},
 	)
