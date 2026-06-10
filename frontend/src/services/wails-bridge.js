@@ -764,7 +764,16 @@ export function SendDingDingMessageByType(msg, code, type) {
   if (isWailsMode()) {
     return window.go.main.App.SendDingDingMessageByType(msg, code, type);
   }
-  return Promise.resolve('发送成功');
+  // Web端：调用 /dingding/message 接口，传入标题和消息
+  const typeNames = { 1: '涨跌报警', 2: '股价报警', 3: '成本价报警' };
+  const title = code || '通知';
+  return apiService.client.post('/dingding/message', {
+    message: msg,
+    stockCode: code,
+    title: typeNames[type] ? `${typeNames[type]} - ${title}` : title,
+  }, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || '发送成功')
+    .catch(() => '发送失败');
 }
 
 export function SendDingDingMessage(arg1, arg2) {

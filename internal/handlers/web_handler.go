@@ -609,7 +609,7 @@ func ShareAnalysis(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "分享成功"})
 }
 
-// SendDingDingMessage 发送钉钉消息
+// SendDingDingMessage 发送钉钉消息（Web端用户隔离，读取当前用户配置）
 func SendDingDingMessage(c *gin.Context) {
 	var req struct {
 		Message   string `json:"message"`
@@ -629,7 +629,14 @@ func SendDingDingMessage(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "消息为空，跳过发送"})
 		return
 	}
-	result := data.NewDingDingAPI().SendToDingDing(title, msg)
+	// 读取当前用户的钉钉配置，而非全局默认配置
+	userID, _ := middleware.GetUserIDFromContext(c)
+	cfg := data.GetSettingConfigByUserID(userID)
+	if cfg == nil || cfg.Settings == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "用户配置不存在"})
+		return
+	}
+	result := data.NewDingDingAPI().SendToDingDingWithConfig(title, msg, cfg.DingPushEnable, cfg.DingRobot)
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
 
