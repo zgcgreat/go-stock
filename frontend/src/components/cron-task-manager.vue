@@ -1340,7 +1340,11 @@ const handleSubmit = async () => {
       return
     }
 
-    formData.params = generatedParamsJson.value
+    // 仅对有专用参数UI的任务类型覆盖params，其他类型保留用户在textarea中输入的值
+    const generatedParams = generatedParamsJson.value
+    if (generatedParams !== undefined && generatedParams !== '') {
+      formData.params = generatedParams
+    }
 
     submitting.value = true
     const submitData = { ...formData }
