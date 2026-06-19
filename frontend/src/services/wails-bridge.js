@@ -21,19 +21,20 @@ function getAuthHeaders() {
 
 // 辅助函数：从 Web API 响应中提取数据
 function extractApiData(response) {
-  if (response.data) {
+  if (response && response.data) {
     // 标准格式 {code: 0, data: [...]}
     if (response.data.code === 0) {
       // 检查是否是分页格式 {code: 0, data: {list: [...]}}
       if (response.data.data && typeof response.data.data === 'object' && response.data.data.list !== undefined) {
         return response.data.data.list;
       }
-      return response.data.data;
+      // 确保不返回 null/undefined，避免调用方 .map() 崩溃
+      return response.data.data ?? [];
     }
     // 直接返回数据
     return response.data;
   }
-  return response;
+  return Array.isArray(response) ? response : [];
 }
 
 // 辅助函数：从 Web API 响应中提取单个对象
@@ -58,7 +59,7 @@ function downloadBlob(filename, blob) {
 }
 
 function normalizeBase64Payload(payload, mimeType) {
-  if (!payload) {
+  if (!payload || typeof payload !== 'string') {
     return '';
   }
   const text = String(payload);
@@ -69,6 +70,36 @@ function normalizeBase64Payload(payload, mimeType) {
   return dataPrefix + text.replace(/^data:[^;]+;base64,/, '');
 }
 
+// ===== SSE 连接管理器：追踪活跃 SSE 连接，支持并发取消 =====
+const sseConnections = new Map();
+const sseKeys = new Set(); // 追踪当前活跃的 SSE 键名
+
+function abortSSEByKey(key) {
+  const conn = sseConnections.get(key);
+  if (conn) {
+    conn.aborted = true;
+    if (conn.reader && typeof conn.reader.cancel === 'function') {
+      conn.reader.cancel().catch(() => {});
+    }
+    if (conn.controller && typeof conn.controller.abort === 'function') {
+      conn.controller.abort();
+    }
+    sseConnections.delete(key);
+    sseKeys.delete(key);
+  }
+}
+
+function createSSEConnection(key) {
+  // 如果已有同 key 连接，先取消旧的
+  if (sseKeys.has(key)) {
+    abortSSEByKey(key);
+  }
+  const conn = { aborted: false, reader: null, controller: null };
+  sseConnections.set(key, conn);
+  sseKeys.add(key);
+  return conn;
+}
+
 /**
  * SSE 工具函数：建立 SSE 连接，通过 EventsEmit 将数据分发到前端事件系统
  * @param {string} url         - SSE 接口路径（相对于 baseURL）
@@ -77,9 +108,16 @@ function normalizeBase64Payload(payload, mimeType) {
  * @param {Function} doneMsg   - 生成"完成"时的消息对象，默认 'DONE'
  */
 function connectSSE(url, body, eventName, doneMsg = 'DONE') {
+  // ===== 创建连接标识，自动取消旧连接 =====
+  const connKey = `sse_${eventName}`;
+  const conn = createSSEConnection(connKey);
+
   const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
   const token = localStorage.getItem('token');
   const fullUrl = baseURL.startsWith('http') ? `${baseURL}${url}` : `${window.location.origin}${baseURL}${url}`;
+
+  const controller = new AbortController();
+  conn.controller = controller;
 
   fetch(fullUrl, {
     method: 'POST',
@@ -88,26 +126,36 @@ function connectSSE(url, body, eventName, doneMsg = 'DONE') {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
+    signal: controller.signal,
   }).then(response => {
     if (!response.ok) {
-      EventsEmit(eventName, { error: `HTTP ${response.status}` });
+      // ===== 修复：提取错误体信息 =====
+      response.text().then(body => {
+        let errorDetail = `HTTP ${response.status}`;
+        try {
+          const parsed = JSON.parse(body);
+          errorDetail = parsed.message || parsed.error || errorDetail;
+        } catch(e) { /* ignore */ }
+        EventsEmit(eventName, { error: errorDetail, status: response.status });
+      }).catch(() => {
+        EventsEmit(eventName, { error: `HTTP ${response.status}` });
+      });
       return;
     }
     const reader = response.body.getReader();
+    conn.reader = reader; // ===== 保存 reader 以便取消 =====
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
 
     function processLine(line) {
       if (!line.trim()) return;
-      if (line.startsWith('event:')) return; // 跳过 event 行，由 data 行驱动
+      if (line.startsWith('event:')) return;
       if (line.startsWith('data:')) {
         const raw = line.slice(5).trim();
-        // 完成信号
         if (raw.startsWith('{')) {
           try {
             const parsed = JSON.parse(raw);
             if (parsed.chatId !== undefined) {
-              // 收到 done 信号
               EventsEmit(eventName, doneMsg);
               return;
             }
@@ -120,27 +168,42 @@ function connectSSE(url, body, eventName, doneMsg = 'DONE') {
     }
 
     function read() {
+      // ===== 新增：检查是否已被取消 =====
+      if (conn.aborted) {
+        try { reader.releaseLock(); } catch(e) { /* ignore */ }
+        sseConnections.delete(connKey);
+        sseKeys.delete(connKey);
+        return;
+      }
       reader.read().then(({ done, value }) => {
         if (done) {
-          // 流结束
           if (buffer.trim()) processLine(buffer);
+          try { reader.releaseLock(); } catch(e) { /* ignore */ }
           EventsEmit(eventName, doneMsg);
+          sseConnections.delete(connKey);
+          sseKeys.delete(connKey);
           return;
         }
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // 最后一行可能不完整，留到下次
+        buffer = lines.pop();
         lines.forEach(processLine);
         read();
       }).catch(err => {
         console.error('SSE read error:', err);
-        EventsEmit(eventName, doneMsg);
+        try { reader.releaseLock(); } catch(e) { /* ignore */ }
+        // ===== 修复：区分异常中断和正常完成 =====
+        EventsEmit(eventName, { content: doneMsg, truncated: true, error: err.message });
+        sseConnections.delete(connKey);
+        sseKeys.delete(connKey);
       });
     }
     read();
   }).catch(err => {
+    if (err.name === 'AbortError') return; // 主动取消不报错
     console.error('SSE connect error:', err);
-    EventsEmit(eventName, doneMsg);
+    // ===== 修复：区分异常中断 =====
+    EventsEmit(eventName, { content: doneMsg, truncated: true, error: err.message });
   });
 }
 
@@ -432,7 +495,12 @@ export function GetStockMinutePriceLineData(code, name) {
   } else {
     stockCode = 'sh' + code;
   }
-  return fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${stockCode}`)
+  // 外部API调用加30秒超时，防止永久挂起
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  return fetch(`https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${stockCode}`, {
+    signal: controller.signal,
+  })
     .then(res => res.json())
     .then(res => {
       const data = res.data;
@@ -453,7 +521,12 @@ export function GetStockMinutePriceLineData(code, name) {
       return { priceData, date: date, stockName: name, stockCode: code };
     })
     .catch(err => {
-      console.error('GetStockMinutePriceLineData error:', err);
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        console.error('GetStockMinutePriceLineData timeout');
+      } else {
+        console.error('GetStockMinutePriceLineData error:', err);
+      }
       return { priceData: [] };
     });
 }
@@ -590,11 +663,17 @@ export function NewChatStream(stock, stockCode, question, aiConfigId, sysPromptI
   if (isWailsMode()) {
     return window.go.main.App.NewChatStream(stock, stockCode, question, aiConfigId, sysPromptId, enableTools, think);
   }
-  // Web 模式：建立 SSE 连接，事件通过 EventsEmit('newChatStream') 分发
+  // ===== 创建连接标识，自动取消旧同键连接 =====
+  const connKey = 'newChatStream';
+  const conn = createSSEConnection(connKey);
+
   const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
   const token = localStorage.getItem('token');
   const origin = window.location.origin;
   const fullUrl = baseURL.startsWith('http') ? `${baseURL}/ai/analyze` : `${origin}${baseURL}/ai/analyze`;
+
+  const controller = new AbortController();
+  conn.controller = controller;
 
   fetch(fullUrl, {
     method: 'POST',
@@ -609,12 +688,24 @@ export function NewChatStream(stock, stockCode, question, aiConfigId, sysPromptI
       aiConfigId: Number(aiConfigId) || 0,
       sysPromptId: sysPromptId != null ? Number(sysPromptId) : null,
     }),
+    signal: controller.signal,
   }).then(response => {
     if (!response.ok) {
-      EventsEmit('newChatStream', 'DONE');
+      // ===== 修复：提取错误体信息 =====
+      response.text().then(body => {
+        let errorDetail = `HTTP ${response.status}`;
+        try {
+          const parsed = JSON.parse(body);
+          errorDetail = parsed.message || parsed.error || errorDetail;
+        } catch(e) { /* ignore */ }
+        EventsEmit('newChatStream', { error: errorDetail, status: response.status });
+      }).catch(() => {
+        EventsEmit('newChatStream', { error: `HTTP ${response.status}` });
+      });
       return;
     }
     const reader = response.body.getReader();
+    conn.reader = reader;
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let eventType = '';
@@ -631,23 +722,29 @@ export function NewChatStream(stock, stockCode, question, aiConfigId, sysPromptI
       if (line.startsWith('data:')) {
         const raw = line.slice(5).trim();
         if (eventType === 'chat_id') {
-          // 收到 chatId
           EventsEmit('newChatStream', { chatId: raw });
         } else if (eventType === 'done' || (eventType === '' && raw.startsWith('{'))) {
-          // 完成信号
           EventsEmit('newChatStream', 'DONE');
         } else if (raw) {
-          // 普通文字片段（包装为对象，与 Wails 桌面端消息格式一致）
           EventsEmit('newChatStream', { content: raw });
         }
       }
     }
 
     function read() {
+      if (conn.aborted) {
+        try { reader.releaseLock(); } catch(e) { /* ignore */ }
+        sseConnections.delete(connKey);
+        sseKeys.delete(connKey);
+        return;
+      }
       reader.read().then(({ done, value }) => {
         if (done) {
           if (buffer.trim()) processLine(buffer);
+          try { reader.releaseLock(); } catch(e) { /* ignore */ }
           EventsEmit('newChatStream', 'DONE');
+          sseConnections.delete(connKey);
+          sseKeys.delete(connKey);
           return;
         }
         buffer += decoder.decode(value, { stream: true });
@@ -657,13 +754,18 @@ export function NewChatStream(stock, stockCode, question, aiConfigId, sysPromptI
         read();
       }).catch(err => {
         console.error('NewChatStream SSE read error:', err);
-        EventsEmit('newChatStream', 'DONE');
+        try { reader.releaseLock(); } catch(e) { /* ignore */ }
+        // ===== 修复：区分异常中断 =====
+        EventsEmit('newChatStream', { content: 'DONE', error: err.message });
+        sseConnections.delete(connKey);
+        sseKeys.delete(connKey);
       });
     }
     read();
   }).catch(err => {
+    if (err.name === 'AbortError') return;
     console.error('NewChatStream SSE connect error:', err);
-    EventsEmit('newChatStream', 'DONE');
+    EventsEmit('newChatStream', { content: 'DONE', error: err.message });
   });
 
   return Promise.resolve();
@@ -916,14 +1018,13 @@ export function Hide() {
 
 export function AbortChatWithAgent() {
   if (isWailsMode()) return window.go.main.App.AbortChatWithAgent();
-  // Web 模式下通过标志位中断，在 ChatWithAgent 中处理
-  window._abortAgentStream = true;
+  abortSSEByKey('ChatWithAgent');
   return Promise.resolve();
 }
 
 export function AbortSummaryStockNews() {
   if (isWailsMode()) return window.go.main.App.AbortSummaryStockNews();
-  window._abortNewsStream = true;
+  abortSSEByKey('SummaryStockNews_summary-news');
   return Promise.resolve();
 }
 
@@ -999,8 +1100,9 @@ export function CalculateNextRunTimes(arg1, arg2) {
 export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
   if (isWailsMode()) return window.go.main.App.ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6);
 
-  // 重置中断标志
-  window._abortAgentStream = false;
+  // ===== 使用 SSE 管理器替代全局 window._abortAgentStream =====
+  const connKey = 'ChatWithAgent';
+  const conn = createSSEConnection(connKey);
 
   const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
   const token = localStorage.getItem('token');
@@ -1008,6 +1110,9 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
   const fullUrl = baseURL.startsWith('http')
     ? `${baseURL}/ai/agent-chat`
     : `${origin}${baseURL}/ai/agent-chat`;
+
+  const controller = new AbortController();
+  conn.controller = controller;
 
   fetch(fullUrl, {
     method: 'POST',
@@ -1023,22 +1128,17 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
       memoryCount: arg5 || 10,
       thinking: arg6 || false,
     }),
+    signal: controller.signal,
   }).then(response => {
     if (!response.ok) {
-      // HTTP 错误（401/400/500等），发送错误信息给前端
       let errorMsg = `请求失败 (${response.status})`;
-      // 尝试读取错误响应体
       response.text().then(text => {
         try {
           const errData = JSON.parse(text);
-          if (errData.error?.message) {
-            errorMsg = errData.error.message;
-          } else if (errData.message) {
-            errorMsg = errData.message;
-          } else if (errData.error) {
-            errorMsg = typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error);
-          }
-        } catch { /* ignore parse error */ }
+          if (errData.error?.message) errorMsg = errData.error.message;
+          else if (errData.message) errorMsg = errData.message;
+          else if (errData.error) errorMsg = typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error);
+        } catch { /* ignore */ }
         EventsEmit('agent-message', { role: 'assistant', content: '', error: errorMsg });
         EventsEmit('agent-message', { content: 'agent-DONE' });
       }).catch(() => {
@@ -1048,31 +1148,28 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
       return;
     }
     const reader = response.body.getReader();
+    conn.reader = reader;
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let eventType = '';
 
     function processLine(line) {
-      if (window._abortAgentStream) return;
+      if (conn.aborted) return;
       if (!line.trim()) { eventType = ''; return; }
       if (line.startsWith('event:')) { eventType = line.slice(6).trim(); return; }
       if (line.startsWith('data:')) {
         const raw = line.slice(5).trim();
         try {
           const parsedData = JSON.parse(raw);
-          // 如果解析成功，检查是否为完成信号
           if (parsedData && (parsedData.done || parsedData.finish_reason === 'stop' || (parsedData.chatId && eventType === 'done'))) {
             EventsEmit('agent-message', { content: 'agent-DONE' });
           } else {
-            // 对于普通内容，也发送给前端进行处理
             EventsEmit('agent-message', parsedData);
           }
         } catch (e) {
-          // 如果不是有效的JSON字符串
           if (eventType === 'done' || raw === '{}') {
             EventsEmit('agent-message', { content: 'agent-DONE' });
           } else if (raw) {
-            // 直接发送原始内容，前端的onAgentMessage会处理role
             EventsEmit('agent-message', { content: raw });
           }
         }
@@ -1080,15 +1177,19 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
     }
 
     function read() {
-      if (window._abortAgentStream) {
-        reader.cancel();
-        EventsEmit('agent-message', { content: 'agent-DONE' });
+      if (conn.aborted) {
+        try { reader.releaseLock(); } catch(e) { /* ignore */ }
+        sseConnections.delete(connKey);
+        sseKeys.delete(connKey);
         return;
       }
       reader.read().then(({ done, value }) => {
         if (done) {
           if (buffer.trim()) processLine(buffer);
+          try { reader.releaseLock(); } catch(e) { /* ignore */ }
           EventsEmit('agent-message', { content: 'agent-DONE' });
+          sseConnections.delete(connKey);
+          sseKeys.delete(connKey);
           return;
         }
         buffer += decoder.decode(value, { stream: true });
@@ -1098,12 +1199,16 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
         read();
       }).catch(err => {
         console.error('ChatWithAgent SSE read error:', err);
+        try { reader.releaseLock(); } catch(e) { /* ignore */ }
         EventsEmit('agent-message', { role: 'assistant', content: '', error: `流式读取错误: ${err.message || '连接中断'}` });
         EventsEmit('agent-message', { content: 'agent-DONE' });
+        sseConnections.delete(connKey);
+        sseKeys.delete(connKey);
       });
     }
     read();
   }).catch(err => {
+    if (err.name === 'AbortError') return;
     console.error('ChatWithAgent SSE connect error:', err);
     EventsEmit('agent-message', { role: 'assistant', content: '', error: `连接失败: ${err.message || '网络错误'}` });
     EventsEmit('agent-message', { content: 'agent-DONE' });
@@ -1849,7 +1954,9 @@ export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   const sysPromptId = arg3 != null ? Number(arg3) : null;
   const eventName = arg6 || 'summary-news';
 
-  window._abortNewsStream = false;
+  // ===== 使用 SSE 管理器替代全局 window._abortNewsStream =====
+  const connKey = `SummaryStockNews_${eventName}`;
+  const conn = createSSEConnection(connKey);
 
   const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
   const token = localStorage.getItem('token');
@@ -1857,6 +1964,9 @@ export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   const fullUrl = baseURL.startsWith('http')
     ? `${baseURL}/ai/analyze`
     : `${origin}${baseURL}/ai/analyze`;
+
+  const controller = new AbortController();
+  conn.controller = controller;
 
   fetch(fullUrl, {
     method: 'POST',
@@ -1871,18 +1981,29 @@ export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
       aiConfigId: aiConfigId,
       sysPromptId: sysPromptId,
     }),
+    signal: controller.signal,
   }).then(response => {
     if (!response.ok) {
-      EventsEmit(eventName, 'DONE');
+      response.text().then(body => {
+        let errorDetail = `HTTP ${response.status}`;
+        try {
+          const parsed = JSON.parse(body);
+          errorDetail = parsed.message || parsed.error || errorDetail;
+        } catch(e) { /* ignore */ }
+        EventsEmit(eventName, { error: errorDetail, status: response.status });
+      }).catch(() => {
+        EventsEmit(eventName, { error: `HTTP ${response.status}` });
+      });
       return;
     }
     const reader = response.body.getReader();
+    conn.reader = reader;
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let eventType = '';
 
     function processLine(line) {
-      if (window._abortNewsStream) return;
+      if (conn.aborted) return;
       if (!line.trim()) { eventType = ''; return; }
       if (line.startsWith('event:')) { eventType = line.slice(6).trim(); return; }
       if (line.startsWith('data:')) {
@@ -1892,22 +2013,25 @@ export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
         } else if (eventType === 'done') {
           EventsEmit(eventName, 'DONE');
         } else if (raw) {
-          // 普通文字片段（包装为对象，与 Wails 桌面端消息格式一致）
           EventsEmit(eventName, { content: raw });
         }
       }
     }
 
     function read() {
-      if (window._abortNewsStream) {
-        reader.cancel();
-        EventsEmit(eventName, 'DONE');
+      if (conn.aborted) {
+        try { reader.releaseLock(); } catch(e) { /* ignore */ }
+        sseConnections.delete(connKey);
+        sseKeys.delete(connKey);
         return;
       }
       reader.read().then(({ done, value }) => {
         if (done) {
           if (buffer.trim()) processLine(buffer);
+          try { reader.releaseLock(); } catch(e) { /* ignore */ }
           EventsEmit(eventName, 'DONE');
+          sseConnections.delete(connKey);
+          sseKeys.delete(connKey);
           return;
         }
         buffer += decoder.decode(value, { stream: true });
@@ -1917,13 +2041,17 @@ export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
         read();
       }).catch(err => {
         console.error('SummaryStockNews SSE read error:', err);
-        EventsEmit(eventName, 'DONE');
+        try { reader.releaseLock(); } catch(e) { /* ignore */ }
+        EventsEmit(eventName, { content: 'DONE', error: err.message });
+        sseConnections.delete(connKey);
+        sseKeys.delete(connKey);
       });
     }
     read();
   }).catch(err => {
+    if (err.name === 'AbortError') return;
     console.error('SummaryStockNews SSE connect error:', err);
-    EventsEmit(eventName, 'DONE');
+    EventsEmit(eventName, { content: 'DONE', error: err.message });
   });
 
   return Promise.resolve();

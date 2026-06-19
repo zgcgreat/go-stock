@@ -39,11 +39,11 @@ apiClient.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       const url = error.config?.url || '';
       if (!url.includes('/auth/login') && !url.includes('/auth/register')) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user_info');
-        window.dispatchEvent(new Event('user-info-updated'));
-        // 防止并发请求重复跳转
+        // 只在首次 401 时清除 token 和 dispatch，后续并发 401 不再重复操作
         if (!isRedirecting) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user_info');
+          window.dispatchEvent(new Event('user-info-updated'));
           isRedirecting = true;
           // hash 模式下用 window.location.hash 跳转
           window.location.hash = '#/login';
@@ -69,6 +69,8 @@ export class ApiService {
       const response = await this.client.post('/auth/register', userData);
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
+      } else {
+        console.warn('register: 服务端响应成功但未返回 token', response.data);
       }
       return response.data;
     } catch (error) {
@@ -81,6 +83,8 @@ export class ApiService {
       const response = await this.client.post('/auth/login', credentials);
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
+      } else {
+        console.warn('login: 服务端响应成功但未返回 token', response.data);
       }
       return response.data;
     } catch (error) {

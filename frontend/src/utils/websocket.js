@@ -5,12 +5,13 @@ class WebSocketService {
   constructor(url) {
     this.url = url;
     this.ws = null;
-    this.reconnectInterval = 5000; // 5秒重连间隔
-    this.maxReconnectAttempts = 5; // 最大重连次数
+    this.baseReconnectInterval = 1000; // 初始1秒，指数退避增长
+    this.maxReconnectInterval = 30000; // 最大30秒
+    this.reconnectJitter = 1000;       // 随机抖动 ±500ms
+    this.maxReconnectAttempts = 0;     // 0 = 无限重连（由应用层策略控制）
     this.reconnectAttempts = 0;
     this.eventHandlers = {};
     this.isManuallyClosed = false;
-    this.authRetry = false; // 防止无限重试认证
   }
 
   // 连接 WebSocket
@@ -43,7 +44,6 @@ class WebSocketService {
             type: 'AUTH',
             token: token
           });
-          this.authRetry = false; // 重置认证重试标志
         } catch (e) {
           console.error('发送认证消息失败:', e);
         }
@@ -63,8 +63,12 @@ class WebSocketService {
             // 认证失败，可能是token过期
             if (data.code === 'TOKEN_EXPIRED' || data.code === 'UNAUTHORIZED') {
               Auth.clearToken();
-              // 不要在WebSocket中直接重定向，而是触发一个事件通知应用
               this._triggerEvent('auth_expired', data);
+              // 关闭当前连接，触发 onclose → 自动重连（带新 token）
+              this.isManuallyClosed = false;
+              if (this.ws) {
+                this.ws.close();
+              }
             }
           } else {
             console.log('WebSocket认证成功');
@@ -76,17 +80,29 @@ class WebSocketService {
         this._triggerEvent('message', data);
       } catch (error) {
         console.error('Failed to parse WebSocket message:', event.data, error);
-        this._triggerEvent('message', event.data);
+        // 包装为标准格式，避免监听器因类型不匹配崩溃
+        this._triggerEvent('message', {
+          type: 'PARSE_ERROR',
+          raw: event.data,
+          error: error.message
+        });
       }
     };
 
     this.ws.onclose = (event) => {
       console.log('WebSocket closed:', event.code, event.reason);
 
-      if (!this.isManuallyClosed && this.reconnectAttempts < this.maxReconnectAttempts) {
+      if (!this.isManuallyClosed) {
         this.reconnectAttempts++;
-        console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-        setTimeout(() => this.connect(), this.reconnectInterval);
+        // 指数退避 + 随机抖动
+        const backoff = Math.min(
+          this.baseReconnectInterval * Math.pow(2, this.reconnectAttempts - 1),
+          this.maxReconnectInterval
+        );
+        const jitter = Math.random() * this.reconnectJitter - this.reconnectJitter / 2;
+        const delay = Math.max(backoff + jitter, 500);
+        console.log(`Attempting to reconnect (attempt ${this.reconnectAttempts}, delay ${Math.round(delay)}ms)...`);
+        setTimeout(() => this.connect(), delay);
       } else {
         this._triggerEvent('close', event);
       }
@@ -111,8 +127,7 @@ class WebSocketService {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
-      console.error('WebSocket is not connected');
-      throw new Error('WebSocket is not connected');
+      console.warn('WebSocket is not connected, message dropped:', message);
     }
   }
 

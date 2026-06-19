@@ -2,8 +2,8 @@
   <div class="login-container">
     <div class="login-card">
       <div class="login-header">
-        <h1>go-stock</h1>
-        <p>AI赋能股票分析</p>
+        <h1>股海智擎</h1>
+        <p>智能股票分析系统</p>
       </div>
       <n-form ref="formRef" :model="formData" :rules="rules" label-placement="left" label-width="0" require-mark-placement="right-hanging">
         <n-form-item path="username">

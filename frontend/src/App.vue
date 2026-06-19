@@ -16,7 +16,7 @@ import {
   IsHKTradingTime,
   IsUSTradingTime
 } from './services/wails-bridge.js'
-import {h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
+import {computed, h, onBeforeMount, onBeforeUnmount, onMounted, ref} from "vue";
 import {RouterLink, useRouter} from 'vue-router'
 import {createDiscreteApi,darkTheme,lightTheme , NIcon, NText,NButton,dateZhCN,zhCN} from 'naive-ui'
 import {
@@ -48,6 +48,7 @@ import {useIsWebMode} from "./composables/useResponsive";
 import WebAppShell from "./components/layout/WebAppShell.vue";
 
 const router = useRouter()
+const isLoginPage = computed(() => router.currentRoute.value.name === 'login')
 
 const {isWebMode} = useIsWebMode()
 
@@ -1189,8 +1190,8 @@ onMounted(() => {
                 :y-offset="150"
                 :rotate="-15"
             >
-              <FloatingAiAssistant />
-              <FloatingAgentAssistant />
+              <FloatingAiAssistant v-if="!isLoginPage" />
+              <FloatingAgentAssistant v-if="!isLoginPage" />
 
               <!-- Web 模式：顶部 Tab 导航布局 -->
               <WebAppShell

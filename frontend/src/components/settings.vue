@@ -60,8 +60,10 @@ const formValue = ref({
 })
 
 // 添加一个新的AI配置到列表
+let aiConfigIdCounter = Date.now()
 function addAiConfig() {
   formValue.value.openAI.aiConfigs.push({
+    _uid: ++aiConfigIdCounter, // 唯一标识，用于 Vue key 绑定
     name: '',
     baseUrl: 'https://api.deepseek.com',
     apiKey: '',

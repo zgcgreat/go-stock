@@ -93,11 +93,11 @@ const downColor = '#00da3c';
 const downBorderColor = '';
 const kLineChartRef = ref(null);
 const kLineChartRef2 = ref(null);
+const fsChartInstance = ref(null);       // 分时图 ECharts 实例（防泄漏）
+const kLineChartInstance = ref(null);    // K 线图 ECharts 实例（防泄漏）
 
 
-const handleProgress = (progress) => {
-  //console.log(`Export progress: ${progress.ratio * 100}%`);
-};
+
 const enableEditor = ref(false)
 const mdPreviewRef = ref(null)
 const mdEditorRef = ref(null)
@@ -749,6 +749,16 @@ onBeforeUnmount(() => {
 
   cleanupDraggableTabs()
 
+  // 释放 ECharts 实例，防止内存泄漏
+  if (fsChartInstance.value) {
+    fsChartInstance.value.dispose()
+    fsChartInstance.value = null
+  }
+  if (kLineChartInstance.value) {
+    kLineChartInstance.value.dispose()
+    kLineChartInstance.value = null
+  }
+
 })
 
 //判断是否是A股交易时间
@@ -803,11 +813,14 @@ function AddStock() {
         message.success(result)
         GetFollowList(currentGroupId.value).then(result => {
           followList.value = result
-        })
+        }).catch(err => { console.error("GetFollowList error:", err) })
         monitor();
       } else {
         message.error(result)
       }
+    }).catch(err => {
+      console.error("Follow error:", err)
+      message.error("关注失败：" + (err?.message || err || "网络错误"))
     })
   } else {
     message.error("已经关注了")
@@ -1011,47 +1024,38 @@ function search(code, name) {
 }
 
 function handleLongEntryPriceUpdate(newPrice) {
-  console.log('[DEBUG handleLongEntryPriceUpdate] called, newPrice:', newPrice, 'type:', typeof newPrice)
   currentStockTradingPrice.value.entryPrice = newPrice
-  console.log('[DEBUG handleLongEntryPriceUpdate] after assignment, entryPrice:', currentStockTradingPrice.value.entryPrice)
   saveTradingPriceToBackend()
 }
 
 function handleLongStopLossPriceUpdate(newPrice) {
-  console.log('[DEBUG handleLongStopLossPriceUpdate] called, newPrice:', newPrice, 'type:', typeof newPrice)
   currentStockTradingPrice.value.stopLossPrice = newPrice
   saveTradingPriceToBackend()
 }
 
 function handleLongTakeProfitPriceUpdate(newPrice) {
-  console.log('[DEBUG handleLongTakeProfitPriceUpdate] called, newPrice:', newPrice, 'type:', typeof newPrice)
   currentStockTradingPrice.value.takeProfitPrice = newPrice
   saveTradingPriceToBackend()
 }
 
 function handleCostPriceUpdate(newPrice) {
-  console.log('[DEBUG handleCostPriceUpdate] called, newPrice:', newPrice, 'type:', typeof newPrice)
   currentStockTradingPrice.value.costPrice = newPrice
   saveTradingPriceToBackend()
 }
 
 function saveTradingPriceToBackend() {
-  console.log('[DEBUG saveTradingPriceToBackend] called, stockCode:', currentStockTradingPrice.value.stockCode)
   if (!currentStockTradingPrice.value.stockCode) {
-    console.log('[DEBUG saveTradingPriceToBackend] early return - no stockCode')
     return
   }
   const emCode = currentStockTradingPrice.value.stockCode
   const code = fromEastMoneyCode(emCode)
   if (!code) {
-    console.warn('[saveTradingPriceToBackend] 无法转换股票代码:', emCode)
     return
   }
   const entryPrice = Number(currentStockTradingPrice.value.entryPrice) || 0
   const takeProfitPrice = Number(currentStockTradingPrice.value.takeProfitPrice) || 0
   const stopLossPrice = Number(currentStockTradingPrice.value.stopLossPrice) || 0
   const costPrice = Number(currentStockTradingPrice.value.costPrice) || 0
-  console.log('[DEBUG saveTradingPriceToBackend] calling SetTradingPrice with:', code, entryPrice, takeProfitPrice, stopLossPrice, costPrice)
   SetTradingPrice(
     code,
     entryPrice,
@@ -1059,7 +1063,6 @@ function saveTradingPriceToBackend() {
     stopLossPrice,
     costPrice
   ).then(result => {
-    console.log('[DEBUG saveTradingPriceToBackend] SetTradingPrice result:', result)
     if (result === '设置成功') {
       const emCode = currentStockTradingPrice.value.stockCode
       const internalCode = code
@@ -1068,11 +1071,10 @@ function saveTradingPriceToBackend() {
         followItem.EntryPrice = entryPrice
         followItem.TakeProfitPrice = takeProfitPrice
         followItem.StopLossPrice = stopLossPrice
-        console.log('[DEBUG saveTradingPriceToBackend] updated followList item')
       }
     }
   }).catch(err => {
-    console.error('[DEBUG saveTradingPriceToBackend] SetTradingPrice error:', err)
+    console.error('saveTradingPriceToBackend error:', err)
   })
 }
 
@@ -1101,7 +1103,13 @@ function clearFeishi() {
 function showFsChart(code, name) {
   data.name = name
   data.code = code
-  const chart = echarts.init(kLineChartRef2.value);
+  // 修复：销毁旧 ECharts 实例，防止内存泄漏
+  if (fsChartInstance.value) {
+    fsChartInstance.value.dispose()
+    fsChartInstance.value = null
+  }
+  const chart = echarts.init(kLineChartRef2.value)
+  fsChartInstance.value = chart
   GetStockMinutePriceLineData(code, name).then(result => {
     // console.log("GetStockMinutePriceLineData", result)
     const priceData = result.priceData
@@ -1343,6 +1351,10 @@ function showFenshi(code, name, changePercent) {
 }
 
 function handleFeishi() {
+  // 清理旧定时器，防止多次调用重叠
+  if (feishiInterval.value) {
+    clearInterval(feishiInterval.value)
+  }
   showFsChart(data.code, data.name);
   feishiInterval.value = setInterval(() => {
     showFsChart(data.code, data.name);
@@ -1368,7 +1380,13 @@ function calculateMA(dayCount, values) {
 function handleKLine() {
   GetStockKLine(data.code, data.name, 365).then(result => {
     //console.log("GetStockKLine",result)
+    // 修复：销毁旧 ECharts 实例，防止内存泄漏
+    if (kLineChartInstance.value) {
+      kLineChartInstance.value.dispose()
+      kLineChartInstance.value = null
+    }
     const chart = echarts.init(kLineChartRef.value);
+    kLineChartInstance.value = chart
     const categoryData = [];
     const values = [];
     const volumns = [];
@@ -2023,7 +2041,7 @@ function aiReCheckStock(stock, stockCode) {
 
 function aiCheckStock(stock, stockCode) {
   GetAIResponseResult(stockCode).then(result => {
-    if (result.content) {
+    if (result && result.content) {
       data.modelName = result.modelName
       data.chatId = result.chatId
       data.question = result.question
@@ -2041,18 +2059,8 @@ function aiCheckStock(stock, stockCode) {
       const seconds = String(date.getSeconds()).padStart(2, '0');
       data.time = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
     } else {
-      data.modelName = ""
-      data.question = ""
-      data.airesult = ""
-      data.time = ""
-      data.name = stock
-      data.code = stockCode
-      data.loading = false
-      modalShow4.value = true
-      // message.loading("ai检测中...", {
-      //   duration: 0,
-      // })
-      // NewChatStream(stock, stockCode, "", data.sysPromptId)
+      // 无缓存结果，自动触发新分析（使用 aiReCheckStock，自带loading/超时/错误处理）
+      aiReCheckStock(stock, stockCode)
     }
   })
 }

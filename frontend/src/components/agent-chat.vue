@@ -140,7 +140,6 @@ import {ArrowDownIcon, CheckCircleIcon, SystemSumIcon} from 'tdesign-icons-vue-n
 import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
 import { enhanceCodeBlocks, getCodeTheme } from '../utils/codeBlockEnhancer.js';
-const fetchCancel = ref(null);
 const loading = ref(false);
 
 const inputValue = ref('');
@@ -475,8 +474,6 @@ function parseStepText(text) {
 }
 
 const handleAgentMessage = (data) => {
-  console.log('handleAgentMessage received:', data)
-
   // 处理错误消息
   if (data && data['error']) {
     isStreamLoad.value = false;
@@ -484,14 +481,14 @@ const handleAgentMessage = (data) => {
     stopFormatTimer()
     const lastItemIndex = chatList.value.findIndex(item => item.role === 'assistant')
     if (lastItemIndex !== -1) {
-      const lastItem = chatList.value[lastItemIndex]
+      const chatListClone = [...chatList.value]
+      const lastItem = chatListClone[lastItemIndex]
       const updatedItem = { ...lastItem }
-      updatedItem.content = `❌ Agent 调用失败：${data['error']}`
+      updatedItem.content = '❌ Agent 调用失败：' + String(data['error'] || '未知错误').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       updatedItem.rawContent = updatedItem.content
-      chatList.value[lastItemIndex] = updatedItem
+      chatListClone[lastItemIndex] = updatedItem
+      chatList.value = chatListClone
     }
-    // 在聊天消息中显示错误
-    chatList.value[lastItemIndex] = updatedItem
     return
   }
 
@@ -566,13 +563,14 @@ const handleAgentMessage = (data) => {
 
 onBeforeUnmount(() => {
   EventsOff("agent-message", handleAgentMessage)
+  // 清理流式格式化定时器，防止内存泄漏
+  stopFormatTimer()
 })
 
 onBeforeMount(() => {
   // 每次挂载前都重新注册事件监听
   EventsOn("agent-message", handleAgentMessage)
   GetAiConfigs().then(res=>{
-    console.log(res)
     selectOptions.value = res
     selectValue.value = res[0].ID
   })
@@ -612,15 +610,10 @@ const clearConfirm = function () {
   chatList.value = [];
 };
 const handleOperation = function (type, options) {
-  console.log('handleOperation', type, options);
+  // 由 t-chat-action 组件处理，暂无额外逻辑
 };
 // 倒序渲染
 const chatList = ref([
-  // {
-  //   content: `模型由<span>hunyuan</span>变为<span>GPT4</span>`,
-  //   role: 'model-change',
-  //   reasoning: '',
-  // },
   {
     avatar: h(NImage, { src: icon.value, height: '48px', width: '48px'}),
     name: 'Go-Stock AI',
@@ -630,22 +623,9 @@ const chatList = ref([
     role: 'assistant',
     duration: 10,
   },
-  {
-    avatar: 'https://tdesign.gtimg.com/site/avatar.jpg',
-    name: '宇宙无敌大韭菜',
-    datetime: '',
-    content: '介绍下自己？',
-    role: 'user',
-    reasoning: '',
-  },
 ]);
 
 const onStop = function () {
-  if (fetchCancel.value) {
-    fetchCancel.value.controller.close();
-    loading.value = false;
-    isStreamLoad.value = false;
-  }
   stopFormatTimer()
   const lastItem = chatList.value[0]
   if (lastItem && lastItem.role === 'assistant') {
