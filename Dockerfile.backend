@@ -33,6 +33,7 @@ FROM alpine:latest
 RUN apk --no-cache add \
     ca-certificates \
     tzdata \
+    wget \
     chromium \
     fontconfig \
     freetype \
@@ -41,8 +42,9 @@ RUN apk --no-cache add \
     cups-libs \
     dbus-libs
 
-# 设置时区
+# 设置时区与端口
 ENV TZ=Asia/Shanghai
+ENV AI_ASSISTANT_WEB_ADDR=:8080
 
 WORKDIR /app
 
