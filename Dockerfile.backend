@@ -22,14 +22,14 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
-# 构建后端
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o go-stock-web ./web/
+# 构建后端（注意：实际源码在 ai-assistant-web/cmd/ai-assistant-web/）
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o go-stock-web ./ai-assistant-web/cmd/ai-assistant-web/
 
 # 阶段2: 运行
 FROM alpine:latest
 
 # 安装必要工具 + Chromium（chromedp 获取雪球 cookie 依赖）
-# chromedp 在容器中运行 headless Chrome，需要浏览器二进制和字体/NSS 库
+# chromium 会自动拉取 X11/GL 等运行时库，无需逐个声明
 RUN apk --no-cache add \
     ca-certificates \
     tzdata \
@@ -37,17 +37,9 @@ RUN apk --no-cache add \
     fontconfig \
     freetype \
     nss \
-    libX11 \
-    libXcomposite \
-    libXdamage \
-    libXrandr \
-    libxkbcommon \
-    mesa-gl \
-    mesa-gles \
-    alsa-lib \
+    nss-tools \
     cups-libs \
-    dbus-libs \
-    nss-tools
+    dbus-libs
 
 # 设置时区
 ENV TZ=Asia/Shanghai
