@@ -22,8 +22,9 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
-# 构建后端（注意：实际源码在 ai-assistant-web/cmd/ai-assistant-web/）
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o go-stock-web ./ai-assistant-web/cmd/ai-assistant-web/
+# 构建后端 — 使用独立的 Web 服务入口
+# ./web/main.go 启动完整的 Gin Web 服务器，包含全部 /api/v1/ 路由和前端 SPA 托管
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o go-stock-web ./web/
 
 # 阶段2: 运行
 FROM alpine:latest
@@ -42,14 +43,17 @@ RUN apk --no-cache add \
     cups-libs \
     dbus-libs
 
-# 设置时区与端口
+# 设置时区与端口（web/main.go 使用 GO_STOCK_WEB_PORT，默认 8080）
 ENV TZ=Asia/Shanghai
-ENV AI_ASSISTANT_WEB_ADDR=:8080
+ENV GO_STOCK_WEB_PORT=8080
 
 WORKDIR /app
 
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/go-stock-web .
+
+# 复制前端构建产物（web/main.go 通过 StaticDir=frontend/dist 提供静态文件服务）
+COPY --from=builder /app/frontend/dist ./frontend/dist
 
 # 创建必要的目录
 RUN mkdir -p logs data
