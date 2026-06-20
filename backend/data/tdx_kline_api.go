@@ -13,13 +13,16 @@ import (
 )
 
 type TdxKLineApi struct {
-	client *gotdx.Client
-	once   sync.Once
-	mu     sync.Mutex
+	client    *gotdx.Client
+	macClient *gotdx.Client
+	mu        sync.Mutex // 保护 client
+	macMu     sync.Mutex // 保护 macClient
 }
 
-var tdxApiInstance *TdxKLineApi
-var tdxApiOnce sync.Once
+var (
+	tdxApiInstance *TdxKLineApi
+	tdxApiOnce     sync.Once
+)
 
 func NewTdxKLineApi() *TdxKLineApi {
 	tdxApiOnce.Do(func() {
@@ -28,21 +31,37 @@ func NewTdxKLineApi() *TdxKLineApi {
 	return tdxApiInstance
 }
 
+func (t *TdxKLineApi) newClient() *gotdx.Client {
+	cfg := GetSettingConfig()
+	timeoutSec := cfg.CrawlTimeOut
+	if timeoutSec <= 0 {
+		timeoutSec = 10
+	}
+	return gotdx.New(
+		gotdx.WithAutoSelectFastest(true),
+		gotdx.WithTimeoutSec(int(timeoutSec)),
+	)
+}
+
+func (t *TdxKLineApi) newMACClient() *gotdx.Client {
+	cfg := GetSettingConfig()
+	timeoutSec := cfg.CrawlTimeOut
+	if timeoutSec <= 0 {
+		timeoutSec = 10
+	}
+	return gotdx.NewMAC(
+		gotdx.WithAutoSelectFastest(true),
+		gotdx.WithTimeoutSec(int(timeoutSec)),
+	)
+}
+
 func (t *TdxKLineApi) ensureClient() error {
-	var initErr error
-	t.once.Do(func() {
-		cfg := GetSettingConfig()
-		timeoutSec := cfg.CrawlTimeOut
-		if timeoutSec <= 0 {
-			timeoutSec = 10
-		}
-		client := gotdx.New(
-			gotdx.WithAutoSelectFastest(true),
-			gotdx.WithTimeoutSec(int(timeoutSec)),
-		)
-		t.client = client
-	})
-	return initErr
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.client == nil {
+		t.client = t.newClient()
+	}
+	return nil
 }
 
 func (t *TdxKLineApi) reconnect() error {
@@ -51,15 +70,26 @@ func (t *TdxKLineApi) reconnect() error {
 	if t.client != nil {
 		t.client.Disconnect()
 	}
-	cfg := GetSettingConfig()
-	timeoutSec := cfg.CrawlTimeOut
-	if timeoutSec <= 0 {
-		timeoutSec = 10
+	t.client = t.newClient()
+	return nil
+}
+
+func (t *TdxKLineApi) ensureMACClient() error {
+	t.macMu.Lock()
+	defer t.macMu.Unlock()
+	if t.macClient == nil {
+		t.macClient = t.newMACClient()
 	}
-	t.client = gotdx.New(
-		gotdx.WithAutoSelectFastest(true),
-		gotdx.WithTimeoutSec(int(timeoutSec)),
-	)
+	return nil
+}
+
+func (t *TdxKLineApi) reconnectMAC() error {
+	t.macMu.Lock()
+	defer t.macMu.Unlock()
+	if t.macClient != nil {
+		t.macClient.Disconnect()
+	}
+	t.macClient = t.newMACClient()
 	return nil
 }
 
@@ -281,6 +311,120 @@ func tdxAggregationParams(klt string) (srcKlt string, n int) {
 	default:
 		return "", 1
 	}
+}
+
+// GetMACKLineData 通过 MAC 行情接口获取 K 线数据
+// MAC 行情接口返回的数据包含换手率和流通股本信息，由客户端自动计算补全换手率
+func (t *TdxKLineApi) GetMACKLineData(stockCode string, klt string, limit int) *[]KLineData {
+	result := &[]KLineData{}
+	if err := t.ensureMACClient(); err != nil {
+		logger.SugaredLogger.Errorf("TdxKLine ensureMACClient error: %v", err)
+		return result
+	}
+	if limit <= 0 {
+		limit = 500
+	}
+	market, code := tdxMarketFromStockCode(stockCode)
+
+	aggSrc, aggN := tdxAggregationParams(klt)
+	actualKlt := klt
+	if aggSrc != "" {
+		actualKlt = aggSrc
+	}
+
+	klineType := tdxKLineTypeFromKlt(actualKlt)
+	if klineType < 0 {
+		logger.SugaredLogger.Warnf("TdxKLine MAC: unsupported klt %s", klt)
+		return result
+	}
+
+	fetchCount := uint32(limit)
+	if aggN > 1 {
+		fetchCount = uint32(limit * aggN)
+		if fetchCount > 8000 {
+			fetchCount = 8000
+		}
+	}
+
+	t.macMu.Lock()
+	bars, err := t.macClient.MACSymbolBars(market, code, uint16(klineType), 1, 0, fetchCount, types.AdjustQFQ)
+	t.macMu.Unlock()
+
+	if err != nil {
+		logger.SugaredLogger.Warnf("TdxKLine MACSymbolBars error: %v, reconnecting...", err)
+		if reconnectErr := t.reconnectMAC(); reconnectErr != nil {
+			logger.SugaredLogger.Errorf("TdxKLine reconnectMAC error: %v", reconnectErr)
+			return result
+		}
+		t.macMu.Lock()
+		bars, err = t.macClient.MACSymbolBars(market, code, uint16(klineType), 1, 0, fetchCount, types.AdjustQFQ)
+		t.macMu.Unlock()
+		if err != nil {
+			logger.SugaredLogger.Errorf("TdxKLine MACSymbolBars retry error: %v", err)
+			return result
+		}
+	}
+
+	if len(bars) == 0 {
+		return result
+	}
+
+	converted := convertMACSymbolBar(bars)
+
+	if aggN > 1 {
+		converted = *AggregateKLineEveryN(&converted, aggN)
+	}
+
+	return &converted
+}
+
+func convertMACSymbolBar(list []proto.MACSymbolBar) []KLineData {
+	result := make([]KLineData, 0, len(list))
+	for i, bar := range list {
+		day := formatMACDateTime(bar.DateTime)
+		kd := KLineData{
+			Day:    day,
+			Open:   fmt.Sprintf("%.2f", bar.Open),
+			Close:  fmt.Sprintf("%.2f", bar.Close),
+			High:   fmt.Sprintf("%.2f", bar.High),
+			Low:    fmt.Sprintf("%.2f", bar.Low),
+			Volume: fmt.Sprintf("%.0f", bar.Vol),
+			Amount: fmt.Sprintf("%.2f", bar.Amount),
+		}
+		if i > 0 {
+			prevClose := list[i-1].Close
+			if prevClose > 0 {
+				kd.ChangePercent = fmt.Sprintf("%.2f", (bar.Close-prevClose)/prevClose*100)
+				kd.ChangeValue = fmt.Sprintf("%.2f", bar.Close-prevClose)
+				kd.Amplitude = fmt.Sprintf("%.2f", (bar.High-bar.Low)/prevClose*100)
+			}
+		}
+		if bar.Turnover > 0 {
+			kd.TurnoverRate = fmt.Sprintf("%.2f", bar.Turnover)
+		}
+		result = append(result, kd)
+	}
+	return result
+}
+
+// formatMACDateTime 将 MAC 返回的 DateTime 字符串转为统一格式
+// MAC DateTime: "2006-01-02 15:04:05" 或 "2006-01-02 00:00:00"
+// 分钟线需要时间: "2006-01-02 15:04"
+// 日线及以上只需日期: "2006-01-02"
+func formatMACDateTime(dt string) string {
+	if len(dt) <= 10 {
+		return dt
+	}
+	// 有时间部分，判断是否为 00:00:00（日线及以上）
+	timePart := dt[11:]
+	if timePart == "00:00:00" {
+		return dt[:10]
+	}
+	// 分钟线：去掉秒，保留 "YYYY-MM-DD HH:MM"
+	if len(dt) >= 16 {
+		return dt[:16]
+	}
+	return dt[:10]
 }
 
 func convertTdxKLine(list []proto.SecurityBar) []KLineData {

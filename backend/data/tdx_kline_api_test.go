@@ -141,6 +141,98 @@ func TestTdxKLineApi_GetF10CategoryList(t *testing.T) {
 	}
 }
 
+func TestTdxKLineApi_GetMACKLineData(t *testing.T) {
+	api := NewTdxKLineApi()
+	data := api.GetMACKLineData("600519.SH", "101", 10)
+	if data == nil {
+		t.Fatal("GetMACKLineData returned nil")
+	}
+	t.Logf("MAC日K数据条数: %d", len(*data))
+	if len(*data) > 0 {
+		first := (*data)[0]
+		t.Logf("首条: day=%s open=%s close=%s high=%s low=%s vol=%s amount=%s turnover=%s changepct=%s",
+			first.Day, first.Open, first.Close, first.High, first.Low, first.Volume, first.Amount, first.TurnoverRate, first.ChangePercent)
+		last := (*data)[len(*data)-1]
+		t.Logf("末条: day=%s open=%s close=%s high=%s low=%s vol=%s amount=%s turnover=%s changepct=%s",
+			last.Day, last.Open, last.Close, last.High, last.Low, last.Volume, last.Amount, last.TurnoverRate, last.ChangePercent)
+	}
+}
+
+func TestTdxKLineApi_GetMACKLineData_AllPeriods(t *testing.T) {
+	api := NewTdxKLineApi()
+	periods := []struct {
+		klt   string
+		label string
+	}{
+		{"1", "1分钟"}, {"5", "5分钟"}, {"15", "15分钟"},
+		{"30", "30分钟"}, {"60", "60分钟"}, {"101", "日线"},
+		{"102", "周线"}, {"103", "月线"}, {"104", "季线"}, {"106", "年线"},
+	}
+	for _, p := range periods {
+		t.Run(p.label, func(t *testing.T) {
+			data := api.GetMACKLineData("600519.SH", p.klt, 5)
+			if data == nil {
+				t.Errorf("[%s] klt=%s returned nil", p.label, p.klt)
+				return
+			}
+			count := len(*data)
+			t.Logf("[%s] klt=%s 条数=%d", p.label, p.klt, count)
+			if count > 0 {
+				last := (*data)[count-1]
+				t.Logf("  末条: day=%s open=%s close=%s high=%s low=%s vol=%s turnover=%s",
+					last.Day, last.Open, last.Close, last.High, last.Low, last.Volume, last.TurnoverRate)
+			}
+		})
+	}
+}
+
+func TestTdxKLineApi_GetMACKLineData_SZ(t *testing.T) {
+	api := NewTdxKLineApi()
+	data := api.GetMACKLineData("000001.SZ", "101", 10)
+	if data == nil {
+		t.Fatal("GetMACKLineData returned nil for SZ stock")
+	}
+	t.Logf("平安银行 MAC日K条数: %d", len(*data))
+	if len(*data) > 0 {
+		last := (*data)[len(*data)-1]
+		t.Logf("末条: day=%s open=%s close=%s high=%s low=%s vol=%s turnover=%s",
+			last.Day, last.Open, last.Close, last.High, last.Low, last.Volume, last.TurnoverRate)
+	}
+}
+
+func TestTdxKLineApi_MinuteLineCompare(t *testing.T) {
+	api := NewTdxKLineApi()
+	minuteKlts := []struct {
+		klt   string
+		label string
+	}{
+		{"1", "1分钟"}, {"5", "5分钟"}, {"15", "15分钟"},
+		{"30", "30分钟"}, {"60", "60分钟"},
+	}
+	for _, p := range minuteKlts {
+		t.Run(p.label+"_主行情", func(t *testing.T) {
+			data := api.GetKLineData("600519.SH", p.klt, 5)
+			if data == nil || len(*data) == 0 {
+				t.Errorf("[%s 主行情] 返回空", p.label)
+				return
+			}
+			for i, item := range *data {
+				t.Logf("  [%d] day=%s open=%s close=%s high=%s low=%s vol=%s", i, item.Day, item.Open, item.Close, item.High, item.Low, item.Volume)
+			}
+		})
+		t.Run(p.label+"_MAC", func(t *testing.T) {
+			data := api.GetMACKLineData("600519.SH", p.klt, 5)
+			if data == nil || len(*data) == 0 {
+				t.Errorf("[%s MAC] 返回空", p.label)
+				return
+			}
+			for i, item := range *data {
+				t.Logf("  [%d] day=%s open=%s close=%s high=%s low=%s vol=%s turnover=%s", i, item.Day, item.Open, item.Close, item.High, item.Low, item.Volume, item.TurnoverRate)
+			}
+		})
+	}
+}
+
 func TestTdxKLineApi_GetF10CategoryContent(t *testing.T) {
 	api := NewTdxKLineApi()
 

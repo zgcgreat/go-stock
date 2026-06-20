@@ -560,6 +560,13 @@ type KLineSourceResult struct {
 }
 
 func FetchKLineWithFallback(stockCode, stockName, klt string, limit int, end string) *KLineSourceResult {
+	macResult := fetchFromMACWithTimeout(stockCode, klt, limit, 5*time.Second)
+	if macResult != nil && macResult.Data != nil && len(*macResult.Data) > 0 {
+		macResult.Source = "tdx-mac"
+		return macResult
+	}
+	logger.SugaredLogger.Warnf("MAC K线数据为空或超时，尝试东方财富数据源: code=%s klt=%s", stockCode, klt)
+
 	eastMoneyResult := fetchFromEastMoney(stockCode, stockName, klt, limit, end)
 	if eastMoneyResult != nil && eastMoneyResult.Data != nil && len(*eastMoneyResult.Data) > 0 {
 		eastMoneyResult.Source = "eastmoney"
@@ -622,6 +629,32 @@ func fetchFromTdx(stockCode, klt string, limit int) *KLineSourceResult {
 	api := NewTdxKLineApi()
 	data := api.GetKLineData(stockCode, klt, limit)
 	return &KLineSourceResult{Data: data}
+}
+
+func fetchFromMAC(stockCode, klt string, limit int) *KLineSourceResult {
+	api := NewTdxKLineApi()
+	data := api.GetMACKLineData(stockCode, klt, limit)
+	return &KLineSourceResult{Data: data}
+}
+
+func fetchFromMACWithTimeout(stockCode, klt string, limit int, timeout time.Duration) *KLineSourceResult {
+	type result struct {
+		rs *KLineSourceResult
+		ok bool
+	}
+	ch := make(chan result, 1)
+	go func() {
+		rs := fetchFromMAC(stockCode, klt, limit)
+		ch <- result{rs: rs, ok: true}
+	}()
+
+	select {
+	case r := <-ch:
+		return r.rs
+	case <-time.After(timeout):
+		logger.SugaredLogger.Warnf("fetchFromMAC 超时 (%v)，降级到下一个数据源: code=%s klt=%s", timeout, stockCode, klt)
+		return nil
+	}
 }
 
 func AggregateSinaMonthKLine(dailyData *[]KLineData) *[]KLineData {
