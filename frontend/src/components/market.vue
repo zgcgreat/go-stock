@@ -41,6 +41,7 @@ import ClsCalendarTimeLine from "./ClsCalendarTimeLine.vue";
 import Stockhotmap from "./stockhotmap.vue";
 import MarketStatistic from "./MarketStatistic.vue";
 import BKFundFlowChart from "./bkFundFlowChart.vue";
+import ConceptFundFlowChart from "./conceptFundFlowChart.vue";
 
 const route = useRoute()
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
@@ -737,6 +738,9 @@ function ReFlesh(source) {
       </n-tab-pane>
       <n-tab-pane name="板块资金流向" tab="板块资金流向">
         <BKFundFlowChart :dark-theme="darkTheme" :chart-height="600"/>
+      </n-tab-pane>
+      <n-tab-pane name="概念资金流向" tab="概念资金流向">
+        <ConceptFundFlowChart :dark-theme="darkTheme" :chart-height="600"/>
       </n-tab-pane>
       <n-tab-pane name="龙虎榜" tab="龙虎榜">
         <LongTigerRankList />
