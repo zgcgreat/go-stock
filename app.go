@@ -2302,6 +2302,12 @@ func (a *App) GetTdxCompanyCategoryContent(stockCode string, categoryName string
 	return api.GetF10CategoryContent(stockCode, categoryName)
 }
 
+// GetTdxSymbolBelongBoard 通过通达信 MAC 接口获取股票所属板块信息
+func (a *App) GetTdxSymbolBelongBoard(stockCode string) *[]data.MACBelongBoardItem {
+	api := data.NewTdxKLineApi()
+	return api.GetMACSymbolBelongBoard(stockCode)
+}
+
 func (a *App) GetTelegraphList(source string) *[]*models.Telegraph {
 	telegraphs := data.NewMarketNewsApi().GetTelegraphList(source)
 	return telegraphs

@@ -563,6 +563,7 @@ func FetchKLineWithFallback(stockCode, stockName, klt string, limit int, end str
 	macResult := fetchFromMACWithTimeout(stockCode, klt, limit, 5*time.Second)
 	if macResult != nil && macResult.Data != nil && len(*macResult.Data) > 0 {
 		macResult.Source = "tdx-mac"
+		fillVolumeRatio(macResult.Data)
 		return macResult
 	}
 	logger.SugaredLogger.Warnf("MAC K线数据为空或超时，尝试东方财富数据源: code=%s klt=%s", stockCode, klt)
@@ -570,13 +571,25 @@ func FetchKLineWithFallback(stockCode, stockName, klt string, limit int, end str
 	eastMoneyResult := fetchFromEastMoney(stockCode, stockName, klt, limit, end)
 	if eastMoneyResult != nil && eastMoneyResult.Data != nil && len(*eastMoneyResult.Data) > 0 {
 		eastMoneyResult.Source = "eastmoney"
+		fillVolumeRatio(eastMoneyResult.Data)
 		return eastMoneyResult
 	}
+
+	// 港美股：MAC失败后仅走东方财富，新浪/腾讯/通达信不支持港美股
+	if IsHKStockCode(stockCode) || IsUSStockCode(stockCode) {
+		if macResult != nil {
+			macResult.Source = "tdx-mac-ex"
+			return macResult
+		}
+		return &KLineSourceResult{Data: &[]KLineData{}, Source: ""}
+	}
+
 	logger.SugaredLogger.Warnf("EastMoney K线数据为空或失败，尝试新浪数据源: code=%s klt=%s", stockCode, klt)
 
 	sinaResult := fetchFromSina(stockCode, klt, limit)
 	if sinaResult != nil && sinaResult.Data != nil && len(*sinaResult.Data) > 0 {
 		sinaResult.Source = "sina"
+		fillVolumeRatio(sinaResult.Data)
 		return sinaResult
 	}
 	logger.SugaredLogger.Warnf("新浪K线数据也为空，尝试腾讯数据源: code=%s klt=%s", stockCode, klt)
@@ -584,6 +597,7 @@ func FetchKLineWithFallback(stockCode, stockName, klt string, limit int, end str
 	tencentResult := fetchFromTencent(stockCode, klt, limit)
 	if tencentResult != nil && tencentResult.Data != nil && len(*tencentResult.Data) > 0 {
 		tencentResult.Source = "tencent"
+		fillVolumeRatio(tencentResult.Data)
 		return tencentResult
 	}
 	logger.SugaredLogger.Warnf("腾讯K线数据也为空，尝试通达信数据源: code=%s klt=%s", stockCode, klt)
@@ -591,6 +605,7 @@ func FetchKLineWithFallback(stockCode, stockName, klt string, limit int, end str
 	tdxResult := fetchFromTdx(stockCode, klt, limit)
 	if tdxResult != nil && tdxResult.Data != nil && len(*tdxResult.Data) > 0 {
 		tdxResult.Source = "tdx"
+		fillVolumeRatio(tdxResult.Data)
 		return tdxResult
 	}
 	logger.SugaredLogger.Warnf("通达信K线数据也为空: code=%s klt=%s", stockCode, klt)
@@ -600,6 +615,38 @@ func FetchKLineWithFallback(stockCode, stockName, klt string, limit int, end str
 		return eastMoneyResult
 	}
 	return &KLineSourceResult{Data: &[]KLineData{}, Source: ""}
+}
+
+// fillVolumeRatio 补算量比：量比 = 当日成交量 / 过去5日平均成交量
+func fillVolumeRatio(data *[]KLineData) {
+	if data == nil || len(*data) < 6 {
+		return
+	}
+	list := *data
+	for i := 5; i < len(list); i++ {
+		if list[i].VolumeRatio != "" {
+			continue
+		}
+		curVol, err := strconv.ParseFloat(list[i].Volume, 64)
+		if err != nil || curVol <= 0 {
+			continue
+		}
+		var sum float64
+		validDays := 0
+		for j := i - 5; j < i; j++ {
+			v, err := strconv.ParseFloat(list[j].Volume, 64)
+			if err == nil && v > 0 {
+				sum += v
+				validDays++
+			}
+		}
+		if validDays > 0 {
+			avg := sum / float64(validDays)
+			if avg > 0 {
+				list[i].VolumeRatio = fmt.Sprintf("%.2f", curVol/avg)
+			}
+		}
+	}
 }
 
 func fetchFromEastMoney(stockCode, stockName, klt string, limit int, end string) *KLineSourceResult {

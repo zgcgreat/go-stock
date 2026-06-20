@@ -4886,6 +4886,31 @@ func GetAllDataTools() []tool.BaseTool {
 		},
 	))
 
+	// GetTdxSymbolBelongBoard - 通过通达信MAC接口获取股票所属板块信息
+	tools = append(tools, NewDataToolWrapper(
+		"GetTdxSymbolBelongBoard",
+		"通过通达信MAC接口获取股票所属板块信息，包括行业板块、概念板块、地域板块、风格板块等，以及板块指数、涨停/跌停家数等数据。",
+		map[string]*schema.ParameterInfo{
+			"stockCode": {
+				Type:     "string",
+				Desc:     "股票代码,如：600519.SH。上海证券交易所股票以.SH结尾，深圳证券交易所股票以.SZ结尾，北交所股票以.BJ结尾，港股以.HK结尾。多只时可用英文逗号分隔。",
+				Required: true,
+			},
+		},
+		func(args string) (string, error) {
+			stockCode := gjson.Get(args, "stockCode").String()
+			if stockCode == "" {
+				return "请提供股票代码参数 stockCode", nil
+			}
+			api := data.NewTdxKLineApi()
+			items := api.GetMACSymbolBelongBoard(stockCode)
+			if items == nil || len(*items) == 0 {
+				return fmt.Sprintf("%s：获取所属板块信息失败或无数据", stockCode), nil
+			}
+			return util.MarkdownTableWithTitle(stockCode+" 所属板块（通达信MAC）", *items), nil
+		},
+	))
+
 	// 根据 API Key 配置过滤工具，未配置对应 Key 的工具不注册
 	filtered := make([]tool.BaseTool, 0, len(tools))
 	for _, t := range tools {

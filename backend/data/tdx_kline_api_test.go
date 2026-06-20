@@ -233,6 +233,31 @@ func TestTdxKLineApi_MinuteLineCompare(t *testing.T) {
 	}
 }
 
+func TestTdxKLineApi_MACKLineHKUS(t *testing.T) {
+	api := NewTdxKLineApi()
+	tests := []struct {
+		code  string
+		label string
+	}{
+		{"00700.HK", "腾讯控股"},
+		{"AAPL.US", "苹果"},
+		{"TSLA.US", "特斯拉"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.label, func(t *testing.T) {
+			data := api.GetMACKLineData(tt.code, "101", 5)
+			if data == nil || len(*data) == 0 {
+				t.Errorf("[%s] MAC返回空", tt.label)
+				return
+			}
+			for i, item := range *data {
+				t.Logf("  [%d] day=%s open=%s close=%s high=%s low=%s vol=%s turnover=%s",
+					i, item.Day, item.Open, item.Close, item.High, item.Low, item.Volume, item.TurnoverRate)
+			}
+		})
+	}
+}
+
 func TestTdxKLineApi_GetF10CategoryContent(t *testing.T) {
 	api := NewTdxKLineApi()
 
@@ -259,5 +284,43 @@ func TestTdxKLineApi_GetF10CategoryContent(t *testing.T) {
 			t.Fatal("GetF10CategoryContent should return non-nil even for missing category")
 		}
 		t.Logf("不存在的分类: name=%s, content长度=%d", section.Name, len(section.Content))
+	})
+}
+
+func TestTdxKLineApi_GetMACSymbolBelongBoard(t *testing.T) {
+	api := NewTdxKLineApi()
+
+	t.Run("A股-贵州茅台", func(t *testing.T) {
+		items := api.GetMACSymbolBelongBoard("600519.SH")
+		if items == nil || len(*items) == 0 {
+			t.Fatal("GetMACSymbolBelongBoard returned empty for 600519.SH")
+		}
+		t.Logf("600519.SH 所属板块数: %d", len(*items))
+		for _, item := range *items {
+			t.Logf("  type=%s code=%s name=%s price=%.2f preClose=%.2f 涨停=%.0f 跌停=%.0f",
+				item.BoardType, item.BoardCode, item.BoardName, item.Price, item.PreClose, item.LimitUpCount, item.LimitDownCount)
+		}
+	})
+
+	t.Run("A股-平安银行", func(t *testing.T) {
+		items := api.GetMACSymbolBelongBoard("000001.SZ")
+		if items == nil || len(*items) == 0 {
+			t.Fatal("GetMACSymbolBelongBoard returned empty for 000001.SZ")
+		}
+		t.Logf("000001.SZ 所属板块数: %d", len(*items))
+		for i, item := range *items {
+			if i >= 5 {
+				break
+			}
+			t.Logf("  type=%s name=%s price=%.2f", item.BoardType, item.BoardName, item.Price)
+		}
+	})
+
+	t.Run("港股-腾讯控股", func(t *testing.T) {
+		items := api.GetMACSymbolBelongBoard("00700.HK")
+		t.Logf("00700.HK 所属板块数: %d", len(*items))
+		for _, item := range *items {
+			t.Logf("  type=%s name=%s price=%.2f", item.BoardType, item.BoardName, item.Price)
+		}
 	})
 }
