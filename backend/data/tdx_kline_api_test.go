@@ -258,6 +258,31 @@ func TestTdxKLineApi_MACKLineHKUS(t *testing.T) {
 	}
 }
 
+func TestTdxKLineApi_MACKLineHKUS_Minute(t *testing.T) {
+	api := NewTdxKLineApi()
+	tests := []struct {
+		code  string
+		label string
+		klt   string
+	}{
+		{"AAPL.US", "苹果-1分钟", "1"},
+		{"AAPL.US", "苹果-5分钟", "5"},
+		{"00700.HK", "腾讯-1分钟", "1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.label, func(t *testing.T) {
+			data := api.GetMACKLineData(tt.code, tt.klt, 5)
+			if data == nil || len(*data) == 0 {
+				t.Skipf("%s %s分钟线返回空（可能非交易时段）", tt.code, tt.klt)
+				return
+			}
+			for i, item := range *data {
+				t.Logf("  [%d] day=%s open=%s close=%s high=%s low=%s vol=%s", i, item.Day, item.Open, item.Close, item.High, item.Low, item.Volume)
+			}
+		})
+	}
+}
+
 func TestTdxKLineApi_GetF10CategoryContent(t *testing.T) {
 	api := NewTdxKLineApi()
 
