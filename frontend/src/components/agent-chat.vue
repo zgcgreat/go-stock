@@ -152,7 +152,7 @@ const isShowToBottom = ref(false);
 
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
 import {darkTheme, NFlex, NImage,NSelect} from "naive-ui";
-import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn, SaveAiAssistantSession, GetAiAssistantSession} from "../services/wails-bridge.js";
+import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn, SaveAiAssistantSession, GetAiAssistantSession, AbortChatWithAgent} from "../services/wails-bridge.js";
 import 'tdesign-vue-next/es/style/index.css';
 
 
@@ -589,8 +589,17 @@ const handleAgentMessage = (data) => {
   }
 }
 
+// 保存 EventsOn 返回的 cleanup 函数，用于 Web 模式下正确移除监听器
+let cleanupAgentMessage = null
+
 onBeforeUnmount(() => {
-  EventsOff("agent-message", handleAgentMessage)
+  // 优先使用 cleanup 函数移除监听（Web 模式需要，桌面模式 EventsOff 也可用）
+  if (cleanupAgentMessage) {
+    cleanupAgentMessage()
+    cleanupAgentMessage = null
+  } else {
+    EventsOff("agent-message", handleAgentMessage)
+  }
   // 清理流式格式化定时器，防止内存泄漏
   stopFormatTimer()
 
@@ -612,8 +621,8 @@ onBeforeUnmount(() => {
 })
 
 onBeforeMount(() => {
-  // 每次挂载前都重新注册事件监听
-  EventsOn("agent-message", handleAgentMessage)
+  // 每次挂载前都重新注册事件监听，保存 cleanup 函数
+  cleanupAgentMessage = EventsOn("agent-message", handleAgentMessage)
   GetAiConfigs().then(res=>{
     selectOptions.value = res
     selectValue.value = res[0].ID
@@ -701,6 +710,7 @@ const chatList = ref([
 
 const onStop = function () {
   stopFormatTimer()
+  AbortChatWithAgent() // 中断后端 Agent 流，停止消耗 API token
   const lastItem = chatList.value[0]
   if (lastItem && lastItem.role === 'assistant') {
     if (lastItem.rawContent) {
