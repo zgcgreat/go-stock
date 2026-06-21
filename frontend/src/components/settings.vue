@@ -296,8 +296,9 @@ function saveConfig() {
   }
 
   UpdateConfig(config).then(res => {
-    if (res === '保存成功！') {
-      message.success(res)
+    // 桌面端返回 "保存成功！"，Web端返回 "配置更新成功"
+    if (res === '保存成功！' || res === '配置更新成功') {
+      message.success('保存成功！')
     } else {
       message.error(res)
     }
