@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1402,11 +1404,95 @@ func EnableSkill(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "操作失败: " + err.Error()})
 		return
 	}
-	message := "已禁用"
+	enableMsg := "已禁用"
 	if req.Enable {
-		message = "已启用"
+		enableMsg = "已启用"
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": message})
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": enableMsg})
+}
+
+// ImportSkills 批量导入技能（JSON 文件上传或 JSON body）
+func ImportSkills(c *gin.Context) {
+	var skills []models.Skill
+
+	// 优先尝试读取上传文件
+	file, _, err := c.Request.FormFile("file")
+	if err == nil {
+		defer file.Close()
+		fileData, err := io.ReadAll(file)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "读取文件失败: " + err.Error()})
+			return
+		}
+		if err := json.Unmarshal(fileData, &skills); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "JSON 格式错误: " + err.Error()})
+			return
+		}
+	} else {
+		// 回退到 JSON body
+		if err := c.ShouldBindJSON(&skills); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+			return
+		}
+	}
+
+	if len(skills) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "导入数据为空"})
+		return
+	}
+
+	created, skipped, err := data.NewSkillApi().ImportSkills(skills)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "导入失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": fmt.Sprintf("导入完成：成功 %d 个，跳过（已存在） %d 个", created, skipped),
+		"data": gin.H{
+			"created": created,
+			"skipped": skipped,
+		},
+	})
+}
+
+// ExportAllSkills 导出全部技能为 JSON
+func ExportAllSkills(c *gin.Context) {
+	skills := data.NewSkillApi().GetAllEnabledAndDisabled()
+	if len(skills) == 0 {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "无技能数据", "data": []models.Skill{}})
+		return
+	}
+	exportData, err := json.MarshalIndent(skills, "", "  ")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "导出失败: " + err.Error()})
+		return
+	}
+	filename := fmt.Sprintf("skills-export-%s.json", time.Now().Format("2006-01-02-150405"))
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, "application/json", exportData)
+}
+
+// ExportSkillByID 导出单个技能为 JSON
+func ExportSkillByID(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "无效的技能ID"})
+		return
+	}
+	skill, err := data.NewSkillApi().GetByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 1, "message": "技能不存在"})
+		return
+	}
+	exportData, err := json.MarshalIndent(skill, "", "  ")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "导出失败: " + err.Error()})
+		return
+	}
+	filename := fmt.Sprintf("skill-%s-%s.json", skill.Name, time.Now().Format("20060102-150405"))
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, "application/json", exportData)
 }
 
 // GetMCPServerList 获取 MCP 服务器列表

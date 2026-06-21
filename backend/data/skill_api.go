@@ -112,3 +112,35 @@ func (a *SkillApi) GetMCPServerIDs(skill *models.Skill) []uint {
 	}
 	return ids
 }
+
+// GetAllEnabledAndDisabled 获取全部技能（含已禁用），用于导出
+func (a *SkillApi) GetAllEnabledAndDisabled() []models.Skill {
+	var skills []models.Skill
+	db.Dao.Order("sort_order ASC, created_at DESC").Find(&skills)
+	return skills
+}
+
+// ImportSkills 批量导入技能，按 name 去重（已存在则跳过）
+func (a *SkillApi) ImportSkills(skills []models.Skill) (created int, skipped int, err error) {
+	for _, s := range skills {
+		s.Name = strings.TrimSpace(s.Name)
+		if s.Name == "" {
+			skipped++
+			continue
+		}
+		// 检查是否已存在同名技能
+		var count int64
+		db.Dao.Model(&models.Skill{}).Where("name = ?", s.Name).Count(&count)
+		if count > 0 {
+			skipped++
+			continue
+		}
+		// 清零 ID，让 GORM 自动生成
+		s.ID = 0
+		if err := db.Dao.Create(&s).Error; err != nil {
+			return created, skipped, err
+		}
+		created++
+	}
+	return created, skipped, nil
+}

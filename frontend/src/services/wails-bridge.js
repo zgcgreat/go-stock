@@ -2302,6 +2302,71 @@ export function UpdateSkill(arg1) {
     .catch(err => err.response?.data?.message || err.message || '更新失败');
 }
 
+export function ImportSkills(fileOrData) {
+  if (isWailsMode()) {
+    // 桌面端：如果传的是文件对象，先读取内容
+    if (fileOrData instanceof File) {
+      return fileOrData.text().then(text => {
+        const skills = JSON.parse(text);
+        return window.go.main.App.ImportSkills(skills);
+      });
+    }
+    return window.go.main.App.ImportSkills(fileOrData);
+  }
+  // Web 端：文件上传
+  if (fileOrData instanceof File) {
+    const formData = new FormData();
+    formData.append('file', fileOrData);
+    return apiService.client.post('/skills/import', formData, {
+      headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data)
+      .catch(err => err.response?.data || { code: 1, message: err.message || '导入失败' });
+  }
+  // Web 端：直接传 JSON 数组
+  return apiService.client.post('/skills/import', fileOrData, { headers: getAuthHeaders() })
+    .then(res => res.data)
+    .catch(err => err.response?.data || { code: 1, message: err.message || '导入失败' });
+}
+
+export function ExportAllSkills() {
+  if (isWailsMode()) return window.go.main.App.ExportAllSkills();
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+  const token = localStorage.getItem('token');
+  const url = baseURL.startsWith('http') ? `${baseURL}/skills/export` : `/api/v1/skills/export`;
+  // 下载文件
+  return fetch(url, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  }).then(res => res.blob()).then(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const disposition = res.headers?.get('Content-Disposition') || '';
+    const match = disposition.match(/filename=(.+)/);
+    a.download = match ? match[1] : 'skills-export.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return '导出成功';
+  }).catch(err => '导出失败: ' + (err?.message || err));
+}
+
+export function ExportSkillByID(id) {
+  if (isWailsMode()) return window.go.main.App.ExportSkillByID(id);
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+  const token = localStorage.getItem('token');
+  const url = baseURL.startsWith('http') ? `${baseURL}/skills/${id}/export` : `/api/v1/skills/${id}/export`;
+  return fetch(url, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  }).then(res => res.blob()).then(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const disposition = res.headers?.get('Content-Disposition') || '';
+    const match = disposition.match(/filename=(.+)/);
+    a.download = match ? match[1] : `skill-${id}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return '导出成功';
+  }).catch(err => '导出失败: ' + (err?.message || err));
+}
+
 // ========== 桌面端专用功能（Web 端 no-op） ==========
 
 export function RestartAsAdmin() {

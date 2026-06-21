@@ -40,6 +40,28 @@
         </template>
         添加技能
       </n-button>
+
+      <n-button type="info" @click="handleImport">
+        <template #icon>
+          <n-icon :component="CloudUploadOutline" />
+        </template>
+        导入
+      </n-button>
+
+      <n-button type="success" @click="handleExportAll">
+        <template #icon>
+          <n-icon :component="CloudDownloadOutline" />
+        </template>
+        导出全部
+      </n-button>
+
+      <input
+        ref="fileInputRef"
+        type="file"
+        accept=".json"
+        style="display: none"
+        @change="handleFileChange"
+      />
     </n-space>
 
     <n-data-table
@@ -164,9 +186,9 @@
 import { ref, reactive, h, onMounted } from 'vue'
 import {
   NButton, NSpace, NInput, NDataTable, NModal, NForm, NFormItem,
-  NFormItemGi, NGrid, NTag, NSwitch, NIcon, NSelect, NInputNumber, NPopconfirm, NScrollbar, useMessage
+  NFormItemGi, NGrid, NTag, NSwitch, NIcon, NSelect, NInputNumber, NPopconfirm, NScrollbar, NUpload, useMessage
 } from 'naive-ui'
-import { SearchOutline, AddOutline, TrashOutline, CreateOutline, FlashOutline } from '@vicons/ionicons5'
+import { SearchOutline, AddOutline, TrashOutline, CreateOutline, FlashOutline, CloudUploadOutline, CloudDownloadOutline } from '@vicons/ionicons5'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import {
@@ -178,7 +200,10 @@ import {
   GetSkillByID,
   GetAllSkills,
   GetMCPServerList,
-  GetConfig
+  GetConfig,
+  ImportSkills,
+  ExportAllSkills,
+  ExportSkillByID
 } from '../services/wails-bridge.js'
 
 const message = useMessage()
@@ -307,7 +332,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 140,
+    width: 200,
     render(row) {
       return h(NSpace, { size: 'small' }, {
         default: () => [
@@ -317,6 +342,13 @@ const columns = [
           }, {
             icon: () => h(NIcon, null, { default: () => h(CreateOutline) }),
             default: () => '编辑'
+          }),
+          h(NButton, {
+            size: 'small', type: 'success', quaternary: true,
+            onClick: () => handleExportOne(row)
+          }, {
+            icon: () => h(NIcon, null, { default: () => h(CloudDownloadOutline) }),
+            default: () => '导出'
           }),
           h(NPopconfirm, {
             onPositiveClick: () => handleDelete(row)
@@ -505,6 +537,48 @@ const resetForm = () => {
   })
   if (formRef.value) {
     formRef.value.restoreValidation()
+  }
+}
+
+const fileInputRef = ref(null)
+
+const handleImport = () => {
+  fileInputRef.value?.click()
+}
+
+const handleFileChange = async (e) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    const result = await ImportSkills(file)
+    if (result && result.code === 0) {
+      message.success(result.message || '导入成功')
+      loadData()
+    } else {
+      message.error(result?.message || '导入失败')
+    }
+  } catch (error) {
+    message.error('导入失败: ' + (error?.message || error))
+  }
+  // 清空 input，允许重复选择同一文件
+  e.target.value = ''
+}
+
+const handleExportAll = async () => {
+  try {
+    const result = await ExportAllSkills()
+    message.success(result || '导出成功')
+  } catch (error) {
+    message.error('导出失败: ' + (error?.message || error))
+  }
+}
+
+const handleExportOne = async (row) => {
+  try {
+    const result = await ExportSkillByID(row.id)
+    message.success(result || '导出成功')
+  } catch (error) {
+    message.error('导出失败: ' + (error?.message || error))
   }
 }
 

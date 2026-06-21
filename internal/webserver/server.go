@@ -198,9 +198,12 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/skills", handlers.GetSkillList)
 			protected.POST("/skills", handlers.CreateSkill)
 			protected.GET("/skills/all", handlers.GetAllSkills)
+			protected.GET("/skills/export", handlers.ExportAllSkills)
+			protected.POST("/skills/import", handlers.ImportSkills)
 			protected.GET("/skills/:id", handlers.GetSkillByID)
 			protected.PUT("/skills/:id", handlers.UpdateSkill)
 			protected.DELETE("/skills/:id", handlers.DeleteSkill)
+			protected.GET("/skills/:id/export", handlers.ExportSkillByID)
 			protected.POST("/skills/:id/enable", handlers.EnableSkill)
 
 			// MCP 服务器管理
