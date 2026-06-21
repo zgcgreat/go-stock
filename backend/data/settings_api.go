@@ -348,8 +348,9 @@ func GetSettingConfigByUserID(userID uint) *SettingConfig {
 	if settings.BrowserPoolSize <= 0 {
 		settings.BrowserPoolSize = 1
 	}
-	settings.EnableFund = false
-	settings.EnableAgent = false
+	// Web端：保留数据库实际值，不强制覆盖
+	// 注：上游桌面端这两行设为 false 是因为 Wails 端通过其他方式控制开关
+	// Web端依赖此 API 返回值，强制覆盖会导致用户设置无法保存
 	settings.UserID = userID
 
 	settingConfig.Settings = settings
