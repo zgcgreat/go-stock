@@ -87,6 +87,9 @@
             :operation-btn="['copy']"
             @operation="handleOperation"
         />
+        <NButton v-if="item.role === 'assistant' && item.content && item.content.trim()" quaternary size="tiny" :loading="exportImageKey === String(index)" title="导出为图片" @click="exportAiReplyImage(index)" style="margin-left:4px;font-size:12px;">
+          导出图
+        </NButton>
       </template>
       <template #footer>
 <!--        <t-chat-input :stop-disabled="isStreamLoad" @send="inputEnter" @stop="onStop"> </t-chat-input>-->
@@ -191,6 +194,7 @@ const isShowToBottom = ref(false);
 
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
 import {darkTheme, NFlex, NImage, NSelect, NSwitch, NButton, NIcon, useMessage} from "naive-ui";
+import html2canvas from 'html2canvas';
 import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn, SaveAiAssistantSession, GetAiAssistantSession, AbortChatWithAgent, GetPromptTemplates, ShareText, SaveImage} from "../services/wails-bridge.js";
 import 'tdesign-vue-next/es/style/index.css';
 
@@ -285,6 +289,72 @@ function shareAiToCommunity() {
     .then(msg => message.success(msg || '分享成功'))
     .catch(err => message.error('分享失败: ' + (err?.message ?? err)))
     .finally(() => { shareLoading.value = false })
+}
+
+async function exportAiReplyImage(index) {
+  const key = String(index)
+  if (exportImageKey.value) return
+  exportImageKey.value = key
+  await nextTick()
+  try {
+    const editorId = 'agent-msg-' + index
+    const target = document.getElementById(`${editorId}-preview-wrapper`) ||
+      document.getElementById(`${editorId}-preview`) || null
+    if (!target) {
+      message.warning('未找到预览区域，请展开回答后重试')
+      return
+    }
+    // 临时移除 overflow 限制，确保完整截图
+    const savedStyles = []
+    let el = target.parentElement
+    while (el && el !== document.body) {
+      const style = getComputedStyle(el)
+      if (style.overflow === 'hidden' || style.overflowY === 'hidden' || style.overflowY === 'auto' || style.overflowY === 'scroll') {
+        savedStyles.push({ el, overflow: el.style.overflow, overflowY: el.style.overflowY, height: el.style.height, maxHeight: el.style.maxHeight })
+        el.style.overflow = 'visible'
+        el.style.overflowY = 'visible'
+        el.style.height = 'auto'
+        el.style.maxHeight = 'none'
+      }
+      el = el.parentElement
+    }
+    const savedTargetStyle = { height: target.style.height, maxHeight: target.style.maxHeight, overflow: target.style.overflow, overflowY: target.style.overflowY }
+    target.style.height = 'auto'
+    target.style.maxHeight = 'none'
+    target.style.overflow = 'visible'
+
+    const canvas = await html2canvas(target, {
+      useCORS: true,
+      scale: 2,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: darkThemeRef.value ? '#1e1e1e' : '#ffffff'
+    })
+    // 恢复样式
+    target.style.height = savedTargetStyle.height
+    target.style.maxHeight = savedTargetStyle.maxHeight
+    target.style.overflow = savedTargetStyle.overflow
+    target.style.overflowY = savedTargetStyle.overflowY
+    savedStyles.forEach(({ el: e, overflow, overflowY, height, maxHeight }) => {
+      e.style.overflow = overflow
+      e.style.overflowY = overflowY
+      e.style.height = height
+      e.style.maxHeight = maxHeight
+    })
+    const dataUrl = canvas.toDataURL('image/png')
+    const base64 = dataUrl.replace(/^data:image\/png;base64,/, '')
+    const safeTime = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')
+    const result = await SaveImage(`go-stock-agent-${safeTime}`, base64)
+    if (result && !result.includes('异常') && !result.includes('无法')) {
+      message.success('已导出为 PNG 图片：' + result)
+    } else {
+      message.info(result || '导出取消')
+    }
+  } catch (e) {
+    message.error('导出图片失败: ' + (e?.message ?? e))
+  } finally {
+    exportImageKey.value = ''
+  }
 }
 
 // 会话持久化：sessionId 用于保存/恢复对话
