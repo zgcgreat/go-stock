@@ -888,6 +888,50 @@ func GetBKFundFlowTopList(c *gin.Context) {
 	})
 }
 
+// GetAllConceptCodes 获取所有概念代码和名称
+func GetAllConceptCodes(c *gin.Context) {
+	codes := data.NewConceptFundFlowApi().GetAllConceptCodes()
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    codes,
+	})
+}
+
+// GetConceptFundFlowListByDate 获取某个概念指定日期的资金流向历史数据
+func GetConceptFundFlowListByDate(c *gin.Context) {
+	code := c.Query("code")
+	date := c.Query("date")
+	if code == "" || date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    -1,
+			"message": "code 和 date 参数不能为空",
+		})
+		return
+	}
+	points := data.NewConceptFundFlowApi().GetConceptFundFlowListByDate(code, date)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    points,
+	})
+}
+
+// GetConceptFundFlowTopListByDate 获取指定日期最新快照的概念资金排名
+func GetConceptFundFlowTopListByDate(c *gin.Context) {
+	date := c.Query("date")
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	topN, _ := strconv.Atoi(c.DefaultQuery("topN", "20"))
+	list := data.NewConceptFundFlowApi().GetConceptFundFlowTopListByDate(date, topN)
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    list,
+	})
+}
+
 // IndicatorSearchStock 指标选股（从东方财富接口）
 func IndicatorSearchStock(c *gin.Context) {
 	keyword := c.Query("keyword")

@@ -269,6 +269,11 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/bk-fund-flow/history", handlers.GetBKFundFlowList)
 			protected.GET("/market/bk-fund-flow/codes", handlers.GetAllBKCodes)
 
+			// 概念资金流向
+			protected.GET("/market/concept-fund-flow/codes", handlers.GetAllConceptCodes)
+			protected.GET("/market/concept-fund-flow/list", handlers.GetConceptFundFlowListByDate)
+			protected.GET("/market/concept-fund-flow/top", handlers.GetConceptFundFlowTopListByDate)
+
 			// 异动监控
 			protected.GET("/stock-changes", handlers.GetStockChanges)
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
@@ -375,6 +380,7 @@ func MigrateAllTables() {
 		&models.StockChangeHistory{},
 		&models.MarketStatistic{},
 		&models.BKFundFlow{},
+		&models.ConceptFundFlow{},
 		&models.PlazaPrompt{},
 		&models.PlazaQuestion{},
 		&models.CustomStrategy{},

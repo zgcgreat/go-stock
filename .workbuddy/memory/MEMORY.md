@@ -7,6 +7,9 @@
 - **数据库**: GORM（本地 SQLite）
 - **AI 接入**: OpenAI 兼容接口，支持 DeepSeek、Ollama、LMStudio、硅基流动、火山方舟等
 - **编译**: `go build ./cmd/web/...` 编译 Web 端；根包 `go build ./...` 需 Wails toolchain
+- **上游源**: `github.com/ArvinLovegood/go-stock` (origin/dev)
+- **分支策略**: `dev-web` 基于 `origin/dev` 二次开发，6 次 cherry-pick 同步上游（2026-06-20/21）
+- **Web 认证**: axios 拦截器统一拦截无 token 业务请求；公开路由 `/public/` `/auth/` 不拦截
 
 ## 目录结构
 - `backend/data/` — 数据层：行情爬虫、AI 接口、东方财富K线、市场资讯、基金、工具函数集

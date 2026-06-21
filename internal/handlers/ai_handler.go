@@ -280,6 +280,7 @@ func AgentChat(c *gin.Context) {
 		SessionID   string `json:"sessionId"`
 		MemoryCount int    `json:"memoryCount"`
 		Thinking    bool   `json:"thinking"`
+		AgentMode   string `json:"agentMode"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -329,7 +330,7 @@ func AgentChat(c *gin.Context) {
 	}
 	// 传递 userID 作为 optsOverride[2]，使 Agent 内部查询用户自己的配置
 	userIDStr := strconv.FormatUint(uint64(userID), 10)
-	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, "", "", "", userIDStr)
+	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, req.AgentMode, "", "", userIDStr)
 
 	for msg := range msgCh {
 		if msg == nil {

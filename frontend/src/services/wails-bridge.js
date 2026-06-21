@@ -1097,8 +1097,8 @@ export function CalculateNextRunTimes(arg1, arg2) {
  * Web 模式下：使用 SSE 连接 /api/v1/ai/agent-chat
  * 事件通过 EventsEmit('agent-message') 分发，格式与桌面模式一致
  */
-export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
-  if (isWailsMode()) return window.go.main.App.ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6);
+export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  if (isWailsMode()) return window.go.main.App.ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 
   // ===== 使用 SSE 管理器替代全局 window._abortAgentStream =====
   const connKey = 'ChatWithAgent';
@@ -1127,6 +1127,7 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6) {
       memoryMode: arg4,
       memoryCount: arg5 || 10,
       thinking: arg6 || false,
+      agentMode: arg7 || '',
     }),
     signal: controller.signal,
   }).then(response => {
@@ -1438,6 +1439,38 @@ export function GetBKFundFlowTopList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetBKFundFlowTopList?.(arg1);
   return apiService.client.get('/market/bk-fund-flow/top-latest', {
     params: { topN: arg1 },
+    headers: getAuthHeaders(),
+  })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+// 概念资金流向桥接函数
+
+// GetAllConceptCodes 获取所有概念代码（供下拉选择）
+export function GetAllConceptCodes() {
+  if (isWailsMode()) return window.go.main.App.GetAllConceptCodes?.();
+  return apiService.client.get('/market/concept-fund-flow/codes', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+// GetConceptFundFlowListByDate 获取某个概念指定日期的资金流向历史数据
+export function GetConceptFundFlowListByDate(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetConceptFundFlowListByDate?.(arg1, arg2);
+  return apiService.client.get('/market/concept-fund-flow/list', {
+    params: { code: arg1, date: arg2 },
+    headers: getAuthHeaders(),
+  })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+// GetConceptFundFlowTopListByDate 获取指定日期最新快照的概念资金排名
+export function GetConceptFundFlowTopListByDate(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetConceptFundFlowTopListByDate?.(arg1, arg2);
+  return apiService.client.get('/market/concept-fund-flow/top', {
+    params: { date: arg1, topN: arg2 },
     headers: getAuthHeaders(),
   })
     .then(res => res.data?.data || [])

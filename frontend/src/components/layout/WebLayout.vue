@@ -87,6 +87,7 @@ import { useResponsive } from '../../composables/useResponsive'
 import { useIsWebMode } from '../../composables/useResponsive'
 import Auth from '../../utils/auth'
 import apiService from '../../services/api.js'
+import { GetConfig } from '../../services/wails-bridge.js'
 import { useMessage, useDialog } from 'naive-ui'
 
 const props = defineProps({
@@ -163,6 +164,14 @@ async function ensureUserInfo() {
 }
 ensureUserInfo()
 
+// AI 菜单可见性控制（与桌面端 enableAgent 配置一致）
+const enableAgent = ref(true) // 默认显示，配置加载后按实际值控制
+GetConfig().then(config => {
+  if (config && typeof config.enableAgent === 'boolean') {
+    enableAgent.value = config.enableAgent
+  }
+}).catch(() => {})
+
 // 监听 storage 事件（其他 Tab 登录/退出时触发）
 onMounted(() => {
   window.addEventListener('storage', refreshUserRole)
@@ -176,7 +185,7 @@ const mainTabs = [
   { key: 'market', label: '行情', icon: NewspaperOutline, route: { name: 'market' } },
   { key: 'klineAnalysis', label: 'K线', icon: StatsChartOutline, route: { name: 'klineAnalysis' } },
   { key: 'fund', label: '基金', icon: SparklesOutline, route: { name: 'fund' } },
-  { key: 'agent', label: 'AI', icon: Robot, route: { name: 'agent' } },
+  { key: 'agent', label: 'AI', icon: Robot, route: { name: 'agent' }, agentOnly: true },
   { key: 'research', label: '研究', icon: FlaskOutline, route: { name: 'research' } },
   { key: 'settings', label: '设置', icon: SettingsOutline, route: { name: 'settings' } },
   { key: 'admin', label: '用户管理', icon: PeopleOutline, route: { name: 'userManagement' }, adminOnly: true },
@@ -186,7 +195,11 @@ const mainTabs = [
 const mobileVisibleCount = 4
 
 const visibleMainTabs = computed(() => {
-  const tabs = mainTabs.filter(tab => !tab.adminOnly || isAdmin.value)
+  const tabs = mainTabs.filter(tab => {
+    if (tab.adminOnly && !isAdmin.value) return false
+    if (tab.agentOnly && !enableAgent.value) return false
+    return true
+  })
   if (isMobile.value) {
     return tabs.slice(0, mobileVisibleCount)
   }
@@ -195,7 +208,11 @@ const visibleMainTabs = computed(() => {
 
 const overflowTabs = computed(() => {
   if (isMobile.value) {
-    const tabs = mainTabs.filter(tab => !tab.adminOnly || isAdmin.value)
+    const tabs = mainTabs.filter(tab => {
+      if (tab.adminOnly && !isAdmin.value) return false
+      if (tab.agentOnly && !enableAgent.value) return false
+      return true
+    })
     return tabs.slice(mobileVisibleCount)
   }
   return []

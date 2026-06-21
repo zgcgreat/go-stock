@@ -152,7 +152,7 @@ const isShowToBottom = ref(false);
 
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
 import {darkTheme, NFlex, NImage,NSelect} from "naive-ui";
-import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn} from "../services/wails-bridge.js";
+import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn, SaveAiAssistantSession, GetAiAssistantSession} from "../services/wails-bridge.js";
 import 'tdesign-vue-next/es/style/index.css';
 
 
@@ -168,6 +168,9 @@ const agentModeOptions = [
 ]
 const jsonMdExpandedMap = ref({})
 const reasoningExpandedMap = ref({})
+
+// 会话持久化：sessionId 用于保存/恢复对话
+const sessionId = ref('agent-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8))
 
 // Markdown 渲染主题配置
 const darkThemeRef = ref(false)
@@ -473,6 +476,23 @@ function parseStepText(text) {
   }
 }
 
+// 保存当前会话到后端
+function saveCurrentSession() {
+  if (chatList.value.length <= 1) return // 只有欢迎消息不保存
+  const messages = chatList.value.slice().reverse().map(item => {
+    const msg = {
+      role: item.role,
+      content: item.rawContent || item.content || '',
+      time: item.datetime || new Date().toLocaleString(),
+    }
+    if (item.role === 'assistant' && (item.rawReasoning || item.reasoning)) {
+      msg.reasoning = item.rawReasoning || item.reasoning || ''
+    }
+    return msg
+  })
+  SaveAiAssistantSession(sessionId.value, messages).catch(() => {})
+}
+
 const handleAgentMessage = (data) => {
   // 处理错误消息
   if (data && data['error']) {
@@ -558,6 +578,14 @@ const handleAgentMessage = (data) => {
       }
       chatList.value[lastItemIndex] = updatedItem
     }
+    // 对话结束后自动保存会话
+    saveCurrentSession()
+  }
+  // SSE done 信号也保存
+  if(data['content'] === 'agent-DONE'){
+    isStreamLoad.value = false
+    loading.value = false
+    stopFormatTimer()
   }
 }
 
@@ -565,6 +593,22 @@ onBeforeUnmount(() => {
   EventsOff("agent-message", handleAgentMessage)
   // 清理流式格式化定时器，防止内存泄漏
   stopFormatTimer()
+
+  // 持久化会话：保存当前对话到后端
+  if (chatList.value.length > 0) {
+    const messages = chatList.value.slice().reverse().map(item => {
+      const msg = {
+        role: item.role,
+        content: item.rawContent || item.content || '',
+        time: item.datetime || new Date().toLocaleString(),
+      }
+      if (item.role === 'assistant' && (item.rawReasoning || item.reasoning)) {
+        msg.reasoning = item.rawReasoning || item.reasoning || ''
+      }
+      return msg
+    })
+    SaveAiAssistantSession(sessionId.value, messages).catch(() => {})
+  }
 })
 
 onBeforeMount(() => {
@@ -574,6 +618,36 @@ onBeforeMount(() => {
     selectOptions.value = res
     selectValue.value = res[0].ID
   })
+
+  // 恢复上一次会话
+  GetAiAssistantSession(sessionId.value).then(session => {
+    if (session && session.messages && session.messages.length > 0) {
+      sessionId.value = session.sessionId || sessionId.value
+      const restored = session.messages.map(msg => {
+        if (msg.role === 'assistant') {
+          return {
+            avatar: h(NImage, { src: icon.value, height: '48px', width: '48px'}),
+            name: 'Go-Stock AI',
+            datetime: msg.time || '',
+            content: msg.content || '',
+            rawContent: msg.content || '',
+            reasoning: msg.reasoning || '',
+            rawReasoning: msg.reasoning || '',
+            jsonMarkdown: '',
+            role: 'assistant',
+          }
+        }
+        return {
+          avatar: 'https://tdesign.gtimg.com/site/avatar.jpg',
+          name: '宇宙无敌大韭菜',
+          datetime: msg.time || '',
+          content: msg.content || '',
+          role: 'user',
+        }
+      })
+      chatList.value = restored.reverse()
+    }
+  }).catch(() => {})
 })
 
 onMounted(() => {

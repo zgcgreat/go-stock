@@ -16,8 +16,15 @@ let isRedirecting = false;
 // 请求拦截器 - 用于添加认证令牌
 apiClient.interceptors.request.use(
   (config) => {
-    // 从localStorage获取token并添加到请求头
+    // Web 模式下，非公开路由无 token 时直接拒绝请求
+    // 避免组件挂载时触发大量 401 请求（路由守卫异步执行期间组件已创建）
     const token = localStorage.getItem('token');
+    const url = config.url || '';
+    const isPublicApi = url.startsWith('/public/') || url.startsWith('/auth/');
+    if (!token && !isPublicApi) {
+      return Promise.reject(new axios.Cancel('No auth token - request blocked'));
+    }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
