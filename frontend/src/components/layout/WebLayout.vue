@@ -165,7 +165,7 @@ async function ensureUserInfo() {
 ensureUserInfo()
 
 // AI 菜单可见性控制（与桌面端 enableAgent 配置一致）
-const enableAgent = ref(true) // 默认显示，配置加载后按实际值控制
+const enableAgent = ref(false) // 默认隐藏，与后端默认值一致，配置加载后按实际值控制
 GetConfig().then(config => {
   if (config && typeof config.enableAgent === 'boolean') {
     enableAgent.value = config.enableAgent

@@ -488,9 +488,9 @@ function deletePrompt(ID) {
            <n-form-item-gi :span="3" label="指数基金：" path="enableFund">
               <n-switch v-model:value="formValue.enableFund"/>
             </n-form-item-gi>
-            <!--      <n-form-item-gi :span="3" label="AI智能体：" path="enableAgent">
-                   <n-switch v-model:value="formValue.enableAgent"/>
-                 </n-form-item-gi>-->
+            <n-form-item-gi :span="3" label="AI智能体：" path="enableAgent">
+              <n-switch v-model:value="formValue.enableAgent"/>
+            </n-form-item-gi>
             <n-form-item-gi :span="11" label="东财唯一标识：" path="qgqpBId">
               <n-input type="text" placeholder="东财唯一标识" v-model:value="formValue.qgqpBId" clearable/>
               <n-tooltip placement="top">
