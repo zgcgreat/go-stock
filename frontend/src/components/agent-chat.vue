@@ -107,21 +107,60 @@
               <t-button theme="default" variant="text" size="large" class="btn" @click="inputEnter"> 发送 </t-button>
             </template>
             <template #prefix>
-              <NFlex>
+              <NFlex :wrap="false" align="center" :size="4">
                 <NSelect
                     v-model:value="selectValue"
                     :options="selectOptions"
                     label-field="name" value-field="ID"
                     size="tiny"
-                    style="width: 200px;"
+                    style="width: 180px;"
+                    placeholder="选择模型"
+                />
+                <NSelect
+                    v-model:value="sysPromptId"
+                    :options="sysPromptOptions"
+                    size="tiny"
+                    clearable
+                    style="width: 130px;"
+                    placeholder="系统提示词"
+                />
+                <NSelect
+                    v-model:value="userPromptId"
+                    :options="userPromptOptions"
+                    size="tiny"
+                    clearable
+                    style="width: 130px;"
+                    placeholder="用户提示词"
+                    @update:value="onUserPromptChange"
                 />
                 <NSelect
                     v-model:value="agentMode"
                     :options="agentModeOptions"
                     size="tiny"
-                    style="width: 120px;"
+                    style="width: 100px;"
                 />
+                <div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">
+                  <span style="font-size:12px;color:var(--td-text-color-secondary);">思考</span>
+                  <NSwitch v-model:value="thinkingMode" size="small" />
+                </div>
+                <div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">
+                  <span style="font-size:12px;color:var(--td-text-color-secondary);">记忆</span>
+                  <NSwitch v-model:value="memoryMode" size="small" />
+                </div>
+                <NSelect
+                    v-if="memoryMode"
+                    v-model:value="memoryCount"
+                    :options="memoryCountOptions"
+                    size="tiny"
+                    style="width: 70px;"
+                />
+                <NButton size="tiny" quaternary :loading="shareLoading" @click="shareAiToCommunity" title="分享到社区">
+                  分享
+                </NButton>
               </NFlex>
+              <Transition name="hint-fade">
+                <div v-if="hintVisible" style="font-size:12px;color:#854F0B;padding:2px 8px;">{{ hintText }}</div>
+              </Transition>
             </template>
           </t-chat-sender>
 
@@ -135,7 +174,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import {ref, onMounted, h, onBeforeUnmount, onBeforeMount, nextTick, computed} from 'vue';
+import {ref, onMounted, h, onBeforeUnmount, onBeforeMount, nextTick, computed, watch} from 'vue';
 import {ArrowDownIcon, CheckCircleIcon, SystemSumIcon} from 'tdesign-icons-vue-next';
 import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
@@ -151,8 +190,8 @@ const chatRef = ref(null);
 const isShowToBottom = ref(false);
 
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
-import {darkTheme, NFlex, NImage,NSelect} from "naive-ui";
-import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn, SaveAiAssistantSession, GetAiAssistantSession, AbortChatWithAgent} from "../services/wails-bridge.js";
+import {darkTheme, NFlex, NImage, NSelect, NSwitch, NButton, NIcon, useMessage} from "naive-ui";
+import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn, SaveAiAssistantSession, GetAiAssistantSession, AbortChatWithAgent, GetPromptTemplates, ShareText, SaveImage} from "../services/wails-bridge.js";
 import 'tdesign-vue-next/es/style/index.css';
 
 
@@ -168,6 +207,85 @@ const agentModeOptions = [
 ]
 const jsonMdExpandedMap = ref({})
 const reasoningExpandedMap = ref({})
+
+// 提示词模板
+const sysPromptTemplates = ref([])
+const sysPromptOptions = computed(() => sysPromptTemplates.value.map(t => ({ label: t.name ?? '', value: t.ID ?? t.id })))
+const sysPromptId = ref(null)
+const userPromptTemplates = ref([])
+const userPromptOptions = computed(() => userPromptTemplates.value.map(t => ({ label: t.name ?? '', value: t.ID ?? t.id })))
+const userPromptId = ref(null)
+
+// 思考模式 / 记忆模式
+const thinkingMode = ref(true)
+const memoryMode = ref(false)
+const memoryCount = ref(1)
+const memoryCountOptions = [
+  { label: '1条', value: 1 }, { label: '2条', value: 2 },
+  { label: '3条', value: 3 }, { label: '5条', value: 5 },
+  { label: '10条', value: 10 },
+]
+
+// 模型智能切换提示
+const hintVisible = ref(false)
+const hintText = ref('')
+let hintTimer = null
+function showHint(text) {
+  hintText.value = text
+  hintVisible.value = true
+  if (hintTimer) clearTimeout(hintTimer)
+  hintTimer = setTimeout(() => { hintVisible.value = false }, 3000)
+}
+
+watch(agentMode, (val) => {
+  if (val === 'react') showHint('⚡ 快速模式推荐使用DeepSeek最新版')
+  else if (val === 'plan_execute') showHint('🧠 规划模式推荐使用GLM最新版')
+})
+
+watch(selectValue, (val) => {
+  const opts = selectOptions.value
+  if (!opts?.length) return
+  const found = opts.find(o => o.ID === val || o.id === val)
+  if (!found) return
+  const label = ((found.name ?? '') + ' ' + (found.modelName ?? '')).toLowerCase()
+  if (label.includes('deepseek-chat')) {
+    agentMode.value = 'plan_execute'
+    thinkingMode.value = false
+    showHint('deepseek-chat 已使用规划模式并关闭思考模式')
+  } else if (label.includes('deepseek')) {
+    showHint('⚡ DeepSeek模型推荐使用快速模式')
+  } else if (label.includes('glm')) {
+    showHint('🧠 GLM模型推荐使用规划模式')
+  }
+})
+
+function onUserPromptChange(id) {
+  if (!id) return
+  const t = userPromptTemplates.value.find(x => (x.ID ?? x.id) === id)
+  if (t?.content) inputValue.value = t.content
+}
+
+// 分享 / 导出
+const shareLoading = ref(false)
+const exportImageKey = ref('')
+const message = useMessage()
+
+function shareAiToCommunity() {
+  // 获取最后一条 assistant 消息内容
+  let text = ''
+  for (let i = 0; i < chatList.value.length; i++) {
+    if (chatList.value[i].role === 'assistant' && chatList.value[i].content?.trim()) {
+      text = chatList.value[i].content.trim()
+    }
+  }
+  if (!text) { message.warning('暂无可分享的内容'); return }
+  if (shareLoading.value) return
+  shareLoading.value = true
+  ShareText(text, 'go-stock AI Agent助手')
+    .then(msg => message.success(msg || '分享成功'))
+    .catch(err => message.error('分享失败: ' + (err?.message ?? err)))
+    .finally(() => { shareLoading.value = false })
+}
 
 // 会话持久化：sessionId 用于保存/恢复对话
 const sessionId = ref('agent-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8))
@@ -628,6 +746,13 @@ onBeforeMount(() => {
     selectValue.value = res[0].ID
   })
 
+  // 加载提示词模板
+  GetPromptTemplates('', '').then(res => {
+    const list = Array.isArray(res) ? res : []
+    sysPromptTemplates.value = list.filter(t => t.type === '模型系统Prompt')
+    userPromptTemplates.value = list.filter(t => t.type === '模型用户Prompt')
+  }).catch(() => {})
+
   // 恢复上一次会话
   GetAiAssistantSession(sessionId.value).then(session => {
     if (session && session.messages && session.messages.length > 0) {
@@ -755,7 +880,7 @@ const inputEnter = function () {
   isStreamLoad.value = true;
   startFormatTimer()
   jsonMdExpandedMap.value = { ...jsonMdExpandedMap.value, [0]: true }
-  ChatWithAgent(inputValue.value,selectValue.value,0,false,0,false,agentMode.value === 'auto' ? '' : agentMode.value)
+  ChatWithAgent(inputValue.value, selectValue.value, sysPromptId.value, memoryMode.value, memoryCount.value, thinkingMode.value, agentMode.value === 'auto' ? '' : agentMode.value)
 };
 </script>
 <style lang="less">
