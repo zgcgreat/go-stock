@@ -150,6 +150,12 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 			sysPrompt = data.NewPromptTemplateApi().GetPromptTemplateByID(*sysPromptId)
 		}
 
+		// 追加匹配的技能提示词
+		skillPrompt := buildSkillPrompt(question)
+		if skillPrompt != "" {
+			sysPrompt = sysPrompt + "\n\n" + skillPrompt
+		}
+
 		// 从 optsOverride 提取 userID（Web 端传入），默认 0（桌面端）
 		var userIDForConfig uint
 		if len(optsOverride) > 2 && optsOverride[2] != "" {

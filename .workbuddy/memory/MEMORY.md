@@ -56,3 +56,7 @@
 - Agent Chat 配置用户隔离（2026-06-06）
 - 代码审查批量修复：AuthRequired 统一、路由整理、userID 统一（2026-06-06）
 - 用户管理菜单条件展示（2026-06-07）
+- 上游同步 9 提交 cherry-pick（2026-06-20）：概念资金流向、TDX MAC、板块查询、时区修复
+- Web 端 AI 菜单功能对齐（2026-06-21）：agentMode 修复、enableAgent/enableFund 联动、会话持久化、提示词/思考/记忆/分享/导出图片
+- 登录页 API 拦截（2026-06-21）：axios 拦截器统一拦截无 token 业务请求
+- 设置保存修复（2026-06-21）：enableAgent/enableFund 强制覆盖 bug、保存成功提示红叉

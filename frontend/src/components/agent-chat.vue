@@ -142,6 +142,16 @@
                     size="tiny"
                     style="width: 100px;"
                 />
+                <NSelect
+                    v-model:value="selectedSkillIds"
+                    :options="skillOptions"
+                    size="tiny"
+                    multiple
+                    clearable
+                    style="width: 130px;"
+                    placeholder="技能"
+                    max-tag-count="1"
+                />
                 <div style="display:flex;align-items:center;gap:2px;white-space:nowrap;">
                   <span style="font-size:12px;color:var(--td-text-color-secondary);">思考</span>
                   <NSwitch v-model:value="thinkingMode" size="small" />
@@ -195,7 +205,7 @@ const isShowToBottom = ref(false);
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
 import {darkTheme, NFlex, NImage, NSelect, NSwitch, NButton, NIcon, useMessage} from "naive-ui";
 import html2canvas from 'html2canvas';
-import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn, SaveAiAssistantSession, GetAiAssistantSession, AbortChatWithAgent, GetPromptTemplates, ShareText, SaveImage} from "../services/wails-bridge.js";
+import {ChatWithAgent, GetAiConfigs, GetConfig, GetSponsorInfo, GetVersionInfo,EventsOff, EventsOn, SaveAiAssistantSession, GetAiAssistantSession, AbortChatWithAgent, GetPromptTemplates, ShareText, SaveImage, GetAllSkills} from "../services/wails-bridge.js";
 import 'tdesign-vue-next/es/style/index.css';
 
 
@@ -229,6 +239,15 @@ const memoryCountOptions = [
   { label: '3条', value: 3 }, { label: '5条', value: 5 },
   { label: '10条', value: 10 },
 ]
+
+// 技能选择
+const skillList = ref([])
+const skillOptions = computed(() => skillList.value.map(s => ({ label: s.name ?? '', value: s.id ?? s.ID })))
+const selectedSkillIds = ref([])
+function onSkillChange(ids) {
+  // 保留顺序，只保留已选且仍有效的
+  selectedSkillIds.value = ids
+}
 
 // 模型智能切换提示
 const hintVisible = ref(false)
@@ -823,6 +842,11 @@ onBeforeMount(() => {
     userPromptTemplates.value = list.filter(t => t.type === '模型用户Prompt')
   }).catch(() => {})
 
+  // 加载已启用技能列表
+  GetAllSkills().then(skills => {
+    skillList.value = (skills || []).filter(s => s.enable)
+  }).catch(() => {})
+
   // 恢复上一次会话
   GetAiAssistantSession(sessionId.value).then(session => {
     if (session && session.messages && session.messages.length > 0) {
@@ -950,7 +974,7 @@ const inputEnter = function () {
   isStreamLoad.value = true;
   startFormatTimer()
   jsonMdExpandedMap.value = { ...jsonMdExpandedMap.value, [0]: true }
-  ChatWithAgent(inputValue.value, selectValue.value, sysPromptId.value, memoryMode.value, memoryCount.value, thinkingMode.value, agentMode.value === 'auto' ? '' : agentMode.value)
+  ChatWithAgent(inputValue.value, selectValue.value, sysPromptId.value, memoryMode.value, memoryCount.value, thinkingMode.value, agentMode.value === 'auto' ? '' : agentMode.value, selectedSkillIds.value)
 };
 </script>
 <style lang="less">

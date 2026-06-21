@@ -280,6 +280,22 @@
                     class="chat-footer-agent-mode-select"
                   />
                 </div>
+                <div class="chat-footer-agent-mode">
+                  <NSelect
+                    v-model:value="selectedSkillIds"
+                    :options="skillOptions"
+                    size="small"
+                    multiple
+                    clearable
+                    to="body"
+                    placement="top-start"
+                    placeholder="技能"
+                    max-tag-count="1"
+                    :consistent-menu-width="false"
+                    :menu-props="{ style: { zIndex: 10002 } }"
+                    class="chat-footer-agent-mode-select"
+                  />
+                </div>
               </div>
               <div class="chat-footer-input">
                 <NInput
@@ -341,7 +357,8 @@ import {
   ShareText,
   AbortChatWithAgent,
   SaveAIResponseResult,
-  SaveImage
+  SaveImage,
+  GetAllSkills
 } from '../services/wails-bridge.js'
 import { EventsOff, EventsOn } from '../services/wails-bridge.js'
 import { MdPreview } from 'md-editor-v3'
@@ -404,6 +421,11 @@ const agentModeOptions = [
   { label: '⚡ 快速模式', value: 'react' },
   { label: '🧠 规划模式', value: 'plan_execute' },
 ]
+
+// 技能选择
+const skillList = ref([])
+const skillOptions = computed(() => skillList.value.map(s => ({ label: s.name ?? '', value: s.id ?? s.ID })))
+const selectedSkillIds = ref([])
 
 watch(agentMode, (val) => {
   if (val === 'react') showHint('⚡ 快速模式推荐使用DeepSeek最新版')
@@ -890,7 +912,7 @@ function sendMessage() {
     }
     scrollToBottom()
   })
-  ChatWithAgent(text, configId, sysPromptId.value, memoryMode.value, memoryCount.value, thinkingMode.value, agentMode.value === 'auto' ? '' : agentMode.value)
+  ChatWithAgent(text, configId, sysPromptId.value, memoryMode.value, memoryCount.value, thinkingMode.value, agentMode.value === 'auto' ? '' : agentMode.value, selectedSkillIds.value)
 }
 
 function startNewChat() {
@@ -1244,6 +1266,10 @@ function loadPromptTemplates() {
     sysPromptTemplates.value = list.filter(t => t.type === '模型系统Prompt')
     userPromptTemplates.value = list.filter(t => t.type === '模型用户Prompt')
   })
+  // 加载已启用技能列表
+  GetAllSkills().then(skills => {
+    skillList.value = (skills || []).filter(s => s.enable)
+  }).catch(() => {})
 }
 
 watch(panelVisible, (v) => {

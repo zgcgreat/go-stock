@@ -281,6 +281,7 @@ func AgentChat(c *gin.Context) {
 		MemoryCount int    `json:"memoryCount"`
 		Thinking    bool   `json:"thinking"`
 		AgentMode   string `json:"agentMode"`
+		SkillIds    []uint `json:"skillIds"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -330,7 +331,28 @@ func AgentChat(c *gin.Context) {
 	}
 	// 传递 userID 作为 optsOverride[2]，使 Agent 内部查询用户自己的配置
 	userIDStr := strconv.FormatUint(uint64(userID), 10)
-	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, req.AgentMode, "", "", userIDStr)
+
+	// 构建用户选择的技能提示词追加（optsOverride[0] = sysPromptOverride）
+	var skillPromptOverride string
+	if len(req.SkillIds) > 0 {
+		var sb strings.Builder
+		for _, sid := range req.SkillIds {
+			skill, err := data.NewSkillApi().GetByID(sid)
+			if err != nil || skill == nil {
+				continue
+			}
+			sb.WriteString(fmt.Sprintf("\n### %s\n", skill.Name))
+			if skill.Description != "" {
+				sb.WriteString(fmt.Sprintf("描述：%s\n", skill.Description))
+			}
+			if skill.SystemPrompt != "" {
+				sb.WriteString(fmt.Sprintf("%s\n", skill.SystemPrompt))
+			}
+		}
+		skillPromptOverride = sb.String()
+	}
+
+	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, req.AgentMode, skillPromptOverride, "", userIDStr)
 
 	for msg := range msgCh {
 		if msg == nil {

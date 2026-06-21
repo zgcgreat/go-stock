@@ -1097,7 +1097,7 @@ export function CalculateNextRunTimes(arg1, arg2) {
  * Web 模式下：使用 SSE 连接 /api/v1/ai/agent-chat
  * 事件通过 EventsEmit('agent-message') 分发，格式与桌面模式一致
  */
-export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   if (isWailsMode()) return window.go.main.App.ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 
   // ===== 使用 SSE 管理器替代全局 window._abortAgentStream =====
@@ -1128,6 +1128,7 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
       memoryCount: arg5 || 10,
       thinking: arg6 || false,
       agentMode: arg7 || '',
+      skillIds: arg8 || [],
     }),
     signal: controller.signal,
   }).then(response => {
