@@ -164,13 +164,21 @@ async function ensureUserInfo() {
 }
 ensureUserInfo()
 
-// AI 菜单可见性控制（与桌面端 enableAgent 配置一致）
+// AI/基金菜单可见性控制（与桌面端 enableAgent/enableFund 配置一致）
 const enableAgent = ref(false) // 默认隐藏，与后端默认值一致，配置加载后按实际值控制
-GetConfig().then(config => {
-  if (config && typeof config.enableAgent === 'boolean') {
-    enableAgent.value = config.enableAgent
-  }
-}).catch(() => {})
+const enableFund = ref(true)   // 默认显示，与后端默认值一致，配置加载后按实际值控制
+
+function loadMenuVisibility() {
+  GetConfig().then(config => {
+    if (config && typeof config.enableAgent === 'boolean') {
+      enableAgent.value = config.enableAgent
+    }
+    if (config && typeof config.enableFund === 'boolean') {
+      enableFund.value = config.enableFund
+    }
+  }).catch(() => {})
+}
+loadMenuVisibility()
 
 // 监听 storage 事件（其他 Tab 登录/退出时触发）
 onMounted(() => {
@@ -179,12 +187,25 @@ onMounted(() => {
   window.addEventListener('user-info-updated', refreshUserRole)
 })
 
+// 监听设置变更事件（settings.vue 保存后触发），实时更新菜单可见性
+onMounted(() => {
+  window.addEventListener('web-event-updateSettings', (e) => {
+    const config = e.detail
+    if (config && typeof config.enableAgent === 'boolean') {
+      enableAgent.value = config.enableAgent
+    }
+    if (config && typeof config.enableFund === 'boolean') {
+      enableFund.value = config.enableFund
+    }
+  })
+})
+
 // 主Tab定义：只负责一级页面切换，子页面内部自己管Tab
 const mainTabs = [
   { key: 'stock', label: '自选', icon: StarOutline, route: { name: 'stock' } },
   { key: 'market', label: '行情', icon: NewspaperOutline, route: { name: 'market' } },
   { key: 'klineAnalysis', label: 'K线', icon: StatsChartOutline, route: { name: 'klineAnalysis' } },
-  { key: 'fund', label: '基金', icon: SparklesOutline, route: { name: 'fund' } },
+  { key: 'fund', label: '基金', icon: SparklesOutline, route: { name: 'fund' }, fundOnly: true },
   { key: 'agent', label: 'AI', icon: Robot, route: { name: 'agent' }, agentOnly: true },
   { key: 'research', label: '研究', icon: FlaskOutline, route: { name: 'research' } },
   { key: 'settings', label: '设置', icon: SettingsOutline, route: { name: 'settings' } },
@@ -198,6 +219,7 @@ const visibleMainTabs = computed(() => {
   const tabs = mainTabs.filter(tab => {
     if (tab.adminOnly && !isAdmin.value) return false
     if (tab.agentOnly && !enableAgent.value) return false
+    if (tab.fundOnly && !enableFund.value) return false
     return true
   })
   if (isMobile.value) {
@@ -211,6 +233,7 @@ const overflowTabs = computed(() => {
     const tabs = mainTabs.filter(tab => {
       if (tab.adminOnly && !isAdmin.value) return false
       if (tab.agentOnly && !enableAgent.value) return false
+      if (tab.fundOnly && !enableFund.value) return false
       return true
     })
     return tabs.slice(mobileVisibleCount)
