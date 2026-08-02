@@ -224,6 +224,37 @@ func GetStockRealTimePrice(c *gin.Context) {
 	})
 }
 
+// GetStockKLinePage 分页获取股票K线数据（加载更多历史数据）
+func GetStockKLinePage(c *gin.Context) {
+	stockCode := c.Param("code")
+	if stockCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "股票代码不能为空",
+		})
+		return
+	}
+
+	kLineType := c.DefaultQuery("klt", "101")
+	days, _ := strconv.Atoi(c.DefaultQuery("limit", "120"))
+	if days <= 0 {
+		days = 120
+	}
+	end := c.DefaultQuery("end", "")
+
+	result := data.FetchKLineWithFallback(stockCode, "", kLineType, days, end)
+	kLines := &[]data.KLineData{}
+	if result != nil && result.Data != nil {
+		kLines = result.Data
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    kLines,
+	})
+}
+
 // addStockFollowData 已提取到 data.AddStockFollowData，此处为薄转发
 func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
 	data.AddStockFollowData(follow, stockData)

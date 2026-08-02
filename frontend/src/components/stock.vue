@@ -7,6 +7,7 @@ import {
   Follow,
   GetAiConfigs,
   GetAIResponseResult,
+  GetAllGroupStocks,
   GetConfig,
   GetEffectiveSponsorVip,
   GetFollowList,
@@ -35,15 +36,20 @@ import {
   SetTradingPrice,
   ShareAnalysis,
   UnFollow,
+  UpdateGroup,
   UpdateGroupSort
 } from '../services/wails-bridge.js'
 import {
   NAvatar,
   NButton,
+  NDataTable,
+  NDropdown,
   NFlex,
   NForm,
   NFormItem,
   NInputNumber,
+  NSelect,
+  NTag,
   NText,
   useDialog,
   useMessage,
@@ -60,7 +66,7 @@ import {
 } from '../services/wails-bridge.js'
 import {useIsWebMode} from "../composables/useResponsive";
 import * as Bridge from '../services/wails-bridge.js'
-import {Add, ChatboxOutline,} from '@vicons/ionicons5'
+import {Add, ChatboxOutline, CreateOutline} from '@vicons/ionicons5'
 import {MdEditor, MdPreview} from 'md-editor-v3';
 // preview.css相比style.css少了编辑器那部分样式
 //import 'md-editor-v3/lib/preview.css';
@@ -80,7 +86,6 @@ import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
 
 const route = useRoute()
 const router = useRouter()
-const {isWebMode} = useIsWebMode()
 
 const danmus = ref([])
 const ws = ref(null)
@@ -93,11 +98,11 @@ const downColor = '#00da3c';
 const downBorderColor = '';
 const kLineChartRef = ref(null);
 const kLineChartRef2 = ref(null);
-const fsChartInstance = ref(null);       // 分时图 ECharts 实例（防泄漏）
-const kLineChartInstance = ref(null);    // K 线图 ECharts 实例（防泄漏）
 
 
-
+const handleProgress = (progress) => {
+  //console.log(`Export progress: ${progress.ratio * 100}%`);
+};
 const enableEditor = ref(false)
 const mdPreviewRef = ref(null)
 const mdEditorRef = ref(null)
@@ -110,6 +115,10 @@ const results = ref({})
 const stockList = ref([])
 const followList = ref([])
 const groupList = ref([])
+// 股票代码 -> 所属分组名数组（用于「全部」标签页表格的分组列渲染）
+const codeToGroupNames = ref(new Map())
+// 股票代码 -> 所属分组 ID 数组（用于「全部」标签页表格的分组条件筛选，按 ID 匹配避免重名）
+const codeToGroupIds = ref(new Map())
 const options = ref([])
 const modalShow = ref(false)
 const modalShow2 = ref(false)
@@ -185,6 +194,11 @@ const danmakuColor = computed(() => {
   return data.darkTheme ? 'color:#fff' : 'color:#000'
 })
 
+// 顶部页签固定吸顶时的背景色（与页面 body 背景一致，避免滚动时内容透出）
+const tabNavBgColor = computed(() => {
+  return data.darkTheme ? 'rgb(16, 16, 20)' : '#ffffff'
+})
+
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
 
 const sortedResults = computed(() => {
@@ -197,18 +211,199 @@ const sortedResults = computed(() => {
 });
 
 const groupResults = computed(() => {
-  const group = {}
   if (currentGroupId.value === 0) {
     return sortedResults.value
-  } else {
-    for (const key in sortedResults.value) {
-      if (stocks.value.includes(sortedResults.value[key]['股票代码'])) {
-        group[key] = sortedResults.value[key]
-      }
+  }
+  // 用 Set 替换 Array.includes，避免在自选股数量多时退化为 O(n^2) 查找
+  const codeSet = new Set(stocks.value)
+  const group = {}
+  for (const key in sortedResults.value) {
+    const item = sortedResults.value[key]
+    if (item && codeSet.has(item['股票代码'])) {
+      group[key] = item
     }
-    return group
+  }
+  return group
+})
+
+// ——「全部」标签页：表格分页 + 搜索 ——
+const tableSearchKeyword = ref('')
+// 「全部」标签页分组筛选：0 表示不按分组筛选，>0 为选中分组 ID
+const tableGroupFilter = ref(0)
+
+// 将 sortedResults 对象转为数组，并按关键字（名称/代码）+ 分组条件过滤
+const allTableData = computed(() => {
+  const arr = []
+  for (const key in sortedResults.value) {
+    arr.push(sortedResults.value[key])
+  }
+  // 分组条件过滤：选中分组 ID > 0 时，只保留属于该分组的股票
+  const gid = tableGroupFilter.value
+  const filtered = gid > 0
+    ? arr.filter(item => (codeToGroupIds.value.get(item['股票代码']) || []).includes(gid))
+    : arr
+  // 关键字过滤（名称/代码）
+  const kw = tableSearchKeyword.value.trim().toLowerCase()
+  if (!kw) return filtered
+  return filtered.filter(item => {
+    const name = String(item['股票名称'] || '').toLowerCase()
+    const code = String(item['股票代码'] || '').toLowerCase()
+    return name.includes(kw) || code.includes(kw)
+  })
+})
+
+// 分组筛选下拉选项：首项为「全部分组」，其余来自 groupList
+const groupFilterOptions = computed(() => {
+  const opts = [{ label: '全部分组', value: 0 }]
+  for (const g of groupList.value) {
+    if (g && g.ID) opts.push({ label: g.name, value: g.ID })
+  }
+  return opts
+})
+
+// 客户端分页配置
+const allTablePagination = reactive({
+  page: 1,
+  pageSize: 50,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  prefix({ itemCount }) {
+    return `共 ${itemCount} 只`
+  },
+  onChange: (page) => { allTablePagination.page = page },
+  onUpdatePageSize: (pageSize) => {
+    allTablePagination.pageSize = pageSize
+    allTablePagination.page = 1
   }
 })
+
+// 搜索关键字变化时回到第一页
+watch(tableSearchKeyword, () => { allTablePagination.page = 1 })
+
+// 分组筛选变化时回到第一页
+watch(tableGroupFilter, () => { allTablePagination.page = 1 })
+
+// 「全部」标签页表格列定义（render 用 h()；行高频刷新由 allTableData computed 驱动，与原卡片一致）
+const allTableColumns = [
+  {
+    title: '名称/代码', key: '股票名称', width: 150,
+    sorter: (a, b) => String(a['股票名称']).localeCompare(String(b['股票名称'])),
+    render(row) {
+      return h('div', { style: 'display:flex; flex-direction:column; line-height:1.3;' }, [
+        h(NText, { type: row.type, strong: true }, { default: () => row['股票名称'] }),
+        h(NTag, { size: 'small', bordered: false, type: 'info' }, { default: () => row['股票代码'] })
+      ])
+    }
+  },
+  {
+    title: '分组', key: 'groups', width: 140,
+    // 排序按分组名拼接（无分组排最后）
+    sorter: (a, b) => {
+      const ga = (codeToGroupNames.value.get(a['股票代码']) || []).map(g => g.name).join(',')
+      const gb = (codeToGroupNames.value.get(b['股票代码']) || []).map(g => g.name).join(',')
+      if (!ga && !gb) return 0
+      if (!ga) return 1
+      if (!gb) return -1
+      return ga.localeCompare(gb)
+    },
+    render(row) {
+      const groups = codeToGroupNames.value.get(row['股票代码']) || []
+      if (groups.length === 0) {
+        return h(NText, { depth: 3, style: 'font-size:12px;' }, { default: () => '—' })
+      }
+      // 点击具体分组名跳转到对应分组页签
+      return h('div', { style: 'display:flex; flex-wrap:wrap; gap:2px;' },
+        groups.map(g => h(NTag, {
+          size: 'small', bordered: false, type: 'success',
+          style: 'cursor:pointer;',
+          onClick: () => updateTab(String(g.id))
+        }, { default: () => g.name }))
+      )
+    }
+  },
+  {
+    title: '当前价', key: '当前价格', width: 110,
+    sorter: (a, b) => Number(a['当前价格']) - Number(b['当前价格']),
+    render(row) {
+      const children = [h(NText, { type: row.type }, { default: () => Number(row['当前价格']).toFixed(2) })]
+      if (row['盘前盘后'] > 0) {
+        children.push(h('div', { style: 'font-size:12px;' },
+          `${row['盘前盘后']} ${row['盘前盘后涨跌幅']}%`))
+      }
+      return h('div', { style: 'display:flex; flex-direction:column;' }, children)
+    }
+  },
+  {
+    title: '涨跌幅', key: 'changePercent', width: 90,
+    sorter: (a, b) => Number(a.changePercent) - Number(b.changePercent),
+    defaultSortOrder: 'descend',
+    render(row) {
+      const sign = row.changePercent >= 0 ? '+' : ''
+      return h(NText, { type: row.type }, { default: () => `${sign}${Number(row.changePercent).toFixed(3)}%` })
+    }
+  },
+  {
+    title: '最高/最低', key: '今日最高价', width: 160,
+    sorter: (a, b) => Number(a['今日最高价']) - Number(b['今日最高价']),
+    render(row) {
+      return h('div', { style: 'font-size:12px; line-height:1.4;' }, [
+        h('div', null, `高 ${row['今日最高价']} (${row.highRate}%)`),
+        h('div', null, `低 ${row['今日最低价']} (${row.lowRate}%)`)
+      ])
+    }
+  },
+  {
+    title: '昨收/今开', key: '昨日收盘价', width: 120,
+    sorter: (a, b) => Number(a['昨日收盘价']) - Number(b['昨日收盘价']),
+    render(row) {
+      return h('div', { style: 'font-size:12px; line-height:1.4;' }, [
+        h('div', null, `昨收 ${row['昨日收盘价']}`),
+        h('div', null, `今开 ${row['今日开盘价']}`)
+      ])
+    }
+  },
+  {
+    title: '时间', key: '日期', width: 140,
+    sorter: (a, b) => String(a['日期'] + ' ' + a['时间']).localeCompare(String(b['日期'] + ' ' + b['时间'])),
+    render(row) {
+      return h('div', { style: 'font-size:12px;' }, `${row['日期']} ${row['时间']}`)
+    }
+  },
+  {
+    title: '操作', key: 'actions', width: 460, fixed: 'right',
+    render(row) {
+      const btns = [
+        h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => showLightweightKline(row['股票代码'], row['股票名称']) }, { default: () => '多周期' }),
+        h(NButton, { size: 'tiny', type: 'error', secondary: true, style: 'margin-left:4px;', onClick: () => showK(row['股票代码'], row['股票名称']) }, { default: () => '日K' }),
+        h(NButton, { size: 'tiny', type: 'error', secondary: true, style: 'margin-left:4px;', onClick: () => showFenshi(row['股票代码'], row['股票名称'], row.changePercent) }, { default: () => '分时' })
+      ]
+      if (row['买一报价'] > 0) {
+        btns.push(h(NButton, { size: 'tiny', type: 'error', secondary: true, style: 'margin-left:4px;', onClick: () => showMoney(row['股票代码'], row['股票名称']) }, { default: () => '资金' }))
+      }
+      btns.push(h(NButton, { size: 'tiny', type: 'success', secondary: true, style: 'margin-left:4px;', onClick: () => search(row['股票代码'], row['股票名称']) }, { default: () => '详情' }))
+      if (row['买一报价'] > 0) {
+        btns.push(h(NButton, { size: 'tiny', type: 'success', secondary: true, style: 'margin-left:4px;', onClick: () => searchNotice(row['股票代码']) }, { default: () => '公告' }))
+        btns.push(h(NButton, { size: 'tiny', type: 'success', secondary: true, style: 'margin-left:4px;', onClick: () => searchStockReport(row['股票代码']) }, { default: () => '研报' }))
+      }
+      btns.push(h(NButton, { size: 'tiny', type: 'warning', secondary: true, style: 'margin-left:4px;', onClick: () => setStock(row['股票代码'], row['股票名称']) }, { default: () => '成本' }))
+      if (data.openAiEnable) {
+        btns.push(h(NButton, { size: 'tiny', type: 'warning', secondary: true, style: 'margin-left:4px;', onClick: () => aiCheckStock(row['股票名称'], row['股票代码']) }, { default: () => 'AI分析' }))
+      }
+      // 设置分组下拉：复用统一的 options/renderLabel/onSelect，支持新建分组 + 切换（加入/移出）
+      btns.push(h(NDropdown, {
+        trigger: 'click', options: setGroupOptions.value,
+        menuProps: () => ({ style: 'max-height:300px; overflow-y:auto;' }),
+        renderLabel: (option) => renderSetGroupLabel(option, row['股票代码']),
+        onSelect: (groupId) => handleSetGroupSelect(groupId, row['股票代码'], row['股票名称'])
+      }, {
+        default: () => h(NButton, { size: 'tiny', type: 'warning', tertiary: true, style: 'margin-left:4px;' }, { default: () => '设置分组' })
+      }))
+      btns.push(h(NButton, { size: 'tiny', type: 'error', tertiary: true, style: 'margin-left:4px;', onClick: () => removeMonitor(row['股票代码'], row['股票名称'], row.key) }, { default: () => '取消关注' }))
+      return h('div', { style: 'display:flex; flex-wrap:wrap; gap:4px; align-items:center;' }, btns)
+    }
+  }
+]
+
 const showPopover = ref(false)
 // 拖拽相关变量
 const dragSourceIndex = ref(null)
@@ -319,37 +514,6 @@ function handleTabDragEnd(event) {
 }
 
 onBeforeMount(() => {
-  // --- Web 模式：用 wails-bridge.js HTTP API ---
-  if (isWebMode.value) {
-    Bridge.GetGroupList().then(result => {
-      groupList.value = result || []
-    }).catch(err => { console.error("GetGroupList web error:", err) })
-    Bridge.GetStockList("").then(result => {
-      stockList.value = result || []
-      options.value = (result || []).map(item => {
-        return { label: item.name + " - " + item.ts_code, value: item.ts_code }
-      })
-    }).catch(err => { console.error("GetStockList web error:", err) })
-    Bridge.GetConfig().then(result => {
-      if (result) {
-        if (result.openAiEnable) data.openAiEnable = true
-        if (result.enableDanmu) data.enableDanmu = true
-        if (result.darkTheme) data.darkTheme = true
-      }
-    }).catch(err => { console.error("GetConfig web error:", err) })
-    Bridge.GetPromptTemplates("", "").then(res => {
-      promptTemplates.value = res || []
-      sysPromptOptions.value = (res || []).filter(item => item.type === '模型系统Prompt')
-      userPromptOptions.value = (res || []).filter(item => item.type === '模型用户Prompt')
-    }).catch(err => { console.error("GetPromptTemplates web error:", err) })
-    Bridge.GetAiConfigs().then(res => {
-      aiConfigs.value = res || []
-      if (res && res.length > 0) data.aiConfigId = res[0].ID
-    }).catch(err => { console.error("GetAiConfigs web error:", err) })
-    return  // Web 模式不注册 Wails Events
-  }
-
-  // --- 桌面端：用 Wails 原生绑定 ---
   GetGroupList().then(result => {
     groupList.value = result
     const sorts = result.map(item => item.sort);
@@ -363,6 +527,8 @@ onBeforeMount(() => {
       }
     }
   }).catch(err => { console.error("GetGroupList error:", err) })
+  // 加载全量分组归属，用于「全部」标签页表格的分组列
+  refreshCodeToGroups()
   GetStockList("").then(result => {
     stockList.value = result
     options.value = result.map(item => {
@@ -597,33 +763,6 @@ onMounted(() => {
     initDraggableTabs();
   });
 
-  // --- Web 模式：用 wails-bridge.js HTTP API ---
-  if (isWebMode.value) {
-    Bridge.GetFollowList(currentGroupId.value).then(result => {
-      followList.value = result || []
-      for (const followedStock of (result || [])) {
-        if (followedStock.StockCode.startsWith("us")) {
-          followedStock.StockCode = "gb_" + followedStock.StockCode.replace("us", "").toLowerCase()
-        }
-        if (!stocks.value.includes(followedStock.StockCode)) {
-          stocks.value.push(followedStock.StockCode)
-        }
-        Bridge.Greet(followedStock.StockCode).then(result => {
-          updateData(result)
-        })
-      }
-      message.destroyAll()
-    }).catch(err => { console.error("GetFollowList web error:", err) })
-    Bridge.GetVersionInfo().then((res) => {
-      if (res) {
-        icon.value = res.icon
-        refreshEffectiveVip()
-      }
-    }).catch(err => { console.error("GetVersionInfo web error:", err) })
-    return  // Web 模式不创建弹幕 WebSocket
-  }
-
-  // --- 桌面端：用 Wails 原生绑定 ---
   message.loading("Loading...")
   GetFollowList(currentGroupId.value).then(result => {
 
@@ -749,16 +888,6 @@ onBeforeUnmount(() => {
 
   cleanupDraggableTabs()
 
-  // 释放 ECharts 实例，防止内存泄漏
-  if (fsChartInstance.value) {
-    fsChartInstance.value.dispose()
-    fsChartInstance.value = null
-  }
-  if (kLineChartInstance.value) {
-    kLineChartInstance.value.dispose()
-    kLineChartInstance.value = null
-  }
-
 })
 
 //判断是否是A股交易时间
@@ -798,33 +927,112 @@ function fetchGroupList() {
   })
 }
 
-function AddStock() {
-  if (!data?.code) {
-    message.error("请输入有效股票代码");
-    return;
-  }
-  if (!stocks.value.includes(data.code)) {
-    Follow(data.code).then(result => {
-      if (result === "关注成功") {
-        if (data.code.startsWith("us")) {
-          data.code = "gb_" + data.code.replace("us", "").toLowerCase()
+// 刷新「股票代码 -> 所属分组名/ID 数组」映射，供「全部」标签页表格分组列与分组筛选使用。
+// 一次拉取全量 group_stock_info（含 GroupInfo），前端按 stockCode 聚合。
+function refreshCodeToGroups() {
+  GetAllGroupStocks().then(list => {
+    const nameMap = new Map()
+    const idMap = new Map()
+    if (Array.isArray(list)) {
+      for (const gs of list) {
+        const code = gs.stockCode
+        if (!code) continue
+        const gname = gs.groupInfo && gs.groupInfo.name ? gs.groupInfo.name : ''
+        const gid = gs.groupInfo && gs.groupInfo.ID ? gs.groupInfo.ID : 0
+        if (gname && gid) {
+          if (!nameMap.has(code)) nameMap.set(code, [])
+          nameMap.get(code).push({ id: gid, name: gname })
         }
-        stocks.value.push(data.code)
-        message.success(result)
-        GetFollowList(currentGroupId.value).then(result => {
-          followList.value = result
-        }).catch(err => { console.error("GetFollowList error:", err) })
-        monitor();
-      } else {
-        message.error(result)
+        if (gid) {
+          if (!idMap.has(code)) idMap.set(code, [])
+          idMap.get(code).push(gid)
+        }
       }
-    }).catch(err => {
-      console.error("Follow error:", err)
-      message.error("关注失败：" + (err?.message || err || "网络错误"))
-    })
-  } else {
-    message.error("已经关注了")
+    }
+    codeToGroupNames.value = nameMap
+    codeToGroupIds.value = idMap
+  }).catch(err => { console.error("GetAllGroupStocks error:", err) })
+}
+
+// 关注时的分组选择下拉选项（参考形态选股 allStockList.vue）
+const followGroupOptions = computed(() => {
+  const opts = [{label: '默认（不分组）', key: 0}]
+  groupList.value.forEach(g => opts.push({label: g.name, key: g.ID}))
+  opts.push({type: 'divider', key: 'divider'})
+  opts.push({label: '新建分组', key: 'new'})
+  return opts
+})
+
+// 「设置分组」下拉选项：分组列表 + 分隔符 + 新建分组（与关注下拉一致，复用 new 流程）
+const setGroupOptions = computed(() => {
+  const opts = []
+  groupList.value.forEach(g => opts.push({label: g.name, key: g.ID}))
+  opts.push({type: 'divider', key: 'divider'})
+  opts.push({label: '新建分组', key: 'new'})
+  return opts
+})
+
+// 新建分组后待关注的股票（null 表示非关注流程打开的分组弹窗）
+const pendingFollow = ref(null)
+// 「设置分组」时新建分组后待加入的股票（null 表示非设置分组流程打开的分组弹窗）
+const pendingAddStockGroup = ref(null)
+
+function groupNameById(id) {
+  const g = groupList.value.find(item => item.ID === id)
+  return g ? g.name : ''
+}
+
+function handleFollowSelect(key) {
+  if (key === 'new') {
+    if (!data?.code) {
+      message.error("请输入有效股票代码")
+      showPopover.value = true
+      return
+    }
+    pendingFollow.value = {code: data.code, name: data.name}
+    addTabModel.value = {name: '', sort: 1}
+    addTabPane.value = true
+    return
   }
+  doFollowStock(Number(key))
+}
+
+// 关注并加入分组（groupId=0 表示不分组），参考形态选股 doFollow
+function doFollowStock(groupId) {
+  if (!data?.code) {
+    message.error("请输入有效股票代码")
+    showPopover.value = true
+    return
+  }
+  if (stocks.value.includes(data.code)) {
+    message.error("已经关注了")
+    return
+  }
+  Follow(data.code).then(result => {
+    if (result === "关注成功") {
+      // 后端 Follow 把 us 前缀归一化为 gb_，前端 stocks 数组需同步
+      if (data.code.startsWith("us")) {
+        data.code = "gb_" + data.code.replace("us", "").toLowerCase()
+      }
+      stocks.value.push(data.code)
+      message.success(groupId > 0 ? `已关注，并加入分组「${groupNameById(groupId)}」` : '关注成功')
+      // 加入分组（code 用 gb_ 格式，与后端 followed_stock.stock_code 一致）
+      if (groupId > 0) {
+        AddStockGroup(groupId, data.code).then(() => {
+          GetGroupList().then(gList => { groupList.value = gList })
+          // 刷新「全部」标签页表格的分组列映射
+          refreshCodeToGroups()
+          if (currentGroupId.value === groupId) {
+            updateTab(currentGroupId.value)
+          }
+        }).catch(err => message.error('加入分组失败: ' + (err?.message || err)))
+      }
+      GetFollowList(currentGroupId.value).then(result => { followList.value = result })
+      monitor()
+    } else {
+      message.error(result)
+    }
+  }).catch(err => message.error('关注失败: ' + (err?.message || err)))
 }
 
 
@@ -850,6 +1058,10 @@ function SendDanmu() {
   //console.log("SendDanmu-readyState", ws.value.readyState)
   ws.value.send(data.name)
 }
+
+// 在线搜索防抖（用于场内 ETF 等本地缓存未覆盖的标的）
+let stockSearchTimer = null
+let stockSearchSeq = 0
 
 function getStockList(value) {
 
@@ -877,6 +1089,26 @@ function getStockList(value) {
     blinkBorder(findId)
   }
 
+  // 非空关键字时，防抖调用后端在线搜索（含场内 ETF：本地 FundBasic 缺失时会在线拉取），
+  // 合并本地 stockList 未覆盖的结果，使 513310 等场内基金可被搜到并关注
+  if (stockSearchTimer) clearTimeout(stockSearchTimer)
+  if (!value) return
+  const seq = ++stockSearchSeq
+  stockSearchTimer = setTimeout(() => {
+    GetStockList(value).then(res => {
+      if (seq !== stockSearchSeq || !res || !res.length) return
+      const existing = new Set(options.value.map(o => o.value))
+      const extra = []
+      for (const item of res) {
+        if (item.ts_code && !existing.has(item.ts_code)) {
+          extra.push({ label: (item.name || '') + " - " + item.ts_code, value: item.ts_code })
+          existing.add(item.ts_code)
+        }
+        if (extra.length >= 20) break
+      }
+      if (extra.length) options.value = options.value.concat(extra)
+    }).catch(() => {})
+  }, 300)
 
 }
 
@@ -940,15 +1172,24 @@ async function updateData(result) {
     checkPriceLineAlerts(result)
   }
 
-  // result.key=result.sort
-  results.value = Object.fromEntries(
-      Object.entries(results.value).filter(
-          ([key]) => !key.includes(result["股票代码"])
-      ));
-
-  result.key = GetSortKey(result.sort, result["股票代码"])
+  // 行情系高频推送，避免整体重建 results 触发全卡片重渲染：
+  // 只移除同一股票（sort 变化导致 key 变化时）的旧条目，再写入新条目。
+  const _stockCode = result["股票代码"]
+  result.key = GetSortKey(result.sort, _stockCode)
+  let _prev = null
+  for (const oldKey in results.value) {
+    const old = results.value[oldKey]
+    if (old && old["股票代码"] === _stockCode) {
+      _prev = old
+      if (oldKey !== result.key) delete results.value[oldKey]
+      break
+    }
+  }
+  // 缓存上一次推送的数值，供 n-number-animation 平滑过渡（替代 from=0 的高频重启动画）
+  result.lastChangePercent = _prev ? _prev.changePercent : 0
+  result.lastProfitAmountToday = _prev ? _prev.profitAmountToday : 0
   results.value[result.key] = result
-  if (!stocks.value.includes(result["股票代码"])) {
+  if (!stocks.value.includes(_stockCode)) {
     delete results.value[result.key]
   }
 }
@@ -1024,38 +1265,47 @@ function search(code, name) {
 }
 
 function handleLongEntryPriceUpdate(newPrice) {
+  console.log('[DEBUG handleLongEntryPriceUpdate] called, newPrice:', newPrice, 'type:', typeof newPrice)
   currentStockTradingPrice.value.entryPrice = newPrice
+  console.log('[DEBUG handleLongEntryPriceUpdate] after assignment, entryPrice:', currentStockTradingPrice.value.entryPrice)
   saveTradingPriceToBackend()
 }
 
 function handleLongStopLossPriceUpdate(newPrice) {
+  console.log('[DEBUG handleLongStopLossPriceUpdate] called, newPrice:', newPrice, 'type:', typeof newPrice)
   currentStockTradingPrice.value.stopLossPrice = newPrice
   saveTradingPriceToBackend()
 }
 
 function handleLongTakeProfitPriceUpdate(newPrice) {
+  console.log('[DEBUG handleLongTakeProfitPriceUpdate] called, newPrice:', newPrice, 'type:', typeof newPrice)
   currentStockTradingPrice.value.takeProfitPrice = newPrice
   saveTradingPriceToBackend()
 }
 
 function handleCostPriceUpdate(newPrice) {
+  console.log('[DEBUG handleCostPriceUpdate] called, newPrice:', newPrice, 'type:', typeof newPrice)
   currentStockTradingPrice.value.costPrice = newPrice
   saveTradingPriceToBackend()
 }
 
 function saveTradingPriceToBackend() {
+  console.log('[DEBUG saveTradingPriceToBackend] called, stockCode:', currentStockTradingPrice.value.stockCode)
   if (!currentStockTradingPrice.value.stockCode) {
+    console.log('[DEBUG saveTradingPriceToBackend] early return - no stockCode')
     return
   }
   const emCode = currentStockTradingPrice.value.stockCode
   const code = fromEastMoneyCode(emCode)
   if (!code) {
+    console.warn('[saveTradingPriceToBackend] 无法转换股票代码:', emCode)
     return
   }
   const entryPrice = Number(currentStockTradingPrice.value.entryPrice) || 0
   const takeProfitPrice = Number(currentStockTradingPrice.value.takeProfitPrice) || 0
   const stopLossPrice = Number(currentStockTradingPrice.value.stopLossPrice) || 0
   const costPrice = Number(currentStockTradingPrice.value.costPrice) || 0
+  console.log('[DEBUG saveTradingPriceToBackend] calling SetTradingPrice with:', code, entryPrice, takeProfitPrice, stopLossPrice, costPrice)
   SetTradingPrice(
     code,
     entryPrice,
@@ -1063,6 +1313,7 @@ function saveTradingPriceToBackend() {
     stopLossPrice,
     costPrice
   ).then(result => {
+    console.log('[DEBUG saveTradingPriceToBackend] SetTradingPrice result:', result)
     if (result === '设置成功') {
       const emCode = currentStockTradingPrice.value.stockCode
       const internalCode = code
@@ -1071,10 +1322,11 @@ function saveTradingPriceToBackend() {
         followItem.EntryPrice = entryPrice
         followItem.TakeProfitPrice = takeProfitPrice
         followItem.StopLossPrice = stopLossPrice
+        console.log('[DEBUG saveTradingPriceToBackend] updated followList item')
       }
     }
   }).catch(err => {
-    console.error('saveTradingPriceToBackend error:', err)
+    console.error('[DEBUG saveTradingPriceToBackend] SetTradingPrice error:', err)
   })
 }
 
@@ -1103,13 +1355,7 @@ function clearFeishi() {
 function showFsChart(code, name) {
   data.name = name
   data.code = code
-  // 修复：销毁旧 ECharts 实例，防止内存泄漏
-  if (fsChartInstance.value) {
-    fsChartInstance.value.dispose()
-    fsChartInstance.value = null
-  }
-  const chart = echarts.init(kLineChartRef2.value)
-  fsChartInstance.value = chart
+  const chart = echarts.init(kLineChartRef2.value);
   GetStockMinutePriceLineData(code, name).then(result => {
     // console.log("GetStockMinutePriceLineData", result)
     const priceData = result.priceData
@@ -1351,10 +1597,6 @@ function showFenshi(code, name, changePercent) {
 }
 
 function handleFeishi() {
-  // 清理旧定时器，防止多次调用重叠
-  if (feishiInterval.value) {
-    clearInterval(feishiInterval.value)
-  }
   showFsChart(data.code, data.name);
   feishiInterval.value = setInterval(() => {
     showFsChart(data.code, data.name);
@@ -1380,13 +1622,7 @@ function calculateMA(dayCount, values) {
 function handleKLine() {
   GetStockKLine(data.code, data.name, 365).then(result => {
     //console.log("GetStockKLine",result)
-    // 修复：销毁旧 ECharts 实例，防止内存泄漏
-    if (kLineChartInstance.value) {
-      kLineChartInstance.value.dispose()
-      kLineChartInstance.value = null
-    }
     const chart = echarts.init(kLineChartRef.value);
-    kLineChartInstance.value = chart
     const categoryData = [];
     const values = [];
     const volumns = [];
@@ -2045,7 +2281,7 @@ function aiReCheckStock(stock, stockCode) {
 
 function aiCheckStock(stock, stockCode) {
   GetAIResponseResult(stockCode).then(result => {
-    if (result && result.content) {
+    if (result.content) {
       data.modelName = result.modelName
       data.chatId = result.chatId
       data.question = result.question
@@ -2063,8 +2299,18 @@ function aiCheckStock(stock, stockCode) {
       const seconds = String(date.getSeconds()).padStart(2, '0');
       data.time = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
     } else {
-      // 无缓存结果，自动触发新分析（使用 aiReCheckStock，自带loading/超时/错误处理）
-      aiReCheckStock(stock, stockCode)
+      data.modelName = ""
+      data.question = ""
+      data.airesult = ""
+      data.time = ""
+      data.name = stock
+      data.code = stockCode
+      data.loading = false
+      modalShow4.value = true
+      // message.loading("ai检测中...", {
+      //   duration: 0,
+      // })
+      // NewChatStream(stock, stockCode, "", data.sysPromptId)
     }
   })
 }
@@ -2306,23 +2552,116 @@ function saveTabPane() {
   AddGroup(addTabModel.value).then(result => {
     message.info(result)
     addTabPane.value = false
-    GetGroupList().then(result => {
-      groupList.value = result
+    GetGroupList().then(gList => {
+      groupList.value = gList
+      // 通知 App.vue 菜单栏立即刷新分组子项
+      EventsEmit("groupListChanged")
+      // 若来自关注流程的新建分组，创建成功后执行关注+加分组
+      if (pendingFollow.value) {
+        const created = gList.find(g => g.name === addTabModel.value.name)
+        const pf = pendingFollow.value
+        pendingFollow.value = null
+        if (created) {
+          data.code = pf.code
+          data.name = pf.name
+          doFollowStock(created.ID)
+        }
+      }
+      // 若来自「设置分组」流程的新建分组，创建成功后把股票加入新分组
+      if (pendingAddStockGroup.value) {
+        const created = gList.find(g => g.name === addTabModel.value.name)
+        const ps = pendingAddStockGroup.value
+        pendingAddStockGroup.value = null
+        if (created) {
+          AddStockGroupInfo(created.ID, ps.code, ps.name)
+        }
+      }
     })
   })
 }
 
-function AddStockGroupInfo(groupId, code, name) {
-  if (code.startsWith("gb_")) {
-    code = "us" + code.replace("gb_", "").toLowerCase()
+// 修改分组名称
+const renameTabPane = ref(false)
+const renameModel = reactive({id: 0, name: ''})
+
+function openRenameGroup() {
+  const g = groupList.value.find(item => item.ID === currentGroupId.value)
+  if (!g) {
+    message.warning('请先选择一个分组')
+    return
   }
+  renameModel.id = g.ID
+  renameModel.name = g.name
+  renameTabPane.value = true
+}
+
+function saveRenameGroup() {
+  const newName = renameModel.name.trim()
+  if (!newName) {
+    message.warning('请输入分组名称')
+    return
+  }
+  UpdateGroup(renameModel.id, newName).then(result => {
+    message.info(result)
+    renameTabPane.value = false
+    GetGroupList().then(gList => {
+      groupList.value = gList
+      // 通知 App.vue 菜单栏立即刷新分组子项
+      EventsEmit("groupListChanged")
+    })
+  }).catch(err => message.error('修改失败: ' + (err?.message || err)))
+}
+
+function AddStockGroupInfo(groupId, code, name) {
+  // 注意：不要把 gb_ 前缀转成 us。后端 Follow 已把美股存为 gb_aapl（us→gb_ + ToLower），
+  // AddStockGroup 原样写入 group_stock_info.stock_code，GetFollowList(groupId) 再用该字段
+  // IN 匹配 followed_stock.stock_code。若转成 usaapl 会导致美股分组关联失败（卡片上看不到）。
   AddStockGroup(groupId, code).then(result => {
     message.info(result)
-    GetGroupList().then(result => {
-      groupList.value = result
+    GetGroupList().then(gList => {
+      groupList.value = gList
     })
+    // 刷新「全部」标签页表格的分组列映射
+    refreshCodeToGroups()
+    // 当前正处于目标分组时，刷新该分组，让新成员立即可见
+    if (currentGroupId.value === groupId) {
+      updateTab(currentGroupId.value)
+    }
+  }).catch(err => {
+    message.error('设置分组失败: ' + (err?.message || err))
   })
+}
 
+// 「设置分组」下拉的统一选中处理：new → 打开新建分组弹窗（创建后把股票加入）；普通项 → 切换（未所属加入 / 已所属移出）
+function handleSetGroupSelect(groupId, stockCode, stockName) {
+  if (groupId === 'new') {
+    pendingAddStockGroup.value = {code: stockCode, name: stockName}
+    addTabModel.value = {name: '', sort: 1}
+    addTabPane.value = true
+    return
+  }
+  const belongSet = new Set(codeToGroupIds.value.get(stockCode) || [])
+  if (belongSet.has(groupId)) {
+    // 已所属该分组 → 移出（不切换页签，仅刷新映射）
+    RemoveStockGroup(stockCode, stockName, groupId).then(result => {
+      message.info(result)
+      refreshCodeToGroups()
+    })
+  } else {
+    AddStockGroupInfo(groupId, stockCode, stockName)
+  }
+}
+
+// 「设置分组」下拉的统一 option 渲染：new 项蓝色加 ➕；普通项右侧显示绿色 ✓（若已所属）
+function renderSetGroupLabel(option, stockCode) {
+  if (option.key === 'new') {
+    return h('div', {style: 'color:#2080f0; font-weight:bold;'}, '➕ 新建分组')
+  }
+  const belongSet = new Set(codeToGroupIds.value.get(stockCode) || [])
+  return h('div', {style: 'display:flex; justify-content:space-between; align-items:center; min-width:120px;'}, [
+    h('span', null, option.label),
+    belongSet.has(option.key) ? h('span', {style: 'color:#18a058; margin-left:8px; font-weight:bold;'}, '✓') : null
+  ])
 }
 
 function updateTab(name) {
@@ -2357,9 +2696,15 @@ function delTab(groupId) {
     onPositiveClick: () => {
       RemoveGroup(Number(groupId)).then(result => {
         message.info(result)
+        // 若「全部」标签页正在按被删分组筛选，重置为「全部分组」
+        if (tableGroupFilter.value === Number(groupId)) tableGroupFilter.value = 0
         GetGroupList().then(result => {
           groupList.value = result
+          // 通知 App.vue 菜单栏立即刷新分组子项
+          EventsEmit("groupListChanged")
         })
+        // 分组删除后成员关系变化，刷新「全部」标签页表格的分组列映射
+        refreshCodeToGroups()
       })
     }
   })
@@ -2368,6 +2713,8 @@ function delTab(groupId) {
 function delStockGroup(code, name, groupId) {
   RemoveStockGroup(code, name, groupId).then(result => {
     updateTab(groupId)
+    // 刷新「全部」标签页表格的分组列映射
+    refreshCodeToGroups()
     message.info(result)
   })
 }
@@ -2411,159 +2758,42 @@ watch(modalShow6, (newVal) => {
       </n-gradient-text>
     </template>
   </vue-danmaku>
-  <n-tabs type="card" style="--wails-draggable:no-drag" animated addable :data-currentGroupId="currentGroupId"
+  <n-tabs type="card" style="--wails-draggable:no-drag"
+          :style="{ '--stock-tab-nav-bg': tabNavBgColor }"
+          animated addable :data-currentGroupId="currentGroupId"
           :value="String(currentGroupId)" @add="addTab" @update:value="updateTab" placement="top" @close="(key)=>{delTab(key)}">
 
+    <template #suffix>
+      <n-button v-if="currentGroupId>0" size="small" tertiary type="primary" @click="openRenameGroup" style="margin-left:4px;">
+        <n-icon :component="CreateOutline"/>&nbsp;重命名
+      </n-button>
+    </template>
+
     <n-tab-pane closable name="0" :tab="'全部'">
-      <n-grid :x-gap="8" :cols="3" :y-gap="8">
-        <n-gi :id="result['股票代码']+'_gi'" v-for="result in sortedResults" style="margin-left: 2px;">
-          <n-card :data-sort="result.sort" :id="result['股票代码']" :data-code="result['股票代码']" :bordered="true"
-                  :title="result['股票名称']" :closable="false"
-                  @close="removeMonitor(result['股票代码'],result['股票名称'],result.key)">
-            <n-grid :cols="1" :y-gap="6">
-              <n-gi>
-                <n-text :type="result.type">
-                  <n-number-animation :duration="1000" :precision="2" :from="result['上次当前价格']"
-                                      :to="Number(result['当前价格'])"/>
-                  <n-tag size="small" :type="result.type" :bordered="false" v-if="result['盘前盘后']>0">
-                    ({{ result['盘前盘后'] }} {{ result['盘前盘后涨跌幅'] }}%)
-                  </n-tag>
-                </n-text>
-                <n-text style="padding-left: 10px;" :type="result.type">
-                  <n-number-animation :duration="1000" :precision="3" :from="0" :to="result.changePercent"/>
-                  %
-                </n-text>&nbsp;
-                <n-text size="small" v-if="result.costVolume>0" :type="result.type">
-                  <n-number-animation :duration="1000" :precision="2" :from="0" :to="result.profitAmountToday"/>
-                </n-text>
-              </n-gi>
-            </n-grid>
-            <n-grid :cols="2" :y-gap="4" :x-gap="4">
-              <n-gi>
-                <n-text :type="'info'">{{ "最高 " + result["今日最高价"] + " " + result.highRate }}%</n-text>
-              </n-gi>
-              <n-gi>
-                <n-text :type="'info'">{{ "最低 " + result["今日最低价"] + " " + result.lowRate }}%</n-text>
-              </n-gi>
-              <n-gi>
-                <n-text :type="'info'">{{ "昨收 " + result["昨日收盘价"] }}</n-text>
-              </n-gi>
-              <n-gi>
-                <n-text :type="'info'">{{ "今开 " + result["今日开盘价"] }}</n-text>
-              </n-gi>
-            </n-grid>
-            <n-collapse accordion v-if="result['买一报价']>0">
-              <n-collapse-item title="盘口" name="1" v-if="result['买一报价']>0">
-                <template #header-extra>
-                  <n-flex justify="space-between">
-                    <n-text :type="'info'">{{ "买一 " + result["买一报价"] + '(' + result["买一申报"] + ")" }}</n-text>
-                    <n-text :type="'info'">{{ "卖一 " + result["卖一报价"] + '(' + result["卖一申报"] + ")" }}</n-text>
-                  </n-flex>
-                </template>
-                <n-grid :cols="2" :y-gap="4" :x-gap="4">
-                  <n-gi v-if="result['买一报价']>0">
-                    <n-text :type="'info'">{{ "买一 " + result["买一报价"] + '(' + result["买一申报"] + ")" }}</n-text>
-                  </n-gi>
-                  <n-gi v-if="result['卖一报价']>0">
-                    <n-text :type="'info'">{{ "卖一 " + result["卖一报价"] + '(' + result["卖一申报"] + ")" }}</n-text>
-                  </n-gi>
-
-                  <n-gi v-if="result['买二报价']>0">
-                    <n-text :type="'info'">{{ "买二 " + result["买二报价"] + '(' + result["买二申报"] + ")" }}</n-text>
-                  </n-gi>
-                  <n-gi v-if="result['卖二报价']>0">
-                    <n-text :type="'info'">{{ "卖二 " + result["卖二报价"] + '(' + result["卖二申报"] + ")" }}</n-text>
-                  </n-gi>
-
-                  <n-gi v-if="result['买三报价']>0">
-                    <n-text :type="'info'">{{ "买三 " + result["买三报价"] + '(' + result["买三申报"] + ")" }}</n-text>
-                  </n-gi>
-                  <n-gi v-if="result['卖三报价']>0">
-                    <n-text :type="'info'">{{ "买三 " + result["卖三报价"] + '(' + result["卖三申报"] + ")" }}</n-text>
-                  </n-gi>
-
-                  <n-gi v-if="result['买四报价']>0">
-                    <n-text :type="'info'">{{ "买四 " + result["买四报价"] + '(' + result["买四申报"] + ")" }}</n-text>
-                  </n-gi>
-                  <n-gi v-if="result['卖四报价']>0">
-                    <n-text :type="'info'">{{ "卖四 " + result["卖四报价"] + '(' + result["卖四申报"] + ")" }}</n-text>
-                  </n-gi>
-
-                  <n-gi v-if="result['买五报价']>0">
-                    <n-text :type="'info'">{{ "买五 " + result["买五报价"] + '(' + result["买五申报"] + ")" }}</n-text>
-                  </n-gi>
-                  <n-gi v-if="result['卖五报价']>0">
-                    <n-text :type="'info'">{{ "卖五 " + result["卖五报价"] + '(' + result["卖五申报"] + ")" }}</n-text>
-                  </n-gi>
-                </n-grid>
-              </n-collapse-item>
-            </n-collapse>
-            <template #header-extra>
-
-              <n-tag size="small" :bordered="false">{{ result['股票代码'] }}</n-tag>&nbsp;
-              <n-button size="tiny" secondary type="primary"
-                        @click="removeMonitor(result['股票代码'],result['股票名称'],result.key)">
-                取消关注
-              </n-button>&nbsp;
-
-              <n-button size="tiny" v-if="data.openAiEnable" secondary type="warning"
-                        @click="aiCheckStock(result['股票名称'],result['股票代码'])">
-                AI分析
-              </n-button>
-            </template>
-            <template #footer>
-              <n-flex vertical :size="8">
-                <n-flex justify="center">
-                  <n-text :type="'info'">{{ result["日期"] + " " + result["时间"] }}</n-text>
-                  <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
-                  <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
-                    {{
-                      "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
-                    }}
-                  </n-tag>
-                </n-flex>
-                <n-flex justify="center">
-                  <n-button size="tiny" type="primary" secondary
-                            @click="showLightweightKline(result['股票代码'],result['股票名称'])">
-                    多周期K线
-                  </n-button>
-                </n-flex>
-              </n-flex>
-            </template>
-            <template #action>
-              <n-flex justify="left">
-                <n-button size="tiny" type="warning" @click="setStock(result['股票代码'],result['股票名称'])"> 成本
-                </n-button>
-                <n-button size="tiny" type="error"
-                          @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)"> 分时
-                </n-button>
-                <n-button size="tiny" type="error" @click="showK(result['股票代码'],result['股票名称'])"> 日K</n-button>
-                <n-button size="tiny" type="error" v-if="result['买一报价']>0"
-                          @click="showMoney(result['股票代码'],result['股票名称'])"> 资金
-                </n-button>
-                <n-button size="tiny" type="success" @click="search(result['股票代码'],result['股票名称'])"> 详情
-                </n-button>
-                <n-button v-if="result['买一报价']>0" size="tiny" type="success"
-                          @click="searchNotice(result['股票代码'])"> 公告
-                </n-button>
-                <n-button v-if="result['买一报价']>0" size="tiny" type="success"
-                          @click="searchStockReport(result['股票代码'])"> 研报
-                </n-button>
-                <n-flex justify="right">
-                  <n-dropdown trigger="click" :options="groupList" key-field="ID" label-field="name"
-                              @select="(groupId) => AddStockGroupInfo(groupId,result['股票代码'],result['股票名称'])">
-                    <n-button type="warning" size="tiny">设置分组</n-button>
-                  </n-dropdown>
-                </n-flex>
-              </n-flex>
-            </template>
-          </n-card>
-        </n-gi>
-      </n-grid>
+      <div style="margin: 8px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+          <n-input v-model:value="tableSearchKeyword" clearable placeholder="搜索股票名称/代码"
+                   style="width:280px;" />
+          <n-select v-model:value="tableGroupFilter" :options="groupFilterOptions"
+                    placeholder="全部分组" style="width:180px;" filterable
+                    :consistent-menu-width="false" />
+          <n-text depth="3" style="font-size:12px;">共 {{ allTableData.length }} 只</n-text>
+        </div>
+        <n-data-table
+          :columns="allTableColumns"
+          :data="allTableData"
+          :pagination="allTablePagination"
+          :row-key="(row) => row.key"
+          size="small"
+          striped
+          flex-height
+          style="height: calc(100vh - 190px);"
+        />
+      </div>
     </n-tab-pane>
     <n-tab-pane closable v-for="group in groupList" :group-id="group.ID" :name="String(group.ID)" :tab="group.name">
       <n-grid :x-gap="8" :cols="3" :y-gap="8">
-        <n-gi :id="result['股票代码']+'_gi'" v-for="result in groupResults" style="margin-left: 2px;">
+        <n-gi :id="result['股票代码']+'_gi'" v-for="result in groupResults" :key="result.key" style="margin-left: 2px;">
           <n-card :data-sort="result.sort" :id="result['股票代码']" :data-code="result['股票代码']" :bordered="true"
                   :title="result['股票名称']" :closable="false"
                   @close="removeMonitor(result['股票代码'],result['股票名称'],result.key)">
@@ -2577,11 +2807,11 @@ watch(modalShow6, (newVal) => {
                   </n-tag>
                 </n-text>
                 <n-text style="padding-left: 10px;" :type="result.type">
-                  <n-number-animation :duration="1000" :precision="3" :from="0" :to="result.changePercent"/>
+                  <n-number-animation :duration="1000" :precision="3" :from="result.lastChangePercent" :to="result.changePercent"/>
                   %
                 </n-text>&nbsp;
                 <n-text size="small" v-if="result.costVolume>0" :type="result.type">
-                  <n-number-animation :duration="1000" :precision="2" :from="0" :to="result.profitAmountToday"/>
+                  <n-number-animation :duration="1000" :precision="2" :from="result.lastProfitAmountToday" :to="result.profitAmountToday"/>
                 </n-text>
               </n-gi>
               <n-gi :span="6">
@@ -2704,8 +2934,10 @@ watch(modalShow6, (newVal) => {
                           @click="searchStockReport(result['股票代码'])"> 研报
                 </n-button>
                 <n-flex justify="right">
-                  <n-dropdown trigger="click" :options="groupList" key-field="ID" label-field="name"
-                              @select="(groupId) => AddStockGroupInfo(groupId,result['股票代码'],result['股票名称'])">
+                  <n-dropdown trigger="click" :options="setGroupOptions"
+                              :menu-props="() => ({ style: 'max-height:300px; overflow-y:auto;' })"
+                              :render-label="(option) => renderSetGroupLabel(option, result['股票代码'])"
+                              @select="(groupId) => handleSetGroupSelect(groupId, result['股票代码'], result['股票名称'])">
                     <n-button type="warning" size="tiny">设置分组</n-button>
                   </n-dropdown>
                 </n-flex>
@@ -2717,7 +2949,7 @@ watch(modalShow6, (newVal) => {
     </n-tab-pane>
   </n-tabs>
 
-  <div class="stock-floating-search">
+  <div style="position: fixed;bottom: 18px;right:5px;z-index: 10;width: 400px">
     <!--    <n-card :bordered="false">-->
     <n-input-group>
       <!--        <n-button  type="error" @click="addBTN=!addBTN" > <n-icon :component="Search"/>&nbsp;<n-text  v-if="addBTN">隐藏</n-text></n-button>-->
@@ -2732,9 +2964,11 @@ watch(modalShow6, (newVal) => {
 
       <n-popover trigger="manual" :show="showPopover">
         <template #trigger>
-          <n-button type="primary" @click="AddStock" v-if="addBTN">
-            <n-icon :component="Add"/> &nbsp;关注
-          </n-button>
+          <n-dropdown trigger="click" :options="followGroupOptions" :menu-props="() => ({ style: 'max-height:300px; overflow-y:auto;' })" @select="handleFollowSelect" placement="top">
+            <n-button type="primary" v-if="addBTN">
+              <n-icon :component="Add"/> &nbsp;关注
+            </n-button>
+          </n-dropdown>
         </template>
         <span>输入股票名称/代码关键词开始吧~~~</span>
       </n-popover>
@@ -2856,6 +3090,24 @@ watch(modalShow6, (newVal) => {
           保存
         </n-button>
         <n-button type="warning" @click="addTabPane=false">
+          取消
+        </n-button>
+      </n-flex>
+    </template>
+  </n-modal>
+  <n-modal v-model:show="renameTabPane" title="修改分组名称" style="width: 400px;text-align: left" :preset="'card'">
+    <n-form :model="renameModel" size="medium" label-placement="left">
+      <n-form-item-gi label="分组名称:" path="name" :span="5">
+        <n-input v-model:value="renameModel.name" style="width: 100%" placeholder="请输入新的分组名称"
+                 @keyup.enter="saveRenameGroup"/>
+      </n-form-item-gi>
+    </n-form>
+    <template #footer>
+      <n-flex justify="end">
+        <n-button type="primary" @click="saveRenameGroup">
+          保存
+        </n-button>
+        <n-button type="warning" @click="renameTabPane=false">
           取消
         </n-button>
       </n-flex>
@@ -2985,23 +3237,6 @@ watch(modalShow6, (newVal) => {
 </template>
 
 <style scoped>
-.stock-floating-search {
-  position: fixed;
-  bottom: 18px;
-  right: 5px;
-  z-index: 10;
-  width: min(400px, calc(100vw - 16px));
-  max-width: calc(100vw - 16px);
-}
-
-@media (max-width: 768px) {
-  .stock-floating-search {
-    right: 8px;
-    bottom: 12px;
-    width: calc(100vw - 16px);
-  }
-}
-
 .md-editor-preview h3 {
   text-align: center !important;
 }
@@ -3032,6 +3267,14 @@ watch(modalShow6, (newVal) => {
 :deep(.n-tabs-nav .n-tabs-tab) {
   position: relative;
   cursor: pointer;
+}
+
+/* 顶部页签固定吸顶，不随内容滚动 */
+:deep(.n-tabs-nav) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--stock-tab-nav-bg, #ffffff);
 }
 
 /* 可拖拽标签的样式 */

@@ -7,6 +7,7 @@ import {
   GetConfig,
   GetPromptTemplates,
   SendDingDingMessageByType,
+  SendFeishuMessageByType,
   UpdateConfig,
   CheckSponsorCode,
   FetchAiModels,
@@ -27,6 +28,11 @@ const formValue = ref({
   dingPush: {
     enable: false,
     dingRobot: ''
+  },
+  feishuPush: {
+    enable: false,
+    feishuRobot: '',
+    feishuSecret: ''
   },
   localPush: {
     enable: true,
@@ -208,6 +214,11 @@ onMounted(() => {
       enable: res.dingPushEnable,
       dingRobot: res.dingRobot
     }
+    formValue.value.feishuPush = {
+      enable: res.feishuPushEnable,
+      feishuRobot: res.feishuRobot,
+      feishuSecret: res.feishuSecret
+    }
     formValue.value.localPush = {
       enable: res.localPushEnable,
     }
@@ -258,6 +269,9 @@ function saveConfig() {
     ID: formValue.value.ID,
     dingPushEnable: formValue.value.dingPush.enable,
     dingRobot: formValue.value.dingPush.dingRobot,
+    feishuPushEnable: formValue.value.feishuPush.enable,
+    feishuRobot: formValue.value.feishuPush.feishuRobot,
+    feishuSecret: formValue.value.feishuPush.feishuSecret,
     localPushEnable: formValue.value.localPush.enable,
     updateBasicInfoOnStart: formValue.value.updateBasicInfoOnStart,
     refreshInterval: formValue.value.refreshInterval,
@@ -325,6 +339,33 @@ function sendTestNotice() {
       ' }'
 
   SendDingDingMessageByType(msg, "test-" + new Date().getTime(), 1).then(res => {
+    message.info(res)
+  })
+}
+
+function sendFeishuTestNotice() {
+  let markdown = "### go-stock 飞书测试\n" + new Date()
+  let msg = JSON.stringify({
+    msg_type: "interactive",
+    card: {
+      schema: "2.0",
+      header: {
+        title: {
+          tag: "plain_text",
+          content: "go-stock 飞书测试 " + new Date()
+        }
+      },
+      body: {
+        elements: [
+          {
+            tag: "markdown",
+            content: '<at id=all></at>\n' + markdown
+          }
+        ]
+      }
+    }
+  })
+  SendFeishuMessageByType(msg, "test-feishu-" + new Date().getTime(), 1).then(res => {
     message.info(res)
   })
 }
@@ -627,6 +668,19 @@ function deletePrompt(ID) {
                             path="dingPush.dingRobot">
               <n-input placeholder="请输入钉钉机器人接口地址" v-model:value="formValue.dingPush.dingRobot"/>
               <n-button type="primary" @click="sendTestNotice">发送测试通知</n-button>
+            </n-form-item-gi>
+
+            <n-form-item-gi :span="3" label="飞书推送：" path="feishuPush.enable">
+              <n-switch v-model:value="formValue.feishuPush.enable"/>
+            </n-form-item-gi>
+            <n-form-item-gi :span="22" v-if="formValue.feishuPush.enable" label="飞书机器人Webhook："
+                            path="feishuPush.feishuRobot">
+              <n-input placeholder="请输入飞书机器人Webhook地址" v-model:value="formValue.feishuPush.feishuRobot"/>
+            </n-form-item-gi>
+            <n-form-item-gi :span="22" v-if="formValue.feishuPush.enable" label="飞书机器人签名密钥："
+                            path="feishuPush.feishuSecret">
+              <n-input placeholder="请输入飞书机器人签名密钥（选填）" v-model:value="formValue.feishuPush.feishuSecret"/>
+              <n-button type="primary" @click="sendFeishuTestNotice">发送飞书测试通知</n-button>
             </n-form-item-gi>
 
           </n-grid>

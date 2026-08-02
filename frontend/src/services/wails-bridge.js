@@ -443,13 +443,12 @@ export function GetStockKLine(code, name, days) {
     });
 }
 
-export function GetStockKLineWithFallback(stockCode, stockName, klt, limit) {
+export function GetStockKLineWithFallback(stockCode, stockName, klt, limit, adjust) {
   if (isWailsMode()) {
-    return window.go.main.App.GetStockKLineWithFallback(stockCode, stockName, klt, limit);
+    return window.go.main.App.GetStockKLineWithFallback(stockCode, stockName, klt, limit, adjust || '');
   }
-  // Web 模式：调用 K 线 API，返回带 source 的结果
   return apiService.client.get(`/stocks/${stockCode}/kline`, {
-    params: { name: stockName, klt, limit },
+    params: { name: stockName, klt, limit, adjust: adjust || '' },
     headers: getAuthHeaders()
   })
     .then(res => {
@@ -462,13 +461,12 @@ export function GetStockKLineWithFallback(stockCode, stockName, klt, limit) {
     });
 }
 
-export function GetStockKLinePageWithFallback(stockCode, stockName, klt, limit, end) {
+export function GetStockKLinePageWithFallback(stockCode, stockName, klt, limit, end, adjust) {
   if (isWailsMode()) {
-    return window.go.main.App.GetStockKLinePageWithFallback(stockCode, stockName, klt, limit, end);
+    return window.go.main.App.GetStockKLinePageWithFallback(stockCode, stockName, klt, limit, end, adjust || '');
   }
-  // Web 模式：分页获取 K 线数据
   return apiService.client.get(`/stocks/${stockCode}/kline/page`, {
-    params: { name: stockName, klt, limit, end },
+    params: { name: stockName, klt, limit, end, adjust: adjust || '' },
     headers: getAuthHeaders()
   })
     .then(res => {
@@ -634,6 +632,24 @@ export function GetGroupStockList(groupId) {
       console.warn('GetGroupStockList web fallback failed:', err.message);
       return [];
     });
+}
+
+export function GetAllGroupStocks() {
+  if (isWailsMode()) {
+    return window.go.main.App.GetAllGroupStocks();
+  }
+  return apiService.client.get('/groups/all-stocks', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || {})
+    .catch(() => ({}));
+}
+
+export function UpdateGroup(group) {
+  if (isWailsMode()) {
+    return window.go.main.App.UpdateGroup(group);
+  }
+  return apiService.client.put(`/groups/${group.id || group.ID}`, group, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '更新成功')
+    .catch(err => err.message || '更新失败');
 }
 
 export function GetUserManual() {
@@ -885,6 +901,15 @@ export function SendDingDingMessage(arg1, arg2) {
     .catch(() => '发送成功');
 }
 
+export function SendFeishuMessageByType(msg, code, type) {
+  if (isWailsMode()) {
+    return window.go.main.App.SendFeishuMessageByType(msg, code, type);
+  }
+  return apiService.client.post('/feishu/message', { message: msg, stockCode: code, msgType: type }, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || '发送成功')
+    .catch(() => '发送失败');
+}
+
 // ========== 版本信息 ==========
 
 export function GetVersionInfo() {
@@ -1097,7 +1122,7 @@ export function CalculateNextRunTimes(arg1, arg2) {
  * Web 模式下：使用 SSE 连接 /api/v1/ai/agent-chat
  * 事件通过 EventsEmit('agent-message') 分发，格式与桌面模式一致
  */
-export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
   if (isWailsMode()) return window.go.main.App.ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 
   // ===== 使用 SSE 管理器替代全局 window._abortAgentStream =====
@@ -1129,6 +1154,7 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
       thinking: arg6 || false,
       agentMode: arg7 || '',
       skillIds: arg8 || [],
+      sessionId: arg9 || '',
     }),
     signal: controller.signal,
   }).then(response => {
@@ -1169,7 +1195,7 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
             EventsEmit('agent-message', parsedData);
           }
         } catch (e) {
-          if (eventType === 'done' || raw === '{}') {
+          if (eventType === 'done' || raw === '{}' || raw === '[DONE]') {
             EventsEmit('agent-message', { content: 'agent-DONE' });
           } else if (raw) {
             EventsEmit('agent-message', { content: raw });
@@ -1562,6 +1588,22 @@ export function GlobalStockIndexes() {
   return apiService.client.get('/market/global-indexes', { headers: getAuthHeaders() })
     .then(res => res.data?.data || {})
     .catch(() => ({}));
+}
+
+export function ListAiAssistantSessions() {
+  if (isWailsMode()) return window.go.main.App.ListAiAssistantSessions ? window.go.main.App.ListAiAssistantSessions() : Promise.resolve([]);
+  // Web 模式：调用后端 API
+  return apiService.client.get('/ai/assistant/sessions', { headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+export function DeleteAiAssistantSession(sessionId) {
+  if (isWailsMode()) return window.go.main.App.DeleteAiAssistantSession ? window.go.main.App.DeleteAiAssistantSession(sessionId) : Promise.resolve('ok');
+  // Web 模式：调用后端 API
+  return apiService.client.delete('/ai/assistant/session/' + sessionId, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => err.message || '删除失败');
 }
 
 export function GetAiAssistantSession(arg1) {

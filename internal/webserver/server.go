@@ -90,6 +90,7 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/stocks/realtime", handlers.GetStockRealTime)
 			protected.GET("/stocks/:code", handlers.GetStockByCode)
 			protected.GET("/stocks/:code/kline", handlers.GetStockKLine)
+			protected.GET("/stocks/:code/kline/page", handlers.GetStockKLinePage)
 			protected.GET("/stocks/:code/minute", handlers.GetStockRealTimePrice)
 			protected.GET("/stocks/search", handlers.SearchStocks)
 
@@ -107,6 +108,8 @@ func (ws *WebServer) initRouter() {
 			// AI助手会话管理
 			protected.GET("/ai/assistant/session", handlers.GetAiAssistantSessionHandler)
 			protected.POST("/ai/assistant/session", handlers.SaveAiAssistantSessionHandler)
+			protected.GET("/ai/assistant/sessions", handlers.ListAiAssistantSessionsHandler)
+			protected.DELETE("/ai/assistant/session/:sessionId", handlers.DeleteAiAssistantSessionHandler)
 
 			protected.GET("/prompts/templates", handlers.GetPromptTemplates)
 			protected.POST("/prompts/templates", handlers.CreatePromptTemplate)
@@ -145,7 +148,9 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/stocks/sort", handlers.SetStockSort)
 
 			protected.GET("/groups", handlers.GetGroupList)
+			protected.GET("/groups/all-stocks", handlers.GetAllGroupStocks)
 			protected.POST("/groups", handlers.AddGroup)
+			protected.PUT("/groups/:id", handlers.UpdateGroup)
 			protected.DELETE("/groups/:id", handlers.RemoveGroup)
 			protected.PUT("/groups/:id/sort", handlers.UpdateGroupSort)
 			protected.GET("/groups/:id/stocks", handlers.GetGroupStockList)

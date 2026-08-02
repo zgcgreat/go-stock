@@ -429,3 +429,67 @@ func RemoveStockGroup(c *gin.Context) {
 		"message": "移除成功",
 	})
 }
+
+// UpdateGroup 更新分组（重命名）
+func UpdateGroup(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+
+	groupIDStr := c.Param("id")
+	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "无效的分组ID",
+		})
+		return
+	}
+
+	var req struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "参数错误",
+		})
+		return
+	}
+
+	result := db.Dao.Model(&data.Group{}).Where("id = ? AND user_id = ?", groupID, userID).Update("name", req.Name)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    1,
+			"message": "更新分组失败",
+		})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"code":    1,
+			"message": "分组不存在或不属于当前用户",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "更新成功",
+	})
+}
+
+// GetAllGroupStocks 获取所有分组股票（含分组信息）
+func GetAllGroupStocks(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+
+	var list []data.GroupStock
+	db.Dao.Where("user_id = ?", userID).Preload("GroupInfo").Find(&list)
+	if list == nil {
+		list = []data.GroupStock{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    list,
+	})
+}

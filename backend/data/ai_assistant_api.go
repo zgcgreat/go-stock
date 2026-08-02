@@ -85,3 +85,27 @@ func SaveAiAssistantSession(sessionId string, userID uint, messages []models.AiA
 	}
 	return db.Dao.Create(&session).Error
 }
+
+// ListAiAssistantSessions 获取用户的所有AI助手会话列表（用户隔离）
+// 返回按 updated_at 降序排列的会话摘要（不含完整消息内容）
+func ListAiAssistantSessions(userID uint) ([]models.AiAssistantSession, error) {
+	var list []models.AiAssistantSession
+	q := db.Dao.Model(&models.AiAssistantSession{}).Select("id, user_id, session_id, created_at, updated_at")
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.Order("updated_at DESC").Find(&list).Error
+	if list == nil {
+		list = []models.AiAssistantSession{}
+	}
+	return list, err
+}
+
+// DeleteAiAssistantSession 删除指定会话（用户隔离）
+func DeleteAiAssistantSession(sessionId string, userID uint) error {
+	q := db.Dao.Model(&models.AiAssistantSession{}).Where("session_id = ?", sessionId)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	return q.Delete(&models.AiAssistantSession{}).Error
+}

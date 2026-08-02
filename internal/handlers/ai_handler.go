@@ -571,6 +571,49 @@ func SaveAiAssistantSessionHandler(c *gin.Context) {
 	})
 }
 
+// ListAiAssistantSessionsHandler 列出AI助手所有会话
+func ListAiAssistantSessionsHandler(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+	list, err := data.ListAiAssistantSessions(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    1,
+			"message": "获取会话列表失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    list,
+	})
+}
+
+// DeleteAiAssistantSessionHandler 删除AI助手会话
+func DeleteAiAssistantSessionHandler(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+	sessionId := c.Param("sessionId")
+	if sessionId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "sessionId不能为空",
+		})
+		return
+	}
+	err := data.DeleteAiAssistantSession(sessionId, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    1,
+			"message": "删除会话失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "删除成功",
+	})
+}
+
 // 辅助函数：序列化事件数据
 func marshalEvent(data map[string]interface{}) string {
 	bytes, _ := json.Marshal(data)

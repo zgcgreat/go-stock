@@ -532,12 +532,7 @@ func tryPlanExecute(ctx context.Context, stockAiAgent *StockAiAgent, messages []
 	return true // 成功完成
 }
 
-func createFallbackReactAgent(ctx context.Context, stockAiAgent *StockAiAgent) *react.Agent {
-	// 从 PlanExecute Agent 中提取原始配置来创建 React Agent
-	// 这里需要重新创建，因为我们没有保存原始的 chatModel 和 tools
-
-	// 为了简化，我们返回 nil，让上层处理
-	// 在实际生产环境中，应该保存原始配置或重新创建
+func createFallbackReactAgent(ctx context.Context, stockAiAgent *StockAiAgent, thinkingMode ...bool) *react.Agent {
 	logger.SugaredLogger.Warnf("暂不支持降级到 React 模式，需要重新实现")
 	return nil
 }
