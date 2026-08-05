@@ -13,13 +13,14 @@ Use this file for the latest working context that the next session should read f
 - **Decision**: 数据层用 variadic `userID ...uint` + `firstUserID()` 兼容桌面/agent/web 调用方；handler 用 `middleware.GetUserIDFromContext`
 - **Decision**: `GetStockRealTimePrice` 的 web 回退改为 `/stocks/price-info` 归一化形状（DailyOperationPlan/TradingRecord 依赖）
 - **Decision**: ai-config-manager.vue 的 import 已从 wailsjs 直连改为走 wails-bridge（web 回退可用）
+- **Decision**: `FetchAiModelInfo` 已补后端路由 `/ai/model-info`（逻辑对齐桌面端，含内置模型 token 对照表）
 
 ## Open Questions
 
-- **Question**: 待提交，提交信息风格为 `sync: upstream ...`（本次改动大，可用 `feat:` 风格）
-- **Blocker or follow-up**: 需要 git 提交
+- **Question**: 无阻塞问题
+- **Blocker or follow-up**: 待提交
 
 ## Next Recommended Step
 
-- **Next step**: git status 复查后提交（跳过 frontend/wailsjs 自动生成文件）
+- **Next step**: git 提交本轮改动
 - **Suggested owner**: 用户确认后提交

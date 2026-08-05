@@ -285,6 +285,7 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/sentiment", handlers.AnalyzeSentiment)
 			protected.GET("/market/hot-words", handlers.GetHotWords)
 			protected.GET("/ai/models", handlers.FetchAiModels)
+			protected.GET("/ai/model-info", handlers.FetchAiModelInfo)
 			protected.GET("/trades/check-frequent", handlers.CheckFrequentTrading)
 
 			// 市场统计

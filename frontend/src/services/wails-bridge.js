@@ -1347,12 +1347,12 @@ export function FetchAiModels(arg1, arg2) {
 
 export function FetchAiModelInfo(arg1, arg2, arg3) {
   if (isWailsMode()) return window.go.main.App.FetchAiModelInfo(arg1, arg2, arg3);
-  // Web fallback: backend currently exposes model list only, so return a safe default.
-  return Promise.resolve({
-    modelName: arg3 || '',
-    maxTokens: 0,
-    source: 'fallback',
-  });
+  return apiService.client.get('/ai/model-info', { params: { baseUrl: arg1, apiKey: arg2, modelName: arg3 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { modelName: arg3 || '', maxTokens: 0, source: 'fallback' })
+    .catch(err => {
+      console.warn('FetchAiModelInfo web fallback failed:', err.message);
+      return { modelName: arg3 || '', maxTokens: 0, source: 'fallback' };
+    });
 }
 
 export function FetchAndSaveMarketStatistic() {
