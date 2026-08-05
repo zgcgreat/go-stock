@@ -35,8 +35,8 @@ func InitSystray(a *App) {
 
 		systray.Run(func() {
 			systray.SetIcon(icon2)
-			systray.SetTitle("股海智擎")
-			systray.SetTooltip("股海智擎：AI驱动的智能投研决策中枢")
+			systray.SetTitle("go-stock")
+			systray.SetTooltip("go-stock：AI赋能股票分析")
 
 			mShow := systray.AddMenuItem("显示窗口", "显示主窗口")
 			mQuit := systray.AddMenuItem("退出程序", "退出应用程序")
@@ -80,6 +80,9 @@ func (a *App) startup(ctx context.Context) {
 	InitSystray(a)
 
 	a.ctx = ctx
+
+	// 设置全局 Wails 上下文，供 AI 工具修改分组/概念后向前端推送刷新事件
+	data.SetAppCtx(ctx)
 
 	a.InitCronTasks()
 

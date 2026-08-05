@@ -1861,14 +1861,83 @@ export function GetStockEastMoneyKLinePage(arg1, arg2, arg3, arg4, arg5) {
 
 export function GetStockRealTimePrice(arg1) {
   if (isWailsMode()) return window.go.main.App.GetStockRealTimePrice(arg1);
-  return apiService.client.get('/stocks/realtime', { params: { codes: arg1 }, headers: getAuthHeaders() })
-    .then(res => {
-      if (res.data?.code === 0 && Array.isArray(res.data.data) && res.data.data.length > 0) {
-        return res.data.data[0];
-      }
-      return {};
-    })
-    .catch(() => ({}));
+  // 归一化结构：与 Wails 端返回 {code, price, preClose, changePercent} 保持一致
+  return apiService.client.get('/stocks/price-info', { params: { stockCode: arg1 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { code: -1, price: 0 })
+    .catch(() => ({ code: -1, price: 0 }));
+}
+
+// GetDailyOperationPlanList 分页查询每日操作计划
+export function GetDailyOperationPlanList(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetDailyOperationPlanList(arg1);
+  const params = {};
+  if (arg1) {
+    if (arg1.page) params.page = arg1.page;
+    if (arg1.pageSize) params.pageSize = arg1.pageSize;
+    if (arg1.stockCode) params.stockCode = arg1.stockCode;
+    if (arg1.stockName) params.stockName = arg1.stockName;
+    if (arg1.planDate) params.planDate = arg1.planDate;
+    if (arg1.status) params.status = arg1.status;
+  }
+  return apiService.client.get('/daily-operation-plans', { params, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { list: [], total: 0 })
+    .catch(() => ({ list: [], total: 0 }));
+}
+
+// SaveDailyOperationPlan 新增或更新每日操作计划
+export function SaveDailyOperationPlan(arg1) {
+  if (isWailsMode()) return window.go.main.App.SaveDailyOperationPlan(arg1);
+  return apiService.client.post('/daily-operation-plans', arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '保存成功')
+    .catch(err => err.message || '保存失败');
+}
+
+// DeleteDailyOperationPlan 根据 ID 删除每日操作计划
+export function DeleteDailyOperationPlan(arg1) {
+  if (isWailsMode()) return window.go.main.App.DeleteDailyOperationPlan(arg1);
+  return apiService.client.delete(`/daily-operation-plans/${arg1}`, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '删除成功')
+    .catch(err => err.message || '删除失败');
+}
+
+// UpdateDailyOperationPlanStatus 更新每日操作计划状态
+export function UpdateDailyOperationPlanStatus(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.UpdateDailyOperationPlanStatus(arg1, arg2);
+  return apiService.client.put(`/daily-operation-plans/${arg1}/status`, { status: arg2 }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '更新成功')
+    .catch(err => err.message || '更新失败');
+}
+
+// UpdateDailyOperationPlanAlert 更新每日操作计划盘中预警开关
+export function UpdateDailyOperationPlanAlert(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.UpdateDailyOperationPlanAlert(arg1, arg2);
+  return apiService.client.put(`/daily-operation-plans/${arg1}/alert`, { enableAlert: arg2 }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '更新成功')
+    .catch(err => err.message || '更新失败');
+}
+
+// GetTdxMinuteTimeData 获取 TDX 分时数据
+export function GetTdxMinuteTimeData(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetTdxMinuteTimeData(arg1);
+  return apiService.client.get('/tdx/minute', { params: { stockCode: arg1 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || { items: [] })
+    .catch(() => ({ items: [] }));
+}
+
+// GetAllTdxTransactionData 获取 TDX 成交明细
+export function GetAllTdxTransactionData(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetAllTdxTransactionData(arg1);
+  return apiService.client.get('/tdx/transactions', { params: { stockCode: arg1 }, headers: getAuthHeaders() })
+    .then(res => res.data?.data || [])
+    .catch(() => []);
+}
+
+// UpdateAiConfigs 更新 AI 模型服务配置
+export function UpdateAiConfigs(arg1) {
+  if (isWailsMode()) return window.go.main.App.UpdateAiConfigs(arg1);
+  return apiService.client.put('/ai/configs', arg1, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '保存成功')
+    .catch(err => err.message || '保存失败');
 }
 
 export function GetTelegraphList(arg1) {

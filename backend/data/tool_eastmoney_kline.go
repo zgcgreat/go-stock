@@ -302,10 +302,60 @@ func IsHKStockCode(code string) bool {
 	return strings.HasSuffix(upper, ".HK") || strings.HasPrefix(upper, "HK")
 }
 
+// IsHKCodeForRoute 财务工具路由用的港股代码识别，比 IsHKStockCode 更宽松。
+// 除 .HK 后缀/HK 前缀外，还识别纯 5 位数字代码（A 股均为 6 位代码，5 位纯数字几乎必为港股）。
+// 仅用于工具调用路由判断，不改变 K 线/竞价/资金流向等模块的 IsHKStockCode 行为。
+func IsHKCodeForRoute(code string) bool {
+	if IsHKStockCode(code) {
+		return true
+	}
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return false
+	}
+	// 纯数字且长度 ≤ 5 视为港股（A 股均为 6 位代码）
+	for i := 0; i < len(code); i++ {
+		if code[i] < '0' || code[i] > '9' {
+			return false
+		}
+	}
+	return len(code) <= 5
+}
+
 // IsUSStockCode 判断股票代码是否为美股
 func IsUSStockCode(code string) bool {
 	upper := strings.ToUpper(code)
 	return strings.HasSuffix(upper, ".US") || strings.HasPrefix(upper, "US") || strings.HasPrefix(upper, "GB_")
+}
+
+// IsCSIIndexCode 判断代码是否为中证指数（.CSI 后缀，如 930599.CSI 中证高端装备制造）。
+// 此类指数无沪/深市镜像代码，走通达信扩展行情 ExKLine2 + category=62（ExCategoryCSIIndex），
+// 东方财富作为降级源（secid 前缀 90.）。新浪/腾讯/通达信标准协议均不支持。
+func IsCSIIndexCode(code string) bool {
+	return strings.HasSuffix(strings.ToUpper(code), ".CSI")
+}
+
+// IsGlobalIndexCode 判断代码是否为海外指数（100.XXX 前缀，如 100.DJIA 道琼斯/100.SPX 标普500/100.NDX 纳斯达克/100.HSI 恒生）。
+// 东方财富 secid 前缀 100 = 海外指数，代码为字母（DJIA/SPX/NDX/HSI），convertStockCode 原样返回即为有效 secid。
+// MAC 主客户端不识别此类代码（tdxMarketFromStockCode 会落入 default 返回 MarketSH，
+// MACSymbolBars 把 "100.DJIA" 当沪市代码查询返回错误非空数据），故海外指数不走 MAC，直接走东方财富。
+// 新浪/腾讯/通达信标准协议均不支持海外指数。
+func IsGlobalIndexCode(code string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(code))
+	if !strings.HasPrefix(upper, "100.") {
+		return false
+	}
+	suffix := upper[len("100."):]
+	// 海外指数代码为字母（如 DJIA/SPX/NDX/HSI），排除纯数字后缀
+	if suffix == "" {
+		return false
+	}
+	for _, c := range suffix {
+		if c >= '0' && c <= '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // NormalizeKLineType 导出 normalizeKLineType 供外部包使用

@@ -282,6 +282,8 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&models.PromptTemplate{})
 	db.Dao.AutoMigrate(&data.Group{})
 	db.Dao.AutoMigrate(&data.GroupStock{})
+	db.Dao.AutoMigrate(&data.Concept{})
+	db.Dao.AutoMigrate(&data.ConceptStock{})
 	db.Dao.AutoMigrate(&models.Tags{})
 	db.Dao.AutoMigrate(&models.Telegraph{})
 	db.Dao.AutoMigrate(&models.TelegraphTags{})
@@ -302,6 +304,7 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&models.CustomStrategy{})
 	db.Dao.AutoMigrate(&models.BKFundFlow{})
 	db.Dao.AutoMigrate(&models.ConceptFundFlow{})
+	db.Dao.AutoMigrate(&models.DailyOperationPlan{})
 
 	//updateMultipleModel()
 

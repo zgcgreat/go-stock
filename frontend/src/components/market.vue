@@ -11,15 +11,15 @@ import {
   IsTradingTime,
   IsHKTradingTime,
   IsUSTradingTime,
+  OpenURL,
   ReFleshTelegraphList,
   SaveAIResponseResult,
   SaveAsMarkdown,
   ShareAnalysis,
   SummaryStockNews,
   GetAiConfigs,
-  EventsOff,
-  EventsOn,
-} from "../services/wails-bridge.js";
+} from "../../wailsjs/go/main/App";
+import {EventsOff, EventsOn} from "../../wailsjs/runtime";
 import NewsList from "./newsList.vue";
 import KLineChart from "./KLineChart.vue";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
@@ -39,7 +39,6 @@ import HotTopics from "./HotTopics.vue";
 import InvestCalendarTimeLine from "./InvestCalendarTimeLine.vue";
 import ClsCalendarTimeLine from "./ClsCalendarTimeLine.vue";
 import Stockhotmap from "./stockhotmap.vue";
-import MarketStatistic from "./MarketStatistic.vue";
 import BKFundFlowChart from "./bkFundFlowChart.vue";
 import ConceptFundFlowChart from "./conceptFundFlowChart.vue";
 
@@ -66,6 +65,40 @@ const httpProxyEnabled = ref(false)
 const theme = computed(() => {
   return darkTheme ? 'dark' : 'light'
 })
+// Polymarket 预测市场列表
+const polymarketMarkets = ref([
+  {
+    marketSlug: 'will-the-fed-increase-interest-rates-by-25-bps-after-the-september-2026-meeting-649',
+    eventUrl: 'https://polymarket.com/event/fed-decision-in-september-762',
+    title: '美联储将在2026年9月会议后加息25个基点吗？',
+    yesPct: '60%',
+    noPct: '41%'
+  },
+  {
+    marketSlug: 'will-nvidia-be-the-largest-company-in-the-world-by-market-cap-on-december-31-244',
+    eventUrl: 'https://polymarket.com/event/largest-company-end-of-december-2026',
+    title: '问题：截至12月31日，NVIDIA 是否会成为全球市值最大的公司？',
+    yesPct: '56%',
+    noPct: '45%'
+  }
+])
+function polymarketSrc(m) {
+  return `https://embed.polymarket.com/market?market=${m.marketSlug}&theme=${darkTheme.value ? 'dark' : 'light'}&liveactivity=true&height=300`
+}
+function polymarketLdJson(m) {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    'name': m.title,
+    'description': `Prediction market: 是 ${m.yesPct} · 否 ${m.noPct} on Polymarket.`,
+    'url': m.eventUrl,
+    'publisher': {
+      '@type': 'Organization',
+      'name': 'Polymarket',
+      'url': 'https://polymarket.com'
+    }
+  })
+}
 const aiSummary = ref(``)
 const aiSummaryTime = ref("")
 const modelName = ref("")
@@ -92,26 +125,15 @@ const enableTools= ref(true)
 const thinkingMode = ref(true)
 const treemapRef = ref(null);
 let treemapchart =null;
-const marketStatisticRef = ref(null);
-
-// 将指数数据中的字符串数值转为数字类型
-function normalizeIndexData(items) {
-  if (!Array.isArray(items)) return []
-  return items.map(item => ({
-    ...item,
-    zdf: parseFloat(item.zdf) || 0,
-    zxj: parseFloat(item.zxj) || 0,
-  }))
-}
 
 function getIndex() {
   GlobalStockIndexes().then((res) => {
     globalStockIndexes.value = res
-    common.value = normalizeIndexData(res["common"])
-    america.value = normalizeIndexData(res["america"])
-    europe.value = normalizeIndexData(res["europe"])
-    asia.value = normalizeIndexData(res["asia"])
-    other.value = normalizeIndexData(res["other"])
+    common.value = res["common"]
+    america.value = res["america"]
+    europe.value = res["europe"]
+    asia.value = res["asia"]
+    other.value = res["other"]
   })
 }
 
@@ -124,16 +146,14 @@ onBeforeMount(() => {
     httpProxyEnabled.value = result.httpProxyEnabled
   })
   GetPromptTemplates("", "").then(res => {
-    promptTemplates.value = Array.isArray(res) ? res : []
+    promptTemplates.value = res
     sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
     userPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型用户Prompt')
   })
 
   GetAiConfigs().then(res=>{
-    aiConfigs.value = Array.isArray(res) ? res : []
-    if (res && res.length > 0) {
-      aiConfigId.value = res[0].ID
-    }
+    aiConfigs.value = res
+    aiConfigId.value = res[0].ID
   })
   GetTelegraphList("财联社电报").then((res) => {
     telegraphList.value = res
@@ -313,12 +333,6 @@ function getAiSummary() {
 function updateTab(name) {
   summaryBTN.value = (name === "市场快讯");
   nowTab.value = name
-  
-  // 当切换到市场统计tab时，刷新数据
-  if (name === "市场统计" && marketStatisticRef.value) {
-    console.log('[market] 切换到市场统计tab，刷新数据')
-    marketStatisticRef.value.refresh()
-  }
 }
 
 EventsOn("summaryStockNews", async (msg) => {
@@ -439,7 +453,7 @@ function ReFlesh(source) {
       <n-tab-pane name="市场快讯" tab="市场快讯">
         <n-grid :cols="1" :y-gap="0">
           <n-gi>
-            <AnalyzeMartket :dark-theme="darkTheme" :chart-height="300" :kDays="1" :name="'最近24小时热词'" />
+            <AnalyzeMartket :dark-theme="darkTheme" :chart-height="300" />
           </n-gi>
           <n-gi>
             <n-grid :cols="foreignNewsList.length?3:2" :y-gap="0">
@@ -784,13 +798,54 @@ function ReFlesh(source) {
           <n-tab-pane name="财经日历" tab="财经日历">
             <ClsCalendarTimeLine />
           </n-tab-pane>
+          <n-tab-pane name="PolyMarket预测" tab="PolyMarket预测">
+            <n-grid :cols="2" :x-gap="12" :y-gap="12" responsive="screen" style="--wails-draggable:no-drag">
+              <n-grid-item v-for="m in polymarketMarkets" :key="m.marketSlug">
+                <n-card :title="m.title" size="small" style="height:100%">
+                  <component :is="'script'" type="application/ld+json" v-html="polymarketLdJson(m)"></component>
+                  <div style="display:flex;justify-content:center">
+                    <figure
+                      class="polymarket-embed"
+                      :aria-label="`Polymarket prediction market: ${m.title}`"
+                      style="position:relative;display:inline-block;margin:0"
+                    >
+                      <iframe
+                        :title="`${m.title} — Polymarket Prediction Market`"
+                        :src="polymarketSrc(m)"
+                        width="400"
+                        height="300"
+                        frameborder="0"
+                        allowtransparency="true"
+                      ></iframe>
+                      <a
+                        :href="m.eventUrl"
+                        aria-label="View on Polymarket"
+                        target="_blank"
+                        rel="noopener"
+                        style="position:absolute;top:16px;right:20px;width:120px;height:24px;z-index:10"
+                      ></a>
+                      <figcaption style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0">
+                        <strong>{{ m.title }}</strong><br>
+                        是 {{ m.yesPct }} · 否 {{ m.noPct }}<br>
+                        <a :href="m.eventUrl">
+                          View full market &amp; trade on Polymarket
+                        </a>
+                      </figcaption>
+                    </figure>
+                  </div>
+                </n-card>
+              </n-grid-item>
+            </n-grid>
+            <n-card title="Polymarket 财经市场" size="small" style="margin-top:12px;--wails-draggable:no-drag">
+              <n-flex justify="center" align="center" :wrap="false" style="gap:12px">
+                <n-text depth="2">polymarket.com 拒绝 iframe 嵌入，点击下方按钮在外部浏览器打开</n-text>
+                <n-button type="info" size="small" @click="OpenURL('https://polymarket.com/zh/finance')">
+                  打开 Polymarket 财经市场
+                </n-button>
+              </n-flex>
+            </n-card>
+          </n-tab-pane>
         </n-tabs>
-      </n-tab-pane>
-      <n-tab-pane name="指标选股" tab="指标选股">
-        <select-stock />
-      </n-tab-pane>
-      <n-tab-pane name="市场统计" tab="市场统计">
-        <MarketStatistic ref="marketStatisticRef" :dark-theme="darkTheme" :chart-height="350" />
       </n-tab-pane>
       <n-tab-pane name="名站优选" tab="名站优选">
         <Stockhotmap />
@@ -874,14 +929,4 @@ function ReFlesh(source) {
 
 </template>
 <style scoped>
-@media (max-width: 768px) {
-  :deep(.n-tabs-scroll-padding) {
-    display: none !important;
-    width: 0 !important;
-  }
-  :deep(.n-tabs-nav-scroll-wrapper::before),
-  :deep(.n-tabs-nav-scroll-wrapper::after) {
-    display: none !important;
-  }
-}
 </style>

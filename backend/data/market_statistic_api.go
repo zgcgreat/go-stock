@@ -2,13 +2,11 @@ package data
 
 import (
 	"encoding/json"
-	"fmt"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"go-stock/backend/util"
 	"time"
-
 )
 
 type MarketStatisticApi struct {
@@ -63,7 +61,6 @@ type clsUpDownDis struct {
 
 func (a *MarketStatisticApi) FetchAndSave() error {
 	url := "https://x-quote.cls.cn/quote/index/home?app=CailianpressWeb&os=web&sv=8.4.6"
-	logger.SugaredLogger.Infof("开始获取市场统计数据: %s", url)
 
 	resp, err := SharedHTTPClient.R().
 		SetHeader("User-Agent", util.GetUserAgent()).
@@ -75,28 +72,18 @@ func (a *MarketStatisticApi) FetchAndSave() error {
 		return err
 	}
 
-	logger.SugaredLogger.Infof("API响应状态码: %d, 响应体长度: %d", resp.StatusCode(), len(resp.Body()))
-
 	var result clsMarketDataResp
 	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		respPreview := string(resp.Body())
-		if len(respPreview) > 200 {
-			respPreview = respPreview[:200]
-		}
-		logger.SugaredLogger.Errorf("解析市场数据失败: %v, 响应内容: %s", err, respPreview)
+		logger.SugaredLogger.Errorf("解析市场数据失败: %v", err)
 		return err
 	}
 
-	logger.SugaredLogger.Infof("API返回code: %d, msg: %s", result.Code, result.Msg)
-
 	if result.Code != 200 {
 		logger.SugaredLogger.Errorf("API返回错误: code=%d, msg=%s", result.Code, result.Msg)
-		return fmt.Errorf("API返回错误: code=%d, msg=%s", result.Code, result.Msg)
+		return nil
 	}
 
 	data := result.Data
-	logger.SugaredLogger.Infof("解析数据成功: IndexQuote数量=%d, UpDownDis.RiseNum=%d, FallNum=%d",
-		len(data.IndexQuote), data.UpDownDis.RiseNum, data.UpDownDis.FallNum)
 	now := time.Now()
 	dataDate := now.Format("2006-01-02")
 	dataTime := now.Format("15:04")

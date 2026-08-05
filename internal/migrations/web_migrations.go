@@ -23,6 +23,7 @@ func ApplyWebCompatibilityMigrations() {
 		"stock_groups",          // data.Group
 		"group_stock_info",      // data.GroupStock
 		"ai_response_result",    // models.AIResponseResult
+		"daily_operation_plan",  // models.DailyOperationPlan
 	})
 
 	migrateSettingsMissingColumns()

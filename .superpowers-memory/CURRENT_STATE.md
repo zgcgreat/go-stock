@@ -4,20 +4,22 @@ Use this file for the latest working context that the next session should read f
 
 ## Active Focus
 
-- **Current task**: Web 端响应式菜单布局已实现，待用户测试验证
-- **Why it matters now**: 改善移动端用户体验，支持手机访问
+- **Current task**: 上游 `origin/dev` 新功能已同步到 web 端（dev-web），核心功能接线全部完成，待提交
+- **Why it matters now**: 完成「完整接线核心功能」选项（每日操作计划/TDX/AI配置/概念CRUD 路由+handler+bridge+导航）
 
 ## Latest Decisions
 
-- **Decision**: 采用响应式布局，桌面端左侧侧边栏，移动端底部 Tab + 抽屉
-- **Reason**: 符合移动端用户习惯，同时保持桌面端功能完整
+- **Decision**: Web 接线范围按用户选定的「完整接线核心功能」执行；飞书机器人明确不接（需长驻进程）
+- **Decision**: 数据层用 variadic `userID ...uint` + `firstUserID()` 兼容桌面/agent/web 调用方；handler 用 `middleware.GetUserIDFromContext`
+- **Decision**: `GetStockRealTimePrice` 的 web 回退改为 `/stocks/price-info` 归一化形状（DailyOperationPlan/TradingRecord 依赖）
+- **Decision**: ai-config-manager.vue 的 import 已从 wailsjs 直连改为走 wails-bridge（web 回退可用）
 
 ## Open Questions
 
-- **Question**: 用户测试后是否需要调整？
-- **Blocker or follow-up**: 等待用户反馈
+- **Question**: 待提交，提交信息风格为 `sync: upstream ...`（本次改动大，可用 `feat:` 风格）
+- **Blocker or follow-up**: 需要 git 提交
 
 ## Next Recommended Step
 
-- **Next step**: 用户刷新页面测试新布局，提供反馈
-- **Suggested owner**: 用户
+- **Next step**: git status 复查后提交（跳过 frontend/wailsjs 自动生成文件）
+- **Suggested owner**: 用户确认后提交

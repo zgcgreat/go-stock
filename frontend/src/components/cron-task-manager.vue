@@ -522,7 +522,7 @@ import {
   CalculateNextRunTime,
   CalculateNextRunTimes,
   GetPromptTemplates
-} from '../services/wails-bridge.js'
+} from '../../wailsjs/go/main/App'
 
 const message = useMessage()
 
@@ -799,7 +799,8 @@ const nextRunTimes = ref([])
 const agentModeOptions = [
   { label: '🤖 自动选择', value: '' },
   { label: '⚡ 快速模式', value: 'react' },
-  { label: '🧠 规划模式', value: 'plan_execute' }
+  { label: '🧠 规划模式', value: 'plan_execute' },
+  { label: '🔬 DeepAgents', value: 'deepagents' }
 ]
 
 const stockAnalysisParamsData = reactive({
@@ -912,7 +913,12 @@ const columns = [
     width: 180,
     ellipsis: { tooltip: true },
     render(row) {
-      return h('span', {}, { default: () => row.name })
+      return h('div', { style: 'display: flex; align-items: center; gap: 8px;' }, [
+        h(NTag, { type: 'info', size: 'small', bordered: false }, {
+          default: () => getTaskTypeLabel(row.taskType)
+        }),
+        h('span', {}, { default: () => row.name })
+      ])
     }
   },
   // {
@@ -1081,6 +1087,7 @@ const pagination = computed(() => ({
   pageSize: pageSize.value,
   showSizePicker: true,
   pageSizes: [10, 20, 50, 100],
+  itemCount: total.value,
   onChange: handlePageChange,
   onUpdatePageSize: handlePageSizeChange
 }))
@@ -1090,8 +1097,8 @@ const loadTaskTypes = async () => {
   try {
     const types = await GetCronTaskTypes()
     taskTypeOptions.value = types.map(t => ({
-      label: t.label || t.B || t.name,
-      value: t.name || t.A
+      label: t.B,
+      value: t.A
     }))
   } catch (error) {
     console.error('加载任务类型失败:', error)
@@ -1193,8 +1200,8 @@ const handleToggleEnable = async (row) => {
   try {
     const newEnable = !row.enable
     const result = await EnableCronTask(row.id, newEnable)
-    if (result && (result.includes('成功') || result.includes('启用') || result.includes('暂停') || result.includes('已'))) {
-      message.success(result)
+    if (result === '操作成功') {
+      message.success(newEnable ? '任务已启用' : '任务已禁用')
       await loadTaskList()
     } else {
       message.error(result)
@@ -1340,11 +1347,7 @@ const handleSubmit = async () => {
       return
     }
 
-    // 仅对有专用参数UI的任务类型覆盖params，其他类型保留用户在textarea中输入的值
-    const generatedParams = generatedParamsJson.value
-    if (generatedParams !== undefined && generatedParams !== '') {
-      formData.params = generatedParams
-    }
+    formData.params = generatedParamsJson.value
 
     submitting.value = true
     const submitData = { ...formData }

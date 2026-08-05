@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/duke-git/lancet/v2/convertor"
 	"github.com/gin-gonic/gin"
 
 	"go-stock/backend/data"
@@ -258,4 +259,53 @@ func GetStockKLinePage(c *gin.Context) {
 // addStockFollowData 已提取到 data.AddStockFollowData，此处为薄转发
 func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
 	data.AddStockFollowData(follow, stockData)
+}
+
+// GetStockPriceInfo 获取单只股票实时价格（与 Wails 端 GetStockRealTimePrice 返回结构一致）
+func GetStockPriceInfo(c *gin.Context) {
+	stockCode := c.Query("stockCode")
+	if stockCode == "" {
+		stockCode = c.Param("code")
+	}
+	if stockCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "缺少股票代码",
+		})
+		return
+	}
+
+	stockDatas, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCode)
+	if err != nil || stockDatas == nil || len(*stockDatas) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    -1,
+			"message": "获取股票价格失败",
+			"price":   0,
+		})
+		return
+	}
+	stock := (*stockDatas)[0]
+	price, _ := convertor.ToFloat(stock.Price)
+	if price == 0 {
+		price, _ = convertor.ToFloat(stock.A1P)
+	}
+	if price == 0 {
+		price, _ = convertor.ToFloat(stock.B1P)
+	}
+	if price == 0 {
+		price, _ = convertor.ToFloat(stock.PreClose)
+	}
+	preClose, _ := convertor.ToFloat(stock.PreClose)
+	changePercent := 0.0
+	if preClose > 0 {
+		changePercent = (price - preClose) / preClose * 100
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":          0,
+		"message":       "success",
+		"price":         price,
+		"name":          stock.Name,
+		"preClose":      preClose,
+		"changePercent": changePercent,
+	})
 }

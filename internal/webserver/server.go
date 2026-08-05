@@ -88,6 +88,7 @@ func (ws *WebServer) initRouter() {
 
 			protected.GET("/stocks/basic", handlers.GetStockBasics)
 			protected.GET("/stocks/realtime", handlers.GetStockRealTime)
+			protected.GET("/stocks/price-info", handlers.GetStockPriceInfo)
 			protected.GET("/stocks/:code", handlers.GetStockByCode)
 			protected.GET("/stocks/:code/kline", handlers.GetStockKLine)
 			protected.GET("/stocks/:code/kline/page", handlers.GetStockKLinePage)
@@ -97,6 +98,7 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/ai/analyze", handlers.AITradeAnalyze)
 			protected.POST("/ai/agent-chat", handlers.AgentChat)
 			protected.GET("/ai/configs", handlers.GetAIConfigs)
+			protected.PUT("/ai/configs", handlers.UpdateAiConfigs)
 			protected.GET("/ai/responses", handlers.GetAIResponses)
 			protected.DELETE("/ai/responses/:id", handlers.DeleteAIResponse)
 
@@ -198,6 +200,28 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/stocks/markets", handlers.GetAllMarkets)
 			protected.GET("/stocks/industries", handlers.GetAllIndustries)
 			protected.GET("/stocks/concepts", handlers.GetAllConcepts)
+
+			// 概念标签（独立于分组）
+			protected.GET("/concepts", handlers.GetConceptList)
+			protected.POST("/concepts", handlers.AddConcept)
+			protected.PUT("/concepts/:id", handlers.UpdateConcept)
+			protected.DELETE("/concepts/:id", handlers.RemoveConcept)
+			protected.POST("/concepts/stocks", handlers.AddStockConcept)
+			protected.DELETE("/concepts/stocks", handlers.RemoveStockConcept)
+			protected.GET("/concepts/stocks/all", handlers.GetAllStockConcepts)
+			protected.GET("/concepts/stocks/by-code", handlers.GetStockConceptsByStockCode)
+
+			// 每日操作计划
+			protected.GET("/daily-operation-plans", handlers.GetDailyOperationPlanList)
+			protected.GET("/daily-operation-plans/:id", handlers.GetDailyOperationPlanByID)
+			protected.POST("/daily-operation-plans", handlers.SaveDailyOperationPlan)
+			protected.DELETE("/daily-operation-plans/:id", handlers.DeleteDailyOperationPlan)
+			protected.PUT("/daily-operation-plans/:id/status", handlers.UpdateDailyOperationPlanStatus)
+			protected.PUT("/daily-operation-plans/:id/alert", handlers.UpdateDailyOperationPlanAlert)
+
+			// TDX 分时/成交数据
+			protected.GET("/tdx/minute", handlers.GetTdxMinuteTimeData)
+			protected.GET("/tdx/transactions", handlers.GetAllTdxTransactionData)
 
 			// 技能管理
 			protected.GET("/skills", handlers.GetSkillList)
@@ -363,6 +387,8 @@ func MigrateAllTables() {
 		&data.GroupStock{},
 		&data.FollowedStock{},
 		&data.StockBasic{},
+		&data.Concept{},
+		&data.ConceptStock{},
 		&data.StockInfo{},
 		&data.Settings{},
 		&data.AIConfig{},
@@ -370,6 +396,7 @@ func MigrateAllTables() {
 		&data.IndexBasic{},
 		&data.FundBasic{},
 		&data.FollowedFund{},
+		&models.DailyOperationPlan{},
 		&models.PromptTemplate{},
 		&models.AiAssistantSession{},
 		&models.AIResponseResult{},

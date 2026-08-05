@@ -13,6 +13,8 @@ import klineAnalysis from "../components/kline-analysis.vue"
 import userManager from "../components/UserManager.vue"
 import loginView from "../components/Login.vue"
 import registerView from "../components/Register.vue"
+import dailyOperationPlanView from "../components/DailyOperationPlan.vue"
+import aiConfigManagerView from "../components/ai-config-manager.vue"
 import Auth from '../utils/auth.js'
 
 const routes = [
@@ -29,6 +31,8 @@ const routes = [
     { path: '/mcp-servers', component: mcpServerManager, name: 'mcpServers' },
     { path: '/kline-analysis', component: klineAnalysis, name: 'klineAnalysis' },
     { path: '/user-management', component: userManager, name: 'userManagement' },
+    { path: '/daily-operation-plans', component: dailyOperationPlanView, name: 'dailyOperationPlans' },
+    { path: '/ai-config-manager', component: aiConfigManagerView, name: 'aiConfigManager' },
 
 ]
 

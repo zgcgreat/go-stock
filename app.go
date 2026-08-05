@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -15,7 +16,7 @@ import (
 	"go-stock/backend/logger"
 	"go-stock/backend/machineid"
 	"go-stock/backend/models"
-	"go-stock/backend/services"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"github.com/duke-git/lancet/v2/cryptor"
 	"github.com/inconshreveable/go-update"
 	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert/yaml"
 	"golang.org/x/exp/slices"
 
 	"github.com/coocood/freecache"
@@ -53,6 +55,8 @@ type App struct {
 	stockAlertMu       sync.Mutex
 	stockAlertLastSent map[string]time.Time
 	priceAtAlertReset  map[string]float64
+	feishuBotMu        sync.Mutex
+	feishuBot          *agent.FeishuBot
 }
 
 // NewApp creates a new App application struct
@@ -150,6 +154,67 @@ func (a *App) CheckDeviceBinding(token string, apiBase string) map[string]any {
 	return result
 }
 
+// PromptPlazaRequest 以 Go 后端代理的方式请求提示词广场 API，
+// 规避 macOS WKWebView 的 App Transport Security 对明文 HTTP 的限制，
+// 前端不应直接 fetch 远程广场接口。
+// method: GET/POST/PUT/DELETE
+// apiBase: 广场 API 根地址，如 http://go-stock.sparkmemory.top:1918/api
+// path: 接口路径，如 /auth/register
+// query: URL 查询参数，可为 nil；nil 值与空字符串会被跳过，与前端原 fetch 行为一致
+// body: 请求体 JSON 字符串，可为空
+// token: 鉴权 token，可为空
+// 返回响应体解析后的 map（含 code/message/data），网络或解析失败时 code != 0。
+func (a *App) PromptPlazaRequest(method, apiBase, path string, query map[string]any, body, token string) map[string]any {
+	result := map[string]any{"code": -1, "message": "", "data": nil}
+	if apiBase == "" {
+		result["message"] = "apiBase 为空"
+		return result
+	}
+	url := strings.TrimRight(apiBase, "/") + path
+	req := data.SharedHTTPClient.R().SetHeader("Content-Type", "application/json")
+	if token != "" {
+		req = req.SetHeader("Authorization", "Bearer "+token)
+	}
+	if len(query) > 0 {
+		params := make(map[string]string, len(query))
+		for k, v := range query {
+			if v == nil {
+				continue
+			}
+			s := fmt.Sprintf("%v", v)
+			if s == "" {
+				continue
+			}
+			params[k] = s
+		}
+		if len(params) > 0 {
+			req = req.SetQueryParams(params)
+		}
+	}
+	if body != "" {
+		req = req.SetBody(body)
+	}
+
+	resp, err := req.Execute(strings.ToUpper(method), url)
+	if err != nil {
+		result["message"] = err.Error()
+		return result
+	}
+
+	var respData map[string]any
+	if err := json.Unmarshal(resp.Body(), &respData); err != nil {
+		result["message"] = "响应解析失败: " + err.Error()
+		return result
+	}
+	if respData == nil {
+		respData = map[string]any{}
+	}
+	if _, ok := respData["code"]; !ok {
+		respData["code"] = -1
+	}
+	return respData
+}
+
 func (a *App) QuitApp() {
 	if a.ctx != nil {
 		if a.cron != nil {
@@ -185,13 +250,11 @@ func (a *App) CheckSponsorCode(sponsorCode string) map[string]any {
 		}
 
 		// 校验通过后，将赞助码持久化到 Settings 中
-		configService := services.GetConfigService()
-		config := configService.GetSettingConfig()
+		config := data.GetSettingConfig()
 		// 只在赞助码变更时写库，避免无谓更新
 		if config.SponsorCode != sponsorCode {
 			config.SponsorCode = sponsorCode
-			settingsService := services.GetSettingsService()
-			settingsService.UpdateConfig(config)
+			data.UpdateConfig(config)
 		}
 
 		return map[string]any{
@@ -626,8 +689,18 @@ func (a *App) domReady(ctx context.Context) {
 
 	// Add your action here
 	//定时更新数据
-	configService := services.GetConfigService()
-	config := configService.GetSettingConfig()
+	config := data.GetSettingConfig()
+
+	// 启动飞书应用机器人（如已启用）
+	if config != nil && config.FeishuBotEnable {
+		go func() {
+			defer PanicHandler()
+			if err := a.startFeishuBot(); err != nil {
+				logger.SugaredLogger.Errorf("auto start feishu bot failed: %v", err)
+			}
+		}()
+	}
+
 	go func() {
 		go data.NewMarketNewsApi().TelegraphList(30)
 		go data.NewMarketNewsApi().GetSinaNews(30)
@@ -717,6 +790,16 @@ func (a *App) domReady(ctx context.Context) {
 			logger.SugaredLogger.Errorf("AddFunc MonitorAiRecommendStockPrices error:%s", err.Error())
 		} else {
 			a.setCronEntry("MonitorAiRecommendStockPrices", idAiStock)
+		}
+
+		// 每日操作计划盘中预警监控定时器
+		idPlan, err := a.cron.AddFunc(fmt.Sprintf("@every %ds", 60), func() {
+			MonitorDailyOperationPlan(a)
+		})
+		if err != nil {
+			logger.SugaredLogger.Errorf("AddFunc MonitorDailyOperationPlan error:%s", err.Error())
+		} else {
+			a.setCronEntry("MonitorDailyOperationPlan", idPlan)
 		}
 
 		// 自选股成本价监控定时器
@@ -893,6 +976,8 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	if err != nil {
 		logger.SugaredLogger.Errorf("保存StockBasic股票基础信息失败:%s", err.Error())
 	}
+	// 全量覆盖完成后，用通达信即时数据对 A 股做增量校准（新股上市当天即可见）
+	go a.syncStockBasicFromTdx()
 
 	//count := int64(0)
 	//db.Dao.Model(&data.StockBasic{}).Count(&count)
@@ -952,6 +1037,8 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	if err != nil {
 		logger.SugaredLogger.Errorf("保存StockInfoUS股票基础信息失败:%s", err.Error())
 	}
+	// 港股/美股全量覆盖完成后，用通达信扩展行情即时数据做增量校准
+	go a.syncHKUSStockBasicFromTdx()
 	//for _, stock := range *stockUSBasics {
 	//	stockInfo := &models.StockInfoUS{
 	//		Code:   stock.Code,
@@ -968,15 +1055,52 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	//}
 
 }
-func (a *App) NewsPush(news *[]models.Telegraph) {
 
-	follows := data.NewStockDataApi().GetFollowList(0)
-	stockNames := slice.Map(*follows, func(index int, item data.FollowedStock) string {
-		return item.Name
-	})
+// syncStockBasicFromTdx 用通达信即时数据对 A 股基础信息做增量校准。
+// 在 CheckStockBaseInfo 全量覆盖之后调用：通达信本地证券列表新股上市当天即可见，
+// 以 upsert 方式补充全量 JSON 未及时覆盖的新上市/改名/退市股票。
+func (a *App) syncStockBasicFromTdx() {
+	defer PanicHandler()
+	added, updated, err := data.NewTdxKLineApi().SyncStockBasicToDB()
+	if err != nil {
+		logger.SugaredLogger.Warnf("通达信同步股票基础信息失败:%s", err.Error())
+		return
+	}
+	logger.SugaredLogger.Infof("通达信同步股票基础信息完成：新增 %d 条，更新 %d 条", added, updated)
+}
+
+// syncHKUSStockBasicFromTdx 用通达信扩展行情即时数据对港股/美股基础信息做增量校准。
+func (a *App) syncHKUSStockBasicFromTdx() {
+	defer PanicHandler()
+	hkAdded, hkUpdated, usAdded, usUpdated, err := data.NewTdxKLineApi().SyncHKUSStockBasicToDB()
+	if err != nil {
+		logger.SugaredLogger.Warnf("通达信同步港美股基础信息失败:%s", err.Error())
+		return
+	}
+	logger.SugaredLogger.Infof("通达信同步港美股基础信息完成：港股新增 %d 更新 %d，美股新增 %d 更新 %d",
+		hkAdded, hkUpdated, usAdded, usUpdated)
+}
+func (a *App) NewsPush(news *[]models.Telegraph) {
+	if news == nil || len(*news) == 0 {
+		return
+	}
+
+	// 配置只需查询一次：循环内重复查 DB 会拖慢推送
+	onlyPushRed := a.GetConfig().EnableOnlyPushRedNews
+
+	// 仅在过滤模式下才需要关注列表；空名需过滤掉，否则 strings.Contains(s, "")==true 会命中所有新闻
+	var stockNames []string
+	if onlyPushRed {
+		follows := data.NewStockDataApi().GetFollowList(0)
+		if follows != nil {
+			stockNames = slice.FilterMap(*follows, func(index int, item data.FollowedStock) (string, bool) {
+				return item.Name, item.Name != ""
+			})
+		}
+	}
 
 	for _, telegraph := range *news {
-		if a.GetConfig().EnableOnlyPushRedNews {
+		if onlyPushRed {
 			if telegraph.IsRed || strutil.ContainsAny(telegraph.Content, stockNames) {
 				go runtime.EventsEmit(a.ctx, "newsPush", telegraph)
 			}
@@ -1396,6 +1520,7 @@ func MonitorAiRecommendStockPrices(a *App) {
 				if a.canSendAlert(buyAlertKey, 5*time.Minute) {
 					go data.NewAlertWindowsApi("go-stock价格预警", title, content, "").SendNotification()
 					go data.NewDingDingAPI().SendToDingDing(title, content)
+					go data.NewFeishuAPI().SendToFeishu(title, content)
 					go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
 						"time":    title,
 						"isRed":   true,
@@ -1428,6 +1553,7 @@ func MonitorAiRecommendStockPrices(a *App) {
 				if a.canSendAlert(profitAlertKey, 5*time.Minute) {
 					go data.NewAlertWindowsApi("go-stock价格预警", title, content, "").SendNotification()
 					go data.NewDingDingAPI().SendToDingDing(title, content)
+					go data.NewFeishuAPI().SendToFeishu(title, content)
 					go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
 						"time":    title,
 						"isRed":   true,
@@ -1461,6 +1587,7 @@ func MonitorAiRecommendStockPrices(a *App) {
 				if a.canSendAlert(stopLossAlertKey, 5*time.Minute) {
 					go data.NewAlertWindowsApi("go-stock价格预警", title, content, "").SendNotification()
 					go data.NewDingDingAPI().SendToDingDing(title, content)
+					go data.NewFeishuAPI().SendToFeishu(title, content)
 					go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
 						"time":    title,
 						"isRed":   true,
@@ -1494,7 +1621,7 @@ func MonitorFollowedStockCostPrices(a *App) {
 	}
 
 	var followedStocks []data.FollowedStock
-	db.Dao.Model(&data.FollowedStock{}).Where("cost_price > 0").Find(&followedStocks)
+	db.Dao.Model(&data.FollowedStock{}).Where("cost_price > 0 AND is_del = 0").Find(&followedStocks)
 
 	if len(followedStocks) == 0 {
 		return
@@ -1545,6 +1672,7 @@ func MonitorFollowedStockCostPrices(a *App) {
 				if a.canSendAlert(alertKey, 5*time.Minute) {
 					go data.NewAlertWindowsApi("go-stock价格预警", title, content, "").SendNotification()
 					go data.NewDingDingAPI().SendToDingDing(title, content)
+					go data.NewFeishuAPI().SendToFeishu(title, content)
 					go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
 						"time":    title,
 						"isRed":   true,
@@ -1638,24 +1766,81 @@ func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
 	return &stockInfos
 }
 func getStockInfo(follow data.FollowedStock) *data.StockInfo {
-	return data.GetStockInfoByFollow(follow)
+	stockCode := follow.StockCode
+	stockDatas, err := data.NewStockDataApi().GetStockCodeRealTimeData(stockCode)
+	if err != nil || stockDatas == nil || len(*stockDatas) == 0 {
+		return &data.StockInfo{}
+	}
+	stockData := (*stockDatas)[0]
+	addStockFollowData(follow, &stockData)
+	return &stockData
 }
 
-// addStockFollowData 已提取到 data.AddStockFollowData，此处保留仅用于价格更新逻辑
 func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
-	data.AddStockFollowData(follow, stockData)
+	stockData.PrePrice = follow.Price //上次当前价格
+	stockData.Sort = follow.Sort
+	stockData.CostPrice = follow.CostPrice //成本价
+	stockData.CostVolume = follow.Volume   //成本量
+	stockData.AlarmChangePercent = follow.AlarmChangePercent
+	stockData.AlarmPrice = follow.AlarmPrice
+	stockData.Groups = follow.Groups
 
-	// 价格更新逻辑（桌面端特有，Web 端不需要）
+	//当前价格
 	price, _ := convertor.ToFloat(stockData.Price)
+	//当前价格为0 时 使用卖一价格作为当前价格
 	if price == 0 {
 		price, _ = convertor.ToFloat(stockData.A1P)
 	}
+	//当前价格依然为0 时 使用买一报价作为当前价格
 	if price == 0 {
 		price, _ = convertor.ToFloat(stockData.B1P)
 	}
+
+	//昨日收盘价
 	preClosePrice, _ := convertor.ToFloat(stockData.PreClose)
+
+	//当前价格依然为0 时 使用昨日收盘价为当前价格
 	if price == 0 {
 		price = preClosePrice
+	}
+
+	//今日最高价
+	highPrice, _ := convertor.ToFloat(stockData.High)
+	if highPrice == 0 {
+		highPrice, _ = convertor.ToFloat(stockData.Open)
+	}
+
+	//今日最低价
+	lowPrice, _ := convertor.ToFloat(stockData.Low)
+	if lowPrice == 0 {
+		lowPrice, _ = convertor.ToFloat(stockData.Open)
+	}
+	//开盘价
+	//openPrice, _ := convertor.ToFloat(stockData.Open)
+
+	if price > 0 && preClosePrice > 0 {
+		stockData.ChangePrice = mathutil.RoundToFloat(price-preClosePrice, 2)
+		stockData.ChangePercent = mathutil.RoundToFloat(mathutil.Div(price-preClosePrice, preClosePrice)*100, 3)
+	}
+	if highPrice > 0 && preClosePrice > 0 {
+		stockData.HighRate = mathutil.RoundToFloat(mathutil.Div(highPrice-preClosePrice, preClosePrice)*100, 3)
+	}
+	if lowPrice > 0 && preClosePrice > 0 {
+		stockData.LowRate = mathutil.RoundToFloat(mathutil.Div(lowPrice-preClosePrice, preClosePrice)*100, 3)
+	}
+	if follow.CostPrice > 0 && follow.Volume > 0 {
+		if price > 0 {
+			stockData.Profit = mathutil.RoundToFloat(mathutil.Div(price-follow.CostPrice, follow.CostPrice)*100, 3)
+			stockData.ProfitAmount = mathutil.RoundToFloat((price-follow.CostPrice)*float64(follow.Volume), 2)
+			stockData.ProfitAmountToday = mathutil.RoundToFloat((price-preClosePrice)*float64(follow.Volume), 2)
+		} else {
+			//未开盘时当前价格为昨日收盘价
+			stockData.Profit = mathutil.RoundToFloat(mathutil.Div(preClosePrice-follow.CostPrice, follow.CostPrice)*100, 3)
+			stockData.ProfitAmount = mathutil.RoundToFloat((preClosePrice-follow.CostPrice)*float64(follow.Volume), 2)
+			// 未开盘时，今日盈亏为 0
+			stockData.ProfitAmountToday = 0
+		}
+
 	}
 
 	//logger.SugaredLogger.Debugf("stockData:%+v", stockData)
@@ -1669,6 +1854,8 @@ func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
 // shutdown is called at application termination
 func (a *App) shutdown(ctx context.Context) {
 	defer PanicHandler()
+	// 停止飞书应用机器人长连接
+	a.stopFeishuBotInternal()
 	// 记录当前窗口大小，供下次启动时还原
 	if a.ctx != nil {
 		if w, h := runtime.WindowGetSize(a.ctx); w > 0 && h > 0 {
@@ -1772,6 +1959,131 @@ func (a *App) SendDingDingMessageByType(message string, stockCode string, msgTyp
 	})
 
 	return data.NewDingDingAPI().SendDingDingMessage(message)
+}
+
+// SendFeishuMessage 发送飞书自定义机器人消息（带 5 分钟去重缓存）
+func (a *App) SendFeishuMessage(message string, stockCode string) string {
+	ttl, _ := a.cache.TTL([]byte(stockCode))
+	if ttl > 0 {
+		return ""
+	}
+	err := a.cache.Set([]byte(stockCode), []byte("1"), 60*5)
+	if err != nil {
+		logger.SugaredLogger.Errorf("set cache error:%s", err.Error())
+		return ""
+	}
+	return data.NewFeishuAPI().SendFeishuMessage(message)
+}
+
+// SendFeishuMessageByType msgType 报警类型: 1 涨跌报警;2 股价报警 3 成本价报警
+func (a *App) SendFeishuMessageByType(message string, stockCode string, msgType int) string {
+	if strutil.HasPrefixAny(stockCode, []string{"SZ", "SH", "sh", "sz"}) && (!isTradingTime(time.Now())) {
+		return "非A股交易时间"
+	}
+	if strutil.HasPrefixAny(stockCode, []string{"hk", "HK"}) && (!IsHKTradingTime(time.Now())) {
+		return "非港股交易时间"
+	}
+	if strutil.HasPrefixAny(stockCode, []string{"us", "US", "gb_"}) && (!IsUSTradingTime(time.Now())) {
+		return "非美股交易时间"
+	}
+
+	ttl, _ := a.cache.TTL([]byte(stockCode))
+	if ttl > 0 {
+		return ""
+	}
+	err := a.cache.Set([]byte(stockCode), []byte("1"), getMsgTypeTTL(msgType))
+	if err != nil {
+		logger.SugaredLogger.Errorf("set cache error:%s", err.Error())
+		return ""
+	}
+	stockInfo := &data.StockInfo{}
+	db.Dao.Model(stockInfo).Where("code = ?", stockCode).First(stockInfo)
+	go data.NewAlertWindowsApi("go-stock消息通知", getMsgTypeName(msgType), GenNotificationMsg(stockInfo), "").SendNotification()
+
+	go runtime.EventsEmit(a.ctx, "newsPush", map[string]any{
+		"time":    "📈 " + getMsgTypeName(msgType),
+		"isRed":   true,
+		"source":  "go-stock",
+		"content": GenNotificationMsg(stockInfo),
+	})
+
+	return data.NewFeishuAPI().SendFeishuMessage(message)
+}
+
+// StartFeishuBot 启动飞书应用机器人（前端按钮触发）
+// 与 FeishuPush 自定义机器人推送完全独立，使用长连接接收消息并由 AI 回复
+func (a *App) StartFeishuBot() string {
+	defer PanicHandler()
+	if err := a.startFeishuBot(); err != nil {
+		return "启动失败：" + err.Error()
+	}
+	return "飞书应用机器人已启动"
+}
+
+// startFeishuBot 内部启动方法，返回 error 便于 domReady 调用
+func (a *App) startFeishuBot() error {
+	a.feishuBotMu.Lock()
+	defer a.feishuBotMu.Unlock()
+
+	if a.feishuBot != nil && a.feishuBot.IsRunning() {
+		return fmt.Errorf("飞书应用机器人已在运行中")
+	}
+
+	bot := agent.NewFeishuBot()
+	if bot == nil {
+		return fmt.Errorf("请先在设置中填写飞书 App ID、App Secret，并选择 AI 配置")
+	}
+
+	ctx := context.Background()
+	if a.ctx != nil {
+		ctx = a.ctx
+	}
+	a.feishuBot = bot
+
+	go func() {
+		defer PanicHandler()
+		if err := bot.Start(ctx); err != nil {
+			logger.SugaredLogger.Errorf("feishu bot start error: %v", err)
+		}
+	}()
+
+	logger.SugaredLogger.Infof("feishu bot started")
+	return nil
+}
+
+// StopFeishuBot 停止飞书应用机器人
+func (a *App) StopFeishuBot() string {
+	defer PanicHandler()
+	a.stopFeishuBotInternal()
+	return "飞书应用机器人已停止"
+}
+
+// stopFeishuBotInternal 内部停止方法（不加 Wails 锁，可被 domReady/shutdown 复用）
+func (a *App) stopFeishuBotInternal() {
+	a.feishuBotMu.Lock()
+	bot := a.feishuBot
+	a.feishuBot = nil
+	a.feishuBotMu.Unlock()
+
+	if bot != nil {
+		bot.Stop()
+		logger.SugaredLogger.Infof("feishu bot stopped")
+	}
+}
+
+// GetFeishuBotStatus 查询飞书应用机器人运行状态
+func (a *App) GetFeishuBotStatus() string {
+	defer PanicHandler()
+	a.feishuBotMu.Lock()
+	defer a.feishuBotMu.Unlock()
+
+	if a.feishuBot == nil {
+		return "stopped"
+	}
+	if a.feishuBot.IsRunning() {
+		return "running"
+	}
+	return "stopped"
 }
 
 func (a *App) NewChatStream(stock, stockCode, question string, aiConfigId int, sysPromptId *int, enableTools bool, think bool) {
@@ -2112,12 +2424,26 @@ func (a *App) UpdateGroupSort(id int, newSort int) bool {
 	return data.NewStockGroupApi(db.Dao).UpdateGroupSort(id, newSort)
 }
 
+// UpdateGroup 修改分组名称
+func (a *App) UpdateGroup(id int, name string) string {
+	ok := data.NewStockGroupApi(db.Dao).UpdateGroup(id, name)
+	if ok {
+		return "修改成功"
+	}
+	return "修改失败"
+}
+
 func (a *App) InitializeGroupSort() bool {
 	return data.NewStockGroupApi(db.Dao).InitializeGroupSort()
 }
 
 func (a *App) GetGroupStockList(groupId int) []data.GroupStock {
 	return data.NewStockGroupApi(db.Dao).GetGroupStockByGroupId(groupId)
+}
+
+// GetAllGroupStocks 返回全部分组-股票归属记录（含分组信息），供前端「全部」标签页表格渲染分组列。
+func (a *App) GetAllGroupStocks() []data.GroupStock {
+	return data.NewStockGroupApi(db.Dao).GetAllGroupStocks()
 }
 
 func (a *App) AddStockGroup(groupId int, stockCode string) string {
@@ -2147,7 +2473,72 @@ func (a *App) RemoveGroup(groupId int) string {
 	}
 }
 
+func (a *App) AddConcept(concept data.Concept) string {
+	ok := data.NewStockConceptApi(db.Dao).AddConcept(concept)
+	if ok {
+		return "添加成功"
+	} else {
+		return "添加失败"
+	}
+}
+
+func (a *App) GetConceptList() []data.Concept {
+	return data.NewStockConceptApi(db.Dao).GetConceptList()
+}
+
+// UpdateConcept 修改概念名称
+func (a *App) UpdateConcept(id int, name string) string {
+	ok := data.NewStockConceptApi(db.Dao).UpdateConcept(id, name)
+	if ok {
+		return "修改成功"
+	}
+	return "修改失败"
+}
+
+func (a *App) RemoveConcept(conceptId int) string {
+	ok := data.NewStockConceptApi(db.Dao).RemoveConcept(conceptId)
+	if ok {
+		return "移除成功"
+	} else {
+		return "移除失败"
+	}
+}
+
+func (a *App) AddStockConcept(conceptId int, stockCode string) string {
+	ok := data.NewStockConceptApi(db.Dao).AddStockConcept(conceptId, stockCode)
+	if ok {
+		return "添加成功"
+	} else {
+		return "添加失败"
+	}
+}
+
+func (a *App) RemoveStockConcept(code, name string, conceptId int) string {
+	ok := data.NewStockConceptApi(db.Dao).RemoveStockConcept(code, name, conceptId)
+	if ok {
+		return "移除成功"
+	} else {
+		return "移除失败"
+	}
+}
+
+// GetAllStockConcepts 返回全部概念-股票归属记录（含概念信息），供前端「全部」标签页表格渲染概念列。
+func (a *App) GetAllStockConcepts() []data.ConceptStock {
+	return data.NewStockConceptApi(db.Dao).GetAllStockConcepts()
+}
+
+func (a *App) GetStockConceptsByStockCode(stockCode string) []data.ConceptStock {
+	return data.NewStockConceptApi(db.Dao).GetStockConceptsByStockCode(stockCode)
+}
+
 func (a *App) GetStockKLine(stockCode, stockName string, days int64) *[]data.KLineData {
+	// 港股优先使用 gotdx (通达信 ExKLine2) 获取日K线，失败再降级到腾讯接口
+	if data.IsHKStockCode(stockCode) {
+		tdxData := data.NewTdxKLineApi().GetMACKLineData(stockCode, "101", int(days))
+		if tdxData != nil && len(*tdxData) > 0 {
+			return tdxData
+		}
+	}
 	return data.NewStockDataApi().GetHK_KLineData(stockCode, "day", days)
 }
 
@@ -2159,6 +2550,52 @@ func (a *App) GetStockMinutePriceLineData(stockCode, stockName string) map[strin
 	res["stockName"] = stockName
 	res["stockCode"] = stockCode
 	return res
+}
+
+// GetTdxMinuteTimeData 通过 gotdx 获取当日分时图数据（A股走标准协议，港美股走 MAC MACTickCharts）。
+// 返回分时点列表（时间/价格/均价/成交量）+ 当日行情概览（昨收/今开/最高/最低/收盘/总量/总额）。
+func (a *App) GetTdxMinuteTimeData(stockCode string) *data.TdxMinuteTimeDataBundle {
+	return data.NewTdxKLineApi().GetMinuteTimeDataAuto(stockCode)
+}
+
+// GetHistoryTdxMinuteTimeData 通过 gotdx 获取历史日期的分时图数据。
+// A 股走标准协议 StockHistoryTickChart（用 buildAShareMinuteTimeSlots 生成时间轴），
+// 港美股走扩展行情 ExTickChart（date>0 时返回历史分时，自带 Time 字段）。
+// tradeDate 格式 "YYYY-MM-DD"（如 "2026-07-17"）。
+func (a *App) GetHistoryTdxMinuteTimeData(stockCode, tradeDate string) *data.TdxMinuteTimeDataBundle {
+	return data.NewTdxKLineApi().GetHistoryMinuteTimeDataAuto(stockCode, tradeDate)
+}
+
+// GetTdxTransactionData 通过 gotdx 获取当日分笔成交明细（A股走标准协议，港美股走 MAC MACTransactions）。
+// start 为起始偏移，count 为请求条数（A股最大 500，港美股最大 1000）。
+func (a *App) GetTdxTransactionData(stockCode string, start uint32, count uint32) *[]data.TdxTransactionData {
+	return data.NewTdxKLineApi().GetTransactionDataAuto(stockCode, start, count)
+}
+
+// GetAllTdxTransactionData 通过 gotdx 循环分页拉取当日全量分笔成交明细。
+// A 股走 StockFullTransaction（内部循环 count=600），港美股走 MAC 循环 count=1000。
+// 返回顺序为「从早到晚」，安全上限 50000 笔。
+// 默认走数据库缓存（5 分钟 TTL），命中缓存直接返回不请求 gotdx。
+func (a *App) GetAllTdxTransactionData(stockCode string) *[]data.TdxTransactionData {
+	return data.NewTdxKLineApi().GetAllTransactionDataAuto(stockCode, false)
+}
+
+// RefreshAllTdxTransactionData 强制刷新：跳过缓存直接走 gotdx 拉取全量，并刷新缓存。
+// 供前端「刷新」按钮使用，确保拿到最新数据。
+func (a *App) RefreshAllTdxTransactionData(stockCode string) *[]data.TdxTransactionData {
+	return data.NewTdxKLineApi().GetAllTransactionDataAuto(stockCode, true)
+}
+
+// GetHistoryTdxTransactionData 通过 gotdx 获取历史日期的全量分笔成交明细（带买卖方向）。
+// A 股走 StockHistoryFullTransactionWithTrans，港美股走 ExHistoryTransaction。
+// tradeDate 格式 "YYYY-MM-DD"（如 "2026-07-17"）。默认走缓存，5 分钟 TTL。
+func (a *App) GetHistoryTdxTransactionData(stockCode, tradeDate string) *[]data.TdxTransactionData {
+	return data.NewTdxKLineApi().GetHistoryTransactionDataAuto(stockCode, tradeDate, false)
+}
+
+// RefreshHistoryTdxTransactionData 强制刷新历史分笔成交：跳过缓存直接走 gotdx 拉取，并刷新缓存。
+func (a *App) RefreshHistoryTdxTransactionData(stockCode, tradeDate string) *[]data.TdxTransactionData {
+	return data.NewTdxKLineApi().GetHistoryTransactionDataAuto(stockCode, tradeDate, true)
 }
 
 func (a *App) GetStockCommonKLine(stockCode, stockName string, days int64) *[]data.KLineData {
@@ -2198,7 +2635,8 @@ func (a *App) GetStockEastMoneyKLinePage(stockCode, stockName string, klt string
 
 // GetStockKLineWithFallback 多数据源自动切换 K 线：优先东方财富，不可用时自动切换新浪财经。
 // 返回 KLineSourceResult，包含 data（K 线数组）和 source（实际使用的数据源标识：eastmoney / sina）。
-func (a *App) GetStockKLineWithFallback(stockCode, stockName string, klt string, limit int) *data.KLineSourceResult {
+// adjustFlag 控制复权类型："qfq"前复权、"hfq"后复权、"none"/"0"不复权、""沿用各数据源默认行为。
+func (a *App) GetStockKLineWithFallback(stockCode, stockName string, klt string, limit int, adjustFlag string) *data.KLineSourceResult {
 	if limit <= 0 {
 		limit = 500
 	}
@@ -2209,12 +2647,13 @@ func (a *App) GetStockKLineWithFallback(stockCode, stockName string, klt string,
 	if klt == "" {
 		klt = "101"
 	}
-	return data.FetchKLineWithFallback(stockCode, stockName, klt, limit, "")
+	return data.FetchKLineWithFallback(stockCode, stockName, klt, limit, "", adjustFlag)
 }
 
 // GetStockKLinePageWithFallback 多数据源自动切换 K 线（分页）：优先东方财富，不可用时自动切换新浪财经。
 // end 参数仅对东方财富有效；新浪数据源不支持分页，将返回最新一段数据。
-func (a *App) GetStockKLinePageWithFallback(stockCode, stockName string, klt string, limit int, end string) *data.KLineSourceResult {
+// adjustFlag 控制复权类型："qfq"前复权、"hfq"后复权、"none"/"0"不复权、""沿用各数据源默认行为。
+func (a *App) GetStockKLinePageWithFallback(stockCode, stockName string, klt string, limit int, end string, adjustFlag string) *data.KLineSourceResult {
 	if limit <= 0 {
 		limit = 500
 	}
@@ -2226,7 +2665,7 @@ func (a *App) GetStockKLinePageWithFallback(stockCode, stockName string, klt str
 		klt = "101"
 	}
 	end = strings.TrimSpace(end)
-	return data.FetchKLineWithFallback(stockCode, stockName, klt, limit, end)
+	return data.FetchKLineWithFallback(stockCode, stockName, klt, limit, end, adjustFlag)
 }
 
 // GetChipDistribution 获取/计算股票筹码分布（筹码图）数据（用于前端绘图）。
@@ -2512,6 +2951,11 @@ func (a *App) SaveWordFile(filename string, base64Data string) string {
 //	@return error
 func (a *App) GetAiConfigs() []*data.AIConfig {
 	return data.GetSettingConfig().AiConfigs
+}
+
+// UpdateAiConfigs 仅更新 AI 模型服务配置，供独立的 AI 模型服务管理页面调用
+func (a *App) UpdateAiConfigs(aiConfigs []*data.AIConfig) string {
+	return data.UpdateAiConfigsOnly(aiConfigs)
 }
 
 // GetAiAssistantSession 获取 AI 助手会话消息列表，sessionId 为空时获取最新的
@@ -2858,7 +3302,7 @@ func (a *App) UpdateCronTask(task *models.CronTask) string {
 //	@param id 任务 ID
 //	@return string 操作结果
 func (a *App) DeleteCronTask(id uint) string {
-	err := agent.NewCronTaskApi().Delete(id, 0) // 桌面端 userID=0，不过滤
+	err := agent.NewCronTaskApi().Delete(id, 0)
 	task, err := agent.NewCronTaskApi().GetByID(id, 0)
 	if err == nil {
 		if entryID, exists := a.getCronEntry(convertor.ToString(id) + "_" + task.Name); exists {
@@ -2878,7 +3322,7 @@ func (a *App) DeleteCronTask(id uint) string {
 //	@param id 任务 ID
 //	@return *models.CronTask 任务信息
 func (a *App) GetCronTaskByID(id uint) *models.CronTask {
-	task, err := agent.NewCronTaskApi().GetByID(id, 0) // 桌面端 userID=0，不过滤
+	task, err := agent.NewCronTaskApi().GetByID(id, 0)
 	if err != nil {
 		return nil
 	}
@@ -2900,7 +3344,7 @@ func (a *App) GetCronTaskList(query *models.CronTaskQuery) *models.CronTaskPageR
 //	@Description: 启用/禁用定时任务
 //	@receiver a
 func (a *App) EnableCronTask(id uint, enable bool) string {
-	err := agent.NewCronTaskApi().EnableTask(id, enable, 0) // 桌面端 userID=0，不过滤
+	err := agent.NewCronTaskApi().EnableTask(id, enable, 0)
 	task, err := agent.NewCronTaskApi().GetByID(id, 0)
 	if err == nil {
 		if entryID, exists := a.getCronEntry(convertor.ToString(id) + "_" + task.Name); exists {
@@ -2935,7 +3379,7 @@ func (a *App) EnableCronTask(id uint, enable bool) string {
 //	@param id 任务 ID
 //	@return string 操作结果
 func (a *App) ExecuteCronTaskNow(id uint) string {
-	task, err := agent.NewCronTaskApi().GetByID(id, 0) // 桌面端 userID=0，不过滤
+	task, err := agent.NewCronTaskApi().GetByID(id, 0)
 	if err != nil {
 		return fmt.Sprintf("任务不存在：%v", err)
 	}
@@ -2980,7 +3424,7 @@ func (a *App) ValidateCronExpr(expr string) string {
 //	@param keyword 搜索关键词
 //	@return []models.CronTask 搜索结果
 func (a *App) SearchCronTasks(keyword string) []models.CronTask {
-	return agent.NewCronTaskApi().SearchTasks(keyword, 0) // 桌面端 userID=0，不过滤
+	return agent.NewCronTaskApi().SearchTasks(keyword, 0)
 }
 
 // CalculateNextRunTime 根据 Cron 表达式计算下一次运行时间
@@ -3042,6 +3486,7 @@ func (a *App) GetTradingRecordById(id uint) (*data.TradingRecord, error) {
 }
 
 // GetTradingRecordStatistics 获取交易记录统计数据
+// 统计始终基于全部历史记录，确保总盈亏与当日盈亏真实准确，不受列表筛选条件影响
 //
 // 返回值:
 //   - *data.TradingRecordStatistics: 统计数据指针
@@ -3108,6 +3553,46 @@ func (a *App) GetMarketStatisticByDate(date string) []models.MarketStatistic {
 
 func (a *App) GetRecentDaysMarketStatistic(days int) []models.MarketStatistic {
 	return data.NewMarketStatisticApi().GetRecentDaysData(days)
+}
+
+// GetIndexTline 获取指数分时数据（财联社）
+// date 格式: "2026-07-22" 或 "20260722"，空字符串取当日
+func (a *App) GetIndexTline(date string) *data.IndexTlineResult {
+	res, err := data.NewClsMarketApi().GetIndexTline(date)
+	if err != nil {
+		logger.SugaredLogger.Errorf("GetIndexTline error: %v", err)
+		return nil
+	}
+	return res
+}
+
+// GetSectorAnchors 获取板块异动时间点（财联社）
+// date 格式: "2026-07-22" 或 "20260722"，空字符串取当日
+func (a *App) GetSectorAnchors(date string) []data.SectorAnchor {
+	res, err := data.NewClsMarketApi().GetSectorAnchors(date)
+	if err != nil {
+		logger.SugaredLogger.Errorf("GetSectorAnchors error: %v", err)
+		return nil
+	}
+	return res
+}
+
+func (a *App) GetMarketEmotion() *data.MarketEmotion {
+	res, err := data.NewClsMarketApi().GetMarketEmotion()
+	if err != nil {
+		logger.SugaredLogger.Errorf("GetMarketEmotion error: %v", err)
+		return nil
+	}
+	return res
+}
+
+func (a *App) GetIndexQuotes() []data.IndexQuoteItem {
+	res, err := data.NewClsMarketApi().GetIndexQuotes()
+	if err != nil {
+		logger.SugaredLogger.Errorf("GetIndexQuotes error: %v", err)
+		return nil
+	}
+	return res
 }
 
 func (a *App) CreateMCPServer(server *models.MCPServer) string {
@@ -3225,6 +3710,366 @@ func (a *App) EnableSkill(id uint, enable bool) string {
 
 func (a *App) GetAllSkills() []models.Skill {
 	return data.NewSkillApi().GetAll()
+}
+
+// FilesystemSkillInfo 文件系统技能信息（从 SKILL.md 解析）
+type FilesystemSkillInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	DirName     string `json:"dirName"`
+}
+
+// skillsDir 返回文件系统技能目录路径（与 agent.deepAgentRootDir 保持一致）
+func skillsDir() string {
+	wd, err := os.Getwd()
+	if err != nil || wd == "" {
+		wd = "."
+	}
+	return filepath.Join(wd, "skills")
+}
+
+// ImportSkillPackage
+//
+//	@Description: 导入技能包（zip 格式）到本地 skills 目录。用户可从其他网站下载 skill 包后导入。
+//	@receiver a
+//	@return string 导入结果消息
+func (a *App) ImportSkillPackage() string {
+	zipPath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择技能包（ZIP）",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "ZIP 压缩包", Pattern: "*.zip"},
+		},
+	})
+	if err != nil || zipPath == "" {
+		return "未选择文件"
+	}
+
+	// 读取 zip 文件
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return "打开 ZIP 文件失败: " + err.Error()
+	}
+	defer reader.Close()
+
+	// 验证包含 SKILL.md，并确定技能目录名
+	var skillDirName string
+	hasSkillMd := false
+	for _, f := range reader.File {
+		// 防止 zip slip 路径穿越
+		if strings.Contains(f.Name, "..") {
+			return "压缩包包含非法路径: " + f.Name
+		}
+		base := filepath.Base(f.Name)
+		if base == "SKILL.md" && !f.FileInfo().IsDir() {
+			hasSkillMd = true
+			// 如果 SKILL.md 在子目录中，用该子目录名作为技能名
+			dir := filepath.Dir(f.Name)
+			if dir == "." || dir == "" {
+				// SKILL.md 在根目录，用 zip 文件名作为技能名
+				skillDirName = strings.TrimSuffix(filepath.Base(zipPath), ".zip")
+			} else {
+				// 取第一级目录名
+				skillDirName = strings.SplitN(filepath.ToSlash(dir), "/", 2)[0]
+			}
+			break
+		}
+	}
+	if !hasSkillMd {
+		return "压缩包中未找到 SKILL.md 文件，不是有效的技能包"
+	}
+
+	// 清理技能目录名（去除非法字符）
+	skillDirName = sanitizeSkillDirName(skillDirName)
+	if skillDirName == "" {
+		skillDirName = "imported-skill"
+	}
+
+	targetDir := filepath.Join(skillsDir(), skillDirName)
+
+	// 如果目录已存在，先删除（覆盖导入）
+	if _, err := os.Stat(targetDir); err == nil {
+		os.RemoveAll(targetDir)
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return "创建技能目录失败: " + err.Error()
+	}
+
+	// 解压所有文件
+	const maxFileSize = 10 * 1024 * 1024 // 单文件 10MB 上限
+	var totalSize int64
+	const maxTotalSize = 100 * 1024 * 1024 // 总计 100MB 上限
+	for _, f := range reader.File {
+		if f.FileInfo().IsDir() {
+			fullPath := filepath.Join(targetDir, f.Name)
+			os.MkdirAll(fullPath, 0o755)
+			continue
+		}
+
+		// 限制文件大小
+		if f.UncompressedSize64 > maxFileSize {
+			os.RemoveAll(targetDir)
+			return "文件过大（超过10MB）: " + f.Name
+		}
+		totalSize += int64(f.UncompressedSize64)
+		if totalSize > maxTotalSize {
+			os.RemoveAll(targetDir)
+			return "压缩包总大小超过 100MB 限制"
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			os.RemoveAll(targetDir)
+			return "解压失败: " + err.Error()
+		}
+
+		fullPath := filepath.Join(targetDir, f.Name)
+		// 确保父目录存在
+		os.MkdirAll(filepath.Dir(fullPath), 0o755)
+
+		outFile, err := os.Create(fullPath)
+		if err != nil {
+			rc.Close()
+			os.RemoveAll(targetDir)
+			return "创建文件失败: " + err.Error()
+		}
+
+		_, err = io.Copy(outFile, rc)
+		rc.Close()
+		outFile.Close()
+		if err != nil {
+			os.RemoveAll(targetDir)
+			return "写入文件失败: " + err.Error()
+		}
+	}
+
+	logger.SugaredLogger.Infof("技能包导入成功: %s -> %s", skillDirName, targetDir)
+	return "技能 '" + skillDirName + "' 导入成功"
+}
+
+// ListFilesystemSkills
+//
+//	@Description: 列出本地 skills 目录下的所有文件系统技能
+//	@receiver a
+//	@return []FilesystemSkillInfo
+func (a *App) ListFilesystemSkills() []FilesystemSkillInfo {
+	dir := skillsDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return []FilesystemSkillInfo{}
+	}
+
+	var result []FilesystemSkillInfo
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillMdPath := filepath.Join(dir, entry.Name(), "SKILL.md")
+		data, err := os.ReadFile(skillMdPath)
+		if err != nil {
+			continue
+		}
+		info := parseSkillFrontmatter(string(data))
+		info.DirName = entry.Name()
+		result = append(result, info)
+	}
+	return result
+}
+
+// DeleteFilesystemSkill
+//
+//	@Description: 删除本地 skills 目录下的指定技能
+//	@receiver a
+//	@param dirName 技能目录名
+//	@return string
+func (a *App) DeleteFilesystemSkill(dirName string) string {
+	dirName = sanitizeSkillDirName(dirName)
+	if dirName == "" {
+		return "无效的技能目录名"
+	}
+	target := filepath.Join(skillsDir(), dirName)
+	if _, err := os.Stat(target); err != nil {
+		return "技能目录不存在: " + dirName
+	}
+	if err := os.RemoveAll(target); err != nil {
+		return "删除失败: " + err.Error()
+	}
+	return "技能 '" + dirName + "' 已删除"
+}
+
+// SkillFileInfo 技能目录中的文件信息
+type SkillFileInfo struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	IsDir   bool   `json:"isDir"`
+	Size    int64  `json:"size"`
+	ModTime string `json:"modTime"`
+}
+
+// ListSkillFiles
+//
+//	@Description: 递归列出指定技能目录下的所有文件
+//	@receiver a
+//	@param dirName 技能目录名
+//	@return []SkillFileInfo
+func (a *App) ListSkillFiles(dirName string) []SkillFileInfo {
+	dirName = sanitizeSkillDirName(dirName)
+	if dirName == "" {
+		return []SkillFileInfo{}
+	}
+	skillPath := filepath.Join(skillsDir(), dirName)
+	if _, err := os.Stat(skillPath); err != nil {
+		return []SkillFileInfo{}
+	}
+
+	var result []SkillFileInfo
+	relBase := filepath.Join(skillsDir(), dirName)
+	_ = filepath.Walk(skillPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		relPath, _ := filepath.Rel(relBase, path)
+		relPath = filepath.ToSlash(relPath)
+		if relPath == "." {
+			return nil
+		}
+		result = append(result, SkillFileInfo{
+			Name:    info.Name(),
+			Path:    relPath,
+			IsDir:   info.IsDir(),
+			Size:    info.Size(),
+			ModTime: info.ModTime().Format("2006-01-02 15:04:05"),
+		})
+		return nil
+	})
+	return result
+}
+
+// ReadSkillFile
+//
+//	@Description: 读取技能目录中指定文件的内容
+//	@receiver a
+//	@param dirName 技能目录名
+//	@param filePath 文件相对路径
+//	@return string 文件内容（读取失败返回空字符串）
+func (a *App) ReadSkillFile(dirName, filePath string) string {
+	dirName = sanitizeSkillDirName(dirName)
+	if dirName == "" {
+		return ""
+	}
+	filePath = strings.ReplaceAll(filePath, "..", "")
+	filePath = strings.ReplaceAll(filePath, "\\", "/")
+	fullPath := filepath.Join(skillsDir(), dirName, filePath)
+	fullPath = filepath.Clean(fullPath)
+	// 校验路径仍在技能目录内
+	skillBase := filepath.Join(skillsDir(), dirName)
+	if !strings.HasPrefix(fullPath, skillBase+string(filepath.Separator)) && fullPath != skillBase {
+		return ""
+	}
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// WriteSkillFile
+//
+//	@Description: 写入技能目录中指定文件的内容
+//	@receiver a
+//	@param dirName 技能目录名
+//	@param filePath 文件相对路径
+//	@param content 文件内容
+//	@return string 操作结果
+func (a *App) WriteSkillFile(dirName, filePath, content string) string {
+	dirName = sanitizeSkillDirName(dirName)
+	if dirName == "" {
+		return "无效的技能目录名"
+	}
+	filePath = strings.ReplaceAll(filePath, "..", "")
+	filePath = strings.ReplaceAll(filePath, "\\", "/")
+	fullPath := filepath.Join(skillsDir(), dirName, filePath)
+	fullPath = filepath.Clean(fullPath)
+	// 校验路径仍在技能目录内
+	skillBase := filepath.Join(skillsDir(), dirName)
+	if !strings.HasPrefix(fullPath, skillBase+string(filepath.Separator)) && fullPath != skillBase {
+		return "非法文件路径"
+	}
+	// 确保父目录存在
+	os.MkdirAll(filepath.Dir(fullPath), 0o755)
+	if err := os.WriteFile(fullPath, []byte(content), 0o644); err != nil {
+		return "写入失败: " + err.Error()
+	}
+	return "保存成功"
+}
+
+// DeleteSkillFile
+//
+//	@Description: 删除技能目录中指定文件
+//	@receiver a
+//	@param dirName 技能目录名
+//	@param filePath 文件相对路径
+//	@return string 操作结果
+func (a *App) DeleteSkillFile(dirName, filePath string) string {
+	dirName = sanitizeSkillDirName(dirName)
+	if dirName == "" {
+		return "无效的技能目录名"
+	}
+	filePath = strings.ReplaceAll(filePath, "..", "")
+	filePath = strings.ReplaceAll(filePath, "\\", "/")
+	fullPath := filepath.Join(skillsDir(), dirName, filePath)
+	fullPath = filepath.Clean(fullPath)
+	skillBase := filepath.Join(skillsDir(), dirName)
+	if !strings.HasPrefix(fullPath, skillBase+string(filepath.Separator)) && fullPath != skillBase {
+		return "非法文件路径"
+	}
+	if err := os.RemoveAll(fullPath); err != nil {
+		return "删除失败: " + err.Error()
+	}
+	return "删除成功"
+}
+
+// parseSkillFrontmatter 从 SKILL.md 内容中解析 frontmatter 元数据
+func parseSkillFrontmatter(content string) FilesystemSkillInfo {
+	info := FilesystemSkillInfo{}
+	const delimiter = "---"
+	content = strings.TrimSpace(content)
+	if !strings.HasPrefix(content, delimiter) {
+		return info
+	}
+	rest := content[len(delimiter):]
+	endIdx := strings.Index(rest, "\n"+delimiter)
+	if endIdx == -1 {
+		return info
+	}
+	frontmatter := strings.TrimSpace(rest[:endIdx])
+
+	// 解析 YAML frontmatter
+	var fm struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+	}
+	if err := yaml.Unmarshal([]byte(frontmatter), &fm); err == nil {
+		info.Name = fm.Name
+		info.Description = fm.Description
+	}
+	return info
+}
+
+// sanitizeSkillDirName 清理技能目录名，只保留安全字符
+func sanitizeSkillDirName(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.ReplaceAll(name, "..", "")
+	name = strings.ReplaceAll(name, "/", "")
+	name = strings.ReplaceAll(name, "\\", "")
+	name = strings.ReplaceAll(name, ":", "")
+	name = strings.ReplaceAll(name, ";", "")
+	name = strings.ReplaceAll(name, "|", "")
+	name = strings.ReplaceAll(name, "?", "")
+	name = strings.ReplaceAll(name, "*", "")
+	name = strings.ReplaceAll(name, "\"", "")
+	name = strings.ReplaceAll(name, "<", "")
+	name = strings.ReplaceAll(name, ">", "")
+	return strings.TrimSpace(name)
 }
 
 func (a *App) GetMCPToolsByServerID(serverID uint) []models.MCPServerTool {

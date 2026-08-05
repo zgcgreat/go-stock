@@ -81,6 +81,7 @@ import {
   PeopleOutline,
   LogOutOutline,
   PersonCircleOutline,
+  CalendarOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
@@ -205,6 +206,7 @@ const mainTabs = [
   { key: 'stock', label: '自选', icon: StarOutline, route: { name: 'stock' } },
   { key: 'market', label: '行情', icon: NewspaperOutline, route: { name: 'market' } },
   { key: 'klineAnalysis', label: 'K线', icon: StatsChartOutline, route: { name: 'klineAnalysis' } },
+  { key: 'dailyOperationPlans', label: '计划', icon: CalendarOutline, route: { name: 'dailyOperationPlans' } },
   { key: 'fund', label: '基金', icon: SparklesOutline, route: { name: 'fund' }, fundOnly: true },
   { key: 'agent', label: 'AI', icon: Robot, route: { name: 'agent' }, agentOnly: true },
   { key: 'research', label: '研究', icon: FlaskOutline, route: { name: 'research' } },
@@ -259,6 +261,7 @@ const activeMainTab = computed(() => {
   if (key.startsWith('research') || ['uplimitLadder', 'promptPlaza', 'promptQa',
       'stockChanges', 'mcpServers', 'skills'].includes(key)) return 'research'
   if (['fundFollow', 'fundRanking'].includes(key)) return 'fund'
+  if (key === 'dailyOperationPlans' || key.startsWith('dailyOperationPlan')) return 'dailyOperationPlans'
   if (key === 'admin' || key === 'userManagement') return 'admin'
   return 'stock'
 })

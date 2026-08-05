@@ -14,6 +14,10 @@ export function AddAllStockInfo(arg1) {
   return window['go']['main']['App']['AddAllStockInfo'](arg1);
 }
 
+export function AddConcept(arg1) {
+  return window['go']['main']['App']['AddConcept'](arg1);
+}
+
 export function AddCronTask(arg1) {
   return window['go']['main']['App']['AddCronTask'](arg1);
 }
@@ -28,6 +32,10 @@ export function AddPrompt(arg1) {
 
 export function AddPromptTemplate(arg1) {
   return window['go']['main']['App']['AddPromptTemplate'](arg1);
+}
+
+export function AddStockConcept(arg1, arg2) {
+  return window['go']['main']['App']['AddStockConcept'](arg1, arg2);
 }
 
 export function AddStockGroup(arg1, arg2) {
@@ -62,8 +70,8 @@ export function CalculateNextRunTimes(arg1, arg2) {
   return window['go']['main']['App']['CalculateNextRunTimes'](arg1, arg2);
 }
 
-export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
-  return window['go']['main']['App']['ChatWithAgent'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+  return window['go']['main']['App']['ChatWithAgent'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
 export function CheckDeviceBinding(arg1, arg2) {
@@ -126,6 +134,14 @@ export function DeleteCustomStrategy(arg1) {
   return window['go']['main']['App']['DeleteCustomStrategy'](arg1);
 }
 
+export function DeleteDailyOperationPlan(arg1) {
+  return window['go']['main']['App']['DeleteDailyOperationPlan'](arg1);
+}
+
+export function DeleteFilesystemSkill(arg1) {
+  return window['go']['main']['App']['DeleteFilesystemSkill'](arg1);
+}
+
 export function DeleteMCPServer(arg1) {
   return window['go']['main']['App']['DeleteMCPServer'](arg1);
 }
@@ -136,6 +152,10 @@ export function DeletePromptTemplate(arg1) {
 
 export function DeleteSkill(arg1) {
   return window['go']['main']['App']['DeleteSkill'](arg1);
+}
+
+export function DeleteSkillFile(arg1, arg2) {
+  return window['go']['main']['App']['DeleteSkillFile'](arg1, arg2);
 }
 
 export function DeleteStockChangeHistory(arg1) {
@@ -214,12 +234,20 @@ export function GetAllBKCodes() {
   return window['go']['main']['App']['GetAllBKCodes']();
 }
 
+export function GetAllConceptCodes() {
+  return window['go']['main']['App']['GetAllConceptCodes']();
+}
+
 export function GetAllConcepts() {
   return window['go']['main']['App']['GetAllConcepts']();
 }
 
 export function GetAllCustomStrategies() {
   return window['go']['main']['App']['GetAllCustomStrategies']();
+}
+
+export function GetAllGroupStocks() {
+  return window['go']['main']['App']['GetAllGroupStocks']();
 }
 
 export function GetAllIndustries() {
@@ -242,6 +270,10 @@ export function GetAllStockChangesWithPaging(arg1) {
   return window['go']['main']['App']['GetAllStockChangesWithPaging'](arg1);
 }
 
+export function GetAllStockConcepts() {
+  return window['go']['main']['App']['GetAllStockConcepts']();
+}
+
 export function GetAllStockInfoById(arg1) {
   return window['go']['main']['App']['GetAllStockInfoById'](arg1);
 }
@@ -252,6 +284,10 @@ export function GetAllStockInfoList(arg1) {
 
 export function GetAllStocks(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetAllStocks'](arg1, arg2, arg3, arg4);
+}
+
+export function GetAllTdxTransactionData(arg1) {
+  return window['go']['main']['App']['GetAllTdxTransactionData'](arg1);
 }
 
 export function GetBKFundFlowList(arg1, arg2) {
@@ -282,6 +318,26 @@ export function GetChipDistribution(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetChipDistribution'](arg1, arg2, arg3, arg4);
 }
 
+export function GetConceptFundFlowList(arg1, arg2) {
+  return window['go']['main']['App']['GetConceptFundFlowList'](arg1, arg2);
+}
+
+export function GetConceptFundFlowListByDate(arg1, arg2) {
+  return window['go']['main']['App']['GetConceptFundFlowListByDate'](arg1, arg2);
+}
+
+export function GetConceptFundFlowTopList(arg1) {
+  return window['go']['main']['App']['GetConceptFundFlowTopList'](arg1);
+}
+
+export function GetConceptFundFlowTopListByDate(arg1, arg2) {
+  return window['go']['main']['App']['GetConceptFundFlowTopListByDate'](arg1, arg2);
+}
+
+export function GetConceptList() {
+  return window['go']['main']['App']['GetConceptList']();
+}
+
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
@@ -310,8 +366,20 @@ export function GetDailyDimensionStats(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetDailyDimensionStats'](arg1, arg2, arg3);
 }
 
+export function GetDailyOperationPlanByID(arg1) {
+  return window['go']['main']['App']['GetDailyOperationPlanByID'](arg1);
+}
+
+export function GetDailyOperationPlanList(arg1) {
+  return window['go']['main']['App']['GetDailyOperationPlanList'](arg1);
+}
+
 export function GetEffectiveSponsorVip() {
   return window['go']['main']['App']['GetEffectiveSponsorVip']();
+}
+
+export function GetFeishuBotStatus() {
+  return window['go']['main']['App']['GetFeishuBotStatus']();
 }
 
 export function GetFollowList(arg1) {
@@ -350,8 +418,24 @@ export function GetGroupStockList(arg1) {
   return window['go']['main']['App']['GetGroupStockList'](arg1);
 }
 
+export function GetHistoryTdxMinuteTimeData(arg1, arg2) {
+  return window['go']['main']['App']['GetHistoryTdxMinuteTimeData'](arg1, arg2);
+}
+
+export function GetHistoryTdxTransactionData(arg1, arg2) {
+  return window['go']['main']['App']['GetHistoryTdxTransactionData'](arg1, arg2);
+}
+
 export function GetHotStrategy() {
   return window['go']['main']['App']['GetHotStrategy']();
+}
+
+export function GetIndexQuotes() {
+  return window['go']['main']['App']['GetIndexQuotes']();
+}
+
+export function GetIndexTline(arg1) {
+  return window['go']['main']['App']['GetIndexTline'](arg1);
 }
 
 export function GetIndustryMoneyRankSina(arg1, arg2) {
@@ -382,6 +466,10 @@ export function GetMachineId() {
   return window['go']['main']['App']['GetMachineId']();
 }
 
+export function GetMarketEmotion() {
+  return window['go']['main']['App']['GetMarketEmotion']();
+}
+
 export function GetMarketStatisticByDate(arg1) {
   return window['go']['main']['App']['GetMarketStatisticByDate'](arg1);
 }
@@ -400,6 +488,10 @@ export function GetPromptTemplates(arg1, arg2) {
 
 export function GetRecentDaysMarketStatistic(arg1) {
   return window['go']['main']['App']['GetRecentDaysMarketStatistic'](arg1);
+}
+
+export function GetSectorAnchors(arg1) {
+  return window['go']['main']['App']['GetSectorAnchors'](arg1);
 }
 
 export function GetSkillByID(arg1) {
@@ -426,6 +518,10 @@ export function GetStockCommonKLine(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetStockCommonKLine'](arg1, arg2, arg3);
 }
 
+export function GetStockConceptsByStockCode(arg1) {
+  return window['go']['main']['App']['GetStockConceptsByStockCode'](arg1);
+}
+
 export function GetStockEastMoneyKLine(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetStockEastMoneyKLine'](arg1, arg2, arg3, arg4);
 }
@@ -438,12 +534,12 @@ export function GetStockKLine(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetStockKLine'](arg1, arg2, arg3);
 }
 
-export function GetStockKLinePageWithFallback(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['GetStockKLinePageWithFallback'](arg1, arg2, arg3, arg4, arg5);
+export function GetStockKLinePageWithFallback(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['GetStockKLinePageWithFallback'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
-export function GetStockKLineWithFallback(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['GetStockKLineWithFallback'](arg1, arg2, arg3, arg4);
+export function GetStockKLineWithFallback(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GetStockKLineWithFallback'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function GetStockList(arg1) {
@@ -480,6 +576,18 @@ export function GetTdxCompanyInfo(arg1) {
 
 export function GetTdxFinanceInfo(arg1) {
   return window['go']['main']['App']['GetTdxFinanceInfo'](arg1);
+}
+
+export function GetTdxMinuteTimeData(arg1) {
+  return window['go']['main']['App']['GetTdxMinuteTimeData'](arg1);
+}
+
+export function GetTdxSymbolBelongBoard(arg1) {
+  return window['go']['main']['App']['GetTdxSymbolBelongBoard'](arg1);
+}
+
+export function GetTdxTransactionData(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetTdxTransactionData'](arg1, arg2, arg3);
 }
 
 export function GetTdxXDXRInfo(arg1) {
@@ -558,6 +666,10 @@ export function HotTopic(arg1) {
   return window['go']['main']['App']['HotTopic'](arg1);
 }
 
+export function ImportSkillPackage() {
+  return window['go']['main']['App']['ImportSkillPackage']();
+}
+
 export function IndustryResearchReport(arg1) {
   return window['go']['main']['App']['IndustryResearchReport'](arg1);
 }
@@ -590,6 +702,14 @@ export function IsUSTradingTime() {
   return window['go']['main']['App']['IsUSTradingTime']();
 }
 
+export function ListFilesystemSkills() {
+  return window['go']['main']['App']['ListFilesystemSkills']();
+}
+
+export function ListSkillFiles(arg1) {
+  return window['go']['main']['App']['ListSkillFiles'](arg1);
+}
+
 export function LongTigerRank(arg1) {
   return window['go']['main']['App']['LongTigerRank'](arg1);
 }
@@ -606,6 +726,10 @@ export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
+export function PromptPlazaRequest(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['PromptPlazaRequest'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 export function QuitApp() {
   return window['go']['main']['App']['QuitApp']();
 }
@@ -614,8 +738,28 @@ export function ReFleshTelegraphList(arg1) {
   return window['go']['main']['App']['ReFleshTelegraphList'](arg1);
 }
 
+export function ReadSkillFile(arg1, arg2) {
+  return window['go']['main']['App']['ReadSkillFile'](arg1, arg2);
+}
+
+export function RefreshAllTdxTransactionData(arg1) {
+  return window['go']['main']['App']['RefreshAllTdxTransactionData'](arg1);
+}
+
+export function RefreshHistoryTdxTransactionData(arg1, arg2) {
+  return window['go']['main']['App']['RefreshHistoryTdxTransactionData'](arg1, arg2);
+}
+
+export function RemoveConcept(arg1) {
+  return window['go']['main']['App']['RemoveConcept'](arg1);
+}
+
 export function RemoveGroup(arg1) {
   return window['go']['main']['App']['RemoveGroup'](arg1);
+}
+
+export function RemoveStockConcept(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RemoveStockConcept'](arg1, arg2, arg3);
 }
 
 export function RemoveStockGroup(arg1, arg2, arg3) {
@@ -640,6 +784,10 @@ export function SaveAsMarkdown(arg1, arg2) {
 
 export function SaveCustomStrategy(arg1) {
   return window['go']['main']['App']['SaveCustomStrategy'](arg1);
+}
+
+export function SaveDailyOperationPlan(arg1) {
+  return window['go']['main']['App']['SaveDailyOperationPlan'](arg1);
 }
 
 export function SaveImage(arg1, arg2) {
@@ -674,6 +822,14 @@ export function SendDingDingMessageByType(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendDingDingMessageByType'](arg1, arg2, arg3);
 }
 
+export function SendFeishuMessage(arg1, arg2) {
+  return window['go']['main']['App']['SendFeishuMessage'](arg1, arg2);
+}
+
+export function SendFeishuMessageByType(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SendFeishuMessageByType'](arg1, arg2, arg3);
+}
+
 export function SetAlarmChangePercent(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetAlarmChangePercent'](arg1, arg2, arg3);
 }
@@ -706,12 +862,20 @@ export function ShowFromTray() {
   return window['go']['main']['App']['ShowFromTray']();
 }
 
+export function StartFeishuBot() {
+  return window['go']['main']['App']['StartFeishuBot']();
+}
+
 export function StockNotice(arg1) {
   return window['go']['main']['App']['StockNotice'](arg1);
 }
 
 export function StockResearchReport(arg1) {
   return window['go']['main']['App']['StockResearchReport'](arg1);
+}
+
+export function StopFeishuBot() {
+  return window['go']['main']['App']['StopFeishuBot']();
 }
 
 export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
@@ -730,8 +894,16 @@ export function UnFollowFund(arg1) {
   return window['go']['main']['App']['UnFollowFund'](arg1);
 }
 
+export function UpdateAiConfigs(arg1) {
+  return window['go']['main']['App']['UpdateAiConfigs'](arg1);
+}
+
 export function UpdateAiRecommendStocksAlert(arg1, arg2) {
   return window['go']['main']['App']['UpdateAiRecommendStocksAlert'](arg1, arg2);
+}
+
+export function UpdateConcept(arg1, arg2) {
+  return window['go']['main']['App']['UpdateConcept'](arg1, arg2);
 }
 
 export function UpdateConfig(arg1) {
@@ -740,6 +912,18 @@ export function UpdateConfig(arg1) {
 
 export function UpdateCronTask(arg1) {
   return window['go']['main']['App']['UpdateCronTask'](arg1);
+}
+
+export function UpdateDailyOperationPlanAlert(arg1, arg2) {
+  return window['go']['main']['App']['UpdateDailyOperationPlanAlert'](arg1, arg2);
+}
+
+export function UpdateDailyOperationPlanStatus(arg1, arg2) {
+  return window['go']['main']['App']['UpdateDailyOperationPlanStatus'](arg1, arg2);
+}
+
+export function UpdateGroup(arg1, arg2) {
+  return window['go']['main']['App']['UpdateGroup'](arg1, arg2);
 }
 
 export function UpdateGroupSort(arg1, arg2) {
@@ -764,4 +948,8 @@ export function UpdateTradingRecord(arg1) {
 
 export function ValidateCronExpr(arg1) {
   return window['go']['main']['App']['ValidateCronExpr'](arg1);
+}
+
+export function WriteSkillFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['WriteSkillFile'](arg1, arg2, arg3);
 }

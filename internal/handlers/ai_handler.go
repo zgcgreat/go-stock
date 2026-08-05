@@ -271,6 +271,34 @@ func GetAIConfigs(c *gin.Context) {
 	})
 }
 
+// UpdateAiConfigs 更新 AI 模型服务配置（仅 AI 配置，不影响其他设置项）
+func UpdateAiConfigs(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+
+	var aiConfigs []*data.AIConfig
+	if err := c.ShouldBindJSON(&aiConfigs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	result := data.UpdateAiConfigsByUserID(userID, aiConfigs)
+	if result != "保存成功！" {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    1,
+			"message": result,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "保存成功",
+	})
+}
+
 // AgentChat Agent模式聊天 - SSE流式（与桌面端 ai-assistant-web/server.go 保持一致）
 func AgentChat(c *gin.Context) {
 	var req struct {

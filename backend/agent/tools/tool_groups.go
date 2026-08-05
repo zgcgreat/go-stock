@@ -24,6 +24,7 @@ var toolGroupMap = map[string]ToolGroup{
 	"QueryBKDictInfo":              GroupBase,
 	"GetCurrentTime":               GroupBase,
 	"GetFollowedStocks":            GroupBase,
+	"CleanupStockCodes":            GroupBase,
 	"GetHolidayInfo":               GroupBase,
 	"GetHolidayYear":               GroupBase,
 	"GetHolidayBatch":              GroupBase,
@@ -78,6 +79,7 @@ var toolGroupMap = map[string]ToolGroup{
 	"FinancialQA": GroupAIAnalysis,
 
 	"GetStockLatestFinance":       GroupStockAnalysis,
+	"GetHKStockLatestFinance":     GroupStockAnalysis,
 	"GetStockQtrMainFinance":      GroupStockAnalysis,
 	"GetStockOrgPredict":          GroupStockAnalysis,
 	"GetStockPredictSummary":      GroupStockAnalysis,
@@ -132,6 +134,7 @@ var toolGroupMap = map[string]ToolGroup{
 	"GetMutualTop10Deal":       GroupMoneyFlow,
 	"GetStockHistoryMoneyData": GroupMoneyFlow,
 	"GetIndustryMoneyRank":     GroupMoneyFlow,
+	"GetMACCapitalFlow":        GroupMoneyFlow,
 
 	"QueryStockNewsTool":          GroupNewsResearch,
 	"GetNewsListData":             GroupNewsResearch,
@@ -161,12 +164,44 @@ var toolGroupMap = map[string]ToolGroup{
 	"GetAIAnalysisDetail":  GroupAIAnalysis,
 	"GetAIAnalysisContent": GroupAIAnalysis,
 
-	"SetTradingPrice":     GroupOperations,
-	"SendDingDingMessage": GroupOperations,
-	"SendToDingDing":      GroupOperations,
-	"SearchFund":          GroupOperations,
-	"GetFundInfo":         GroupOperations,
-	"GetEconomicData":     GroupOperations,
+	"SetTradingPrice":                GroupOperations,
+	"FollowStock":                    GroupOperations,
+	"AddDailyOperationPlan":          GroupOperations,
+	"GetDailyOperationPlanList":      GroupOperations,
+	"UpdateDailyOperationPlan":       GroupOperations,
+	"UpdateDailyOperationPlanStatus": GroupOperations,
+	"SendDingDingMessage":            GroupOperations,
+	"SendToDingDing":                 GroupOperations,
+	"SendFeishuMessage":              GroupOperations,
+	"SendToFeishu":                   GroupOperations,
+	"SearchFund":                     GroupOperations,
+	"GetFundInfo":                    GroupOperations,
+	"GetEconomicData":                GroupOperations,
+	"GetTradingRecordList":           GroupOperations,
+	"GetTradingRecordStatistics":     GroupOperations,
+
+	// 分组与概念标签管理（16 个工具）
+	"GetStockGroups":          GroupOperations,
+	"CreateStockGroup":        GroupOperations,
+	"UpdateStockGroup":        GroupOperations,
+	"DeleteStockGroup":        GroupOperations,
+	"AddStockToGroup":         GroupOperations,
+	"RemoveStockFromGroup":    GroupOperations,
+	"BatchMoveStocksToGroup":  GroupOperations,
+	"GetStockConcepts":        GroupOperations,
+	"CreateStockConcept":      GroupOperations,
+	"UpdateStockConcept":      GroupOperations,
+	"DeleteStockConcept":      GroupOperations,
+	"AddStockToConcept":       GroupOperations,
+	"RemoveStockFromConcept":  GroupOperations,
+	"BatchAddStocksToConcept": GroupOperations,
+	"MergeStockConcepts":      GroupOperations,
+	"ReorganizeStockGroups":   GroupOperations,
+
+	"ListPromptTemplates":  GroupBase,
+	"GetPromptTemplate":    GroupBase,
+	"SavePromptTemplate":   GroupBase,
+	"DeletePromptTemplate": GroupBase,
 }
 
 type groupKeywords struct {
@@ -178,6 +213,7 @@ var groupKeywordsList = []groupKeywords{
 	{GroupStockAnalysis, []string{
 		"股票", "股价", "行情", "K线", "k线", "日K", "周K", "月K", "分钟线",
 		"分时", "实时", "价格", "涨跌", "成交量", "成交额",
+		"集合竞价", "竞价", "开盘竞价", "收盘竞价", "竞价明细",
 		"财务", "报表", "营收", "利润", "ROE", "PE", "PB", "EPS",
 		"毛利率", "净利率", "现金流", "负债率",
 		"行业估值", "行业排名", "行业盈利",
@@ -189,15 +225,16 @@ var groupKeywordsList = []groupKeywords{
 		"主营业务", "主要客户", "供应商", "参控股", "股权投资", "重大合同",
 		"基金业绩", "基金持仓", "基金风险", "基金评级", "基金获奖",
 		"业绩点评", "财报分析", "业绩报告", "营收分析", "利润分析", "季报", "年报", "中报",
-		"行业研究", "行业报告", "产业分析", "行业深度", "行业趋势", "市场分析",
+		"行业研究", "行业报告", "产业分析", "行业深度", "行业趋势",
 		"跟踪报告", "个股跟踪", "行业跟踪", "动态跟踪", "最新动态跟踪",
 		"查数", "金融数据查询", "数据查询", "指标查询", "估值数据", "行情数据查询",
-		"分析", "诊断", "评估", "估值",
+		"诊断", "评估", "估值",
 		"技术面", "基本面", "MACD", "KDJ", "RSI", "布林", "BOLL",
 		"均线", "MA5", "MA10", "MA20", "MA60", "MA120",
 		"前复权", "后复权", "复权",
 		"可比公司", "对标公司", "同行对比", "行业对标",
 		"机构预测", "券商预测", "目标价", "一致性预期",
+		"分析一下", "分析",
 	}},
 	{GroupMarket, []string{
 		"大盘", "市场", "指数", "行情", "涨跌分布", "涨停", "跌停",
@@ -259,18 +296,20 @@ var groupKeywordsList = []groupKeywords{
 		"财经日历", "经济数据公布", "重要数据",
 	}},
 	{GroupAIAnalysis, []string{
-		"AI分析", "AI推荐", "历史分析", "分析报告",
-		"推荐股票", "买入评级", "增持", "减持",
-		"止盈", "止损", "买入价", "目标价",
-		"帮我查", "分析一下", "怎么样", "是什么", "解释一下", "总结一下",
-		"深度分析", "深度思考", "详细分析", "仔细想想",
-		"金融问答", "智能问答",
+		"AI分析", "AI推荐", "AI 分析", "AI 推荐",
+		"历史分析", "分析报告", "分析记录",
+		"推荐股票", "买入评级", "增持评级", "减持评级",
+		"金融问答", "智能问答", "FinancialQA",
+		"GetAIAnalysis", "AiRecommendStocks",
 	}},
 	{GroupOperations, []string{
 		"预警", "价位", "开仓", "止盈价", "止损价", "成本价",
-		"钉钉", "QQ", "通知", "推送", "发送消息",
+		"钉钉", "飞书", "QQ", "通知", "推送", "发送消息",
 		"基金", "基金代码", "基金名称", "净值",
 		"GDP", "CPI", "PPI", "PMI", "宏观经济",
+		"关注", "自选", "加自选", "加入分组", "设置概念", "概念标签", "归类", "持仓", "持仓量",
+		"交易日志", "交易记录", "盈亏",
+		"操作计划", "每日计划", "操作方案", "明日操作", "明天操作", "盘中预警",
 	}},
 }
 
@@ -291,9 +330,7 @@ func ClassifyQuestion(question string) map[ToolGroup]bool {
 	}
 
 	if len(matched) <= 1 {
-		for _, g := range []ToolGroup{
-			GroupStockAnalysis, GroupMarket, GroupNewsResearch,
-		} {
+		for _, g := range DefaultToolGroupsForIntent(DetectQuestionIntent(question)) {
 			matched[g] = true
 		}
 	}

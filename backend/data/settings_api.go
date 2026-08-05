@@ -21,6 +21,15 @@ type Settings struct {
 	FeishuPushEnable       bool   `json:"feishuPushEnable"`
 	FeishuRobot            string `json:"feishuRobot"`
 	FeishuSecret           string `json:"feishuSecret" gorm:"column:feishu_secret"`
+	// 飞书应用机器人（接收消息+AI回复，长连接模式，与 FeishuPush 自定义机器人推送独立）
+	FeishuBotEnable        bool   `json:"feishuBotEnable"`
+	FeishuAppID            string `json:"feishuAppId" gorm:"column:feishu_app_id"`
+	FeishuAppSecret        string `json:"feishuAppSecret" gorm:"column:feishu_app_secret"`
+	FeishuBotAiConfigId    int    `json:"feishuBotAiConfigId" gorm:"column:feishu_bot_ai_config_id"`
+	FeishuBotSysPromptId   int    `json:"feishuBotSysPromptId" gorm:"column:feishu_bot_sys_prompt_id"`
+	FeishuBotEnableTools   bool   `json:"feishuBotEnableTools"`
+	FeishuBotThinking      bool   `json:"feishuBotThinking"`
+	FeishuBotAgentMode     string `json:"feishuBotAgentMode" gorm:"column:feishu_bot_agent_mode"`
 	UpdateBasicInfoOnStart bool   `json:"updateBasicInfoOnStart"`
 	RefreshInterval       int64  `json:"refreshInterval"`
 	OpenAiEnable          bool   `json:"openAiEnable"`
@@ -123,6 +132,14 @@ func UpdateConfig(s *SettingConfig) string {
 			"feishu_push_enable":         s.FeishuPushEnable,
 			"feishu_robot":               s.FeishuRobot,
 			"feishu_secret":              s.FeishuSecret,
+			"feishu_bot_enable":          s.FeishuBotEnable,
+			"feishu_app_id":              s.FeishuAppID,
+			"feishu_app_secret":          s.FeishuAppSecret,
+			"feishu_bot_ai_config_id":    s.FeishuBotAiConfigId,
+			"feishu_bot_sys_prompt_id":   s.FeishuBotSysPromptId,
+			"feishu_bot_enable_tools":    s.FeishuBotEnableTools,
+			"feishu_bot_thinking":        s.FeishuBotThinking,
+			"feishu_bot_agent_mode":      s.FeishuBotAgentMode,
 			"update_basic_info_on_start": s.UpdateBasicInfoOnStart,
 			"refresh_interval":           s.RefreshInterval,
 			"open_ai_enable":             s.OpenAiEnable,
@@ -248,6 +265,28 @@ func updateAiConfigs(aiConfigs []*AIConfig) error {
 	//批量新增的配置
 	err = db.Dao.CreateInBatches(addAiConfigs, len(addAiConfigs)).Error
 	return err
+}
+
+// UpdateAiConfigsOnly 仅更新 AI 模型服务配置，不影响其他设置项。
+// 供独立的 AI 模型服务管理页面调用，避免覆盖 settings 表中的其他字段。
+func UpdateAiConfigsOnly(aiConfigs []*AIConfig) string {
+	if err := updateAiConfigs(aiConfigs); err != nil {
+		logger.SugaredLogger.Errorf("更新AI配置失败: %v", err)
+		return "保存失败: " + err.Error()
+	}
+	// 刷新内存中的配置缓存
+	ConfigureFromSettings(GetSettingConfig())
+	return "保存成功！"
+}
+
+// UpdateAiConfigsByUserID 按用户更新 AI 模型服务配置（Web 端用户隔离），
+// 不影响其他设置项，也不触碰其他用户的 AI 配置。
+func UpdateAiConfigsByUserID(userID uint, aiConfigs []*AIConfig) string {
+	if err := updateAiConfigsByUserID(userID, aiConfigs); err != nil {
+		logger.SugaredLogger.Errorf("更新AI配置失败 userID=%d: %v", userID, err)
+		return "保存失败: " + err.Error()
+	}
+	return "保存成功！"
 }
 
 func GetSettingConfig() *SettingConfig {
@@ -389,6 +428,14 @@ func UpdateConfigByUserID(userID uint, s *SettingConfig) string {
 			"feishu_push_enable":         s.FeishuPushEnable,
 			"feishu_robot":               s.FeishuRobot,
 			"feishu_secret":              s.FeishuSecret,
+			"feishu_bot_enable":          s.FeishuBotEnable,
+			"feishu_app_id":              s.FeishuAppID,
+			"feishu_app_secret":          s.FeishuAppSecret,
+			"feishu_bot_ai_config_id":    s.FeishuBotAiConfigId,
+			"feishu_bot_sys_prompt_id":   s.FeishuBotSysPromptId,
+			"feishu_bot_enable_tools":    s.FeishuBotEnableTools,
+			"feishu_bot_thinking":        s.FeishuBotThinking,
+			"feishu_bot_agent_mode":      s.FeishuBotAgentMode,
 			"update_basic_info_on_start": s.UpdateBasicInfoOnStart,
 			"refresh_interval":            s.RefreshInterval,
 			"open_ai_enable":              s.OpenAiEnable,

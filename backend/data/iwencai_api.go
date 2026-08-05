@@ -3,6 +3,7 @@ package data
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"go-stock/backend/logger"
 	"strings"
@@ -12,6 +13,9 @@ import (
 
 const iwencaiAPIURL = "https://openapi.iwencai.com/v1/query2data"
 const iwencaiSearchURL = "https://openapi.iwencai.com/v1/comprehensive/search"
+const iwencaiGatewaySearchURL = "https://www.iwencai.com/gateway/mobilesearch/comprehensive/search"
+
+const iwencaiGatewaySearchDefaultSize = 20
 
 func generateTraceID() string {
 	b := make([]byte, 32)
@@ -30,6 +34,52 @@ func iwencaiCommonHeaders(apiKey, skillID, skillVersion string) map[string]strin
 		"X-Claw-Plugin-Version": "none",
 		"X-Claw-Trace-Id":       generateTraceID(),
 	}
+}
+
+// iwencaiExtractErrorMessage extracts a human-readable message from a non-200
+// response body. The iwencai openapi returns errors in two shapes:
+//   - a JSON string literal (e.g. 401 quota exhaustion): `"您今天的次数已用完..."`
+//
+// Plain text bodies are returned as-is (truncated by the caller).
+func iwencaiExtractErrorMessage(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	// JSON string literal (covers 401 quota-exhaustion case where the body is
+	// `"..."` rather than the expected `{...}` envelope).
+	var s string
+	if err := json.Unmarshal(body, &s); err == nil {
+		return strings.TrimSpace(s)
+	}
+	// JSON object with status_msg / msg field.
+	var obj struct {
+		StatusMsg string `json:"status_msg"`
+		Msg       string `json:"msg"`
+	}
+	if err := json.Unmarshal(body, &obj); err == nil {
+		if msg := strings.TrimSpace(obj.StatusMsg); msg != "" {
+			return msg
+		}
+		if msg := strings.TrimSpace(obj.Msg); msg != "" {
+			return msg
+		}
+	}
+	// Plain text fallback.
+	return strings.TrimSpace(string(body))
+}
+
+// iwencaiHTTPError builds an error for a non-200 response, appending the
+// response body's message (when available) so callers can tell quota
+// exhaustion apart from invalid keys, network issues, etc.
+func iwencaiHTTPError(prefix string, statusCode int, body []byte) error {
+	msg := iwencaiExtractErrorMessage(body)
+	if msg == "" {
+		return fmt.Errorf("%s返回HTTP错误: %d", prefix, statusCode)
+	}
+	if r := []rune(msg); len(r) > 200 {
+		msg = string(r[:200]) + "..."
+	}
+	return fmt.Errorf("%s返回HTTP错误: %d，详情: %s", prefix, statusCode, msg)
 }
 
 type IwencaiAPI struct {
@@ -93,7 +143,7 @@ func (api *IwencaiAPI) Query(query string, page, limit int) (*IwencaiResponse, e
 	}
 
 	if resp.StatusCode() != 200 {
-		return nil, fmt.Errorf("同花顺问财API返回HTTP错误: %d", resp.StatusCode())
+		return nil, iwencaiHTTPError("同花顺问财API", resp.StatusCode(), resp.Body())
 	}
 
 	if result.StatusCode != 0 {
@@ -169,7 +219,100 @@ type IwencaiSearchItem struct {
 	PublishDate string `json:"publish_date"`
 }
 
-func (api *IwencaiAPI) searchComprehensive(channel string, query string) (*IwencaiSearchResponse, error) {
+// iwencaiOpenAPISearchResponse mirrors the OpenAPI search envelope, which
+// includes status_code/status_msg. The exported IwencaiSearchResponse is the
+// cleaned type shared with the gateway path and omits these fields.
+type iwencaiOpenAPISearchResponse struct {
+	StatusCode int                 `json:"status_code"`
+	StatusMsg  string              `json:"status_msg"`
+	Data       []IwencaiSearchItem `json:"data"`
+}
+
+type iwencaiGatewaySearchRequest struct {
+	Offset   int      `json:"offset"`
+	Size     int      `json:"size"`
+	AppID    string   `json:"app_id"`
+	Query    string   `json:"query"`
+	Channels []string `json:"channels"`
+	Platform string   `json:"platform"`
+	Slots    []any    `json:"slots"`
+}
+
+type iwencaiGatewaySearchItem struct {
+	Channel     string `json:"channel"`
+	Title       string `json:"title"`
+	Summary     string `json:"summary"`
+	URL         string `json:"url"`
+	PublishDate string `json:"publish_date"`
+}
+
+type iwencaiGatewaySearchResponse struct {
+	StatusCode int                        `json:"status_code"`
+	StatusMsg  string                     `json:"status_msg"`
+	Total      int                        `json:"total"`
+	Took       int                        `json:"took"`
+	Data       []iwencaiGatewaySearchItem `json:"data"`
+}
+
+func iwencaiGatewayChannel(channel string) string {
+	if channel == "investor" {
+		return "interact"
+	}
+	return channel
+}
+
+func gatewaySearchItemsToResponse(items []iwencaiGatewaySearchItem) *IwencaiSearchResponse {
+	result := &IwencaiSearchResponse{Data: make([]IwencaiSearchItem, 0, len(items))}
+	for _, item := range items {
+		result.Data = append(result.Data, IwencaiSearchItem{
+			Title:       item.Title,
+			Summary:     item.Summary,
+			URL:         item.URL,
+			PublishDate: item.PublishDate,
+		})
+	}
+	return result
+}
+
+func (api *IwencaiAPI) searchComprehensiveGateway(channel string, query string, size int) (*IwencaiSearchResponse, error) {
+	if query == "" {
+		return nil, fmt.Errorf("搜索关键词不能为空")
+	}
+	if size <= 0 {
+		size = iwencaiGatewaySearchDefaultSize
+	}
+
+	reqBody := iwencaiGatewaySearchRequest{
+		Offset:   0,
+		Size:     size,
+		AppID:    "wencai_pc",
+		Query:    query,
+		Channels: []string{iwencaiGatewayChannel(channel)},
+		Platform: "pc",
+		Slots:    []any{},
+	}
+
+	var gwResult iwencaiGatewaySearchResponse
+	resp, err := api.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(reqBody).
+		SetResult(&gwResult).
+		Post(iwencaiGatewaySearchURL)
+
+	if err != nil {
+		return nil, fmt.Errorf("调用问财网关搜索失败: %v", err)
+	}
+	if resp.StatusCode() != 200 {
+		return nil, iwencaiHTTPError("问财网关搜索", resp.StatusCode(), resp.Body())
+	}
+	if gwResult.StatusCode != 0 {
+		return nil, fmt.Errorf("问财网关搜索返回错误: %s", gwResult.StatusMsg)
+	}
+
+	return gatewaySearchItemsToResponse(gwResult.Data), nil
+}
+
+func (api *IwencaiAPI) searchComprehensiveOpenAPI(channel string, query string) (*IwencaiSearchResponse, error) {
 	apiKey := api.config.Settings.IwencaiApiKey
 	if apiKey == "" {
 		return nil, fmt.Errorf("同花顺问财API密钥未配置，请在设置中填写IwencaiApiKey")
@@ -185,11 +328,11 @@ func (api *IwencaiAPI) searchComprehensive(channel string, query string) (*Iwenc
 		Query:    query,
 	}
 
-	var result IwencaiSearchResponse
+	var raw iwencaiOpenAPISearchResponse
 	resp, err := api.client.R().
 		SetHeaders(iwencaiCommonHeaders(apiKey, "news-search", "1.0.0")).
 		SetBody(reqBody).
-		SetResult(&result).
+		SetResult(&raw).
 		Post(iwencaiSearchURL)
 
 	if err != nil {
@@ -197,10 +340,23 @@ func (api *IwencaiAPI) searchComprehensive(channel string, query string) (*Iwenc
 	}
 
 	if resp.StatusCode() != 200 {
-		return nil, fmt.Errorf("同花顺问财搜索API返回HTTP错误: %d", resp.StatusCode())
+		return nil, iwencaiHTTPError("同花顺问财搜索API", resp.StatusCode(), resp.Body())
 	}
 
-	return &result, nil
+	if raw.StatusCode != 0 {
+		return nil, fmt.Errorf("同花顺问财搜索API返回错误: %s", raw.StatusMsg)
+	}
+
+	return &IwencaiSearchResponse{Data: raw.Data}, nil
+}
+
+func (api *IwencaiAPI) searchComprehensive(channel string, query string) (*IwencaiSearchResponse, error) {
+	result, err := api.searchComprehensiveGateway(channel, query, iwencaiGatewaySearchDefaultSize)
+	if err == nil {
+		return result, nil
+	}
+	logger.SugaredLogger.Warnf("问财网关搜索失败，尝试OpenAPI: %v", err)
+	return api.searchComprehensiveOpenAPI(channel, query)
 }
 
 func (api *IwencaiAPI) SearchReport(query string) (*IwencaiSearchResponse, error) {
