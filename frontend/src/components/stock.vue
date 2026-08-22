@@ -1359,6 +1359,10 @@ function showFsChart(code, name) {
   GetStockMinutePriceLineData(code, name).then(result => {
     // console.log("GetStockMinutePriceLineData", result)
     const priceData = result.priceData
+    if (!priceData || priceData.length === 0) {
+      message.warning('暂无分时数据')
+      return
+    }
     let category = []
     let price = []
     let openprice = 0
@@ -1577,6 +1581,8 @@ function showFsChart(code, name) {
       ]
     };
     chart.setOption(option);
+  }).catch(err => {
+    message.error('分时数据加载失败：' + (err && err.message ? err.message : err))
   })
 }
 
