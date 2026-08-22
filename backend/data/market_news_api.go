@@ -1583,3 +1583,75 @@ func (m MarketNewsApi) GetUplimitHot(date string, limit int) map[string]any {
 	}
 	return result
 }
+
+// ConceptEventList 获取同花顺每日炒作题材事件列表
+func (m MarketNewsApi) ConceptEventList(date string) *[]models.ConceptEventDay {
+	url := "https://news.10jqka.com.cn/app/concept_v2_api/open/api/concept/event/jtcsm/v1/event/list"
+	if date != "" {
+		url += "?date=" + date
+	}
+	resp, err := SharedHTTPClient.SetTimeout(30*time.Second).R().
+		SetHeader("Host", "news.10jqka.com.cn").
+		SetHeader("Origin", "https://news.10jqka.com.cn").
+		SetHeader("Referer", "https://news.10jqka.com.cn/").
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
+		Get(url)
+	if err != nil {
+		logger.SugaredLogger.Errorf("ConceptEventList err:%s", err.Error())
+		return &[]models.ConceptEventDay{}
+	}
+	respMap := struct {
+		StatusCode int    `json:"status_code"`
+		StatusMsg  string `json:"status_msg"`
+		Data       []models.ConceptEventDay
+	}{}
+	if err := json.Unmarshal(resp.Body(), &respMap); err != nil {
+		logger.SugaredLogger.Errorf("ConceptEventList unmarshal err:%s,body:%s", err.Error(), resp.Body())
+		return &[]models.ConceptEventDay{}
+	}
+	return &respMap.Data
+}
+
+// RzrqRank 获取融资融券排名
+func (m MarketNewsApi) RzrqRank(rzrqType, sortKey, sortType, date string, length, offset int) *models.RzrqRankData {
+	res := &models.RzrqRankData{Type: rzrqType}
+	if rzrqType == "" {
+		return res
+	}
+	if sortKey == "" {
+		sortKey = "jmr"
+	}
+	if sortType == "" {
+		sortType = "desc"
+	}
+	if length <= 0 {
+		length = 5
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	apiUrl := fmt.Sprintf("https://eq.10jqka.com.cn/rzrqEnhance/index.php?op=getRankData&type=%s&sortKey=%s&sortType=%s&length=%d&offset=%d", rzrqType, sortKey, sortType, length, offset)
+	if date != "" {
+		apiUrl += "&date=" + date
+	}
+	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
+		SetHeader("Host", "eq.10jqka.com.cn").
+		SetHeader("Referer", "https://eq.10jqka.com.cn/").
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
+		Get(apiUrl)
+	if err != nil {
+		logger.SugaredLogger.Errorf("RzrqRank err:%s", err.Error())
+		return res
+	}
+	respMap := struct {
+		ErrorCode int                   `json:"errorCode"`
+		Data      []models.RzrqRankItem `json:"data"`
+		ErrorMsg  string                `json:"errorMsg"`
+	}{}
+	if err := json.Unmarshal(resp.Body(), &respMap); err != nil {
+		logger.SugaredLogger.Errorf("RzrqRank unmarshal err:%s,body:%s", err.Error(), resp.Body())
+		return res
+	}
+	res.List = respMap.Data
+	return res
+}

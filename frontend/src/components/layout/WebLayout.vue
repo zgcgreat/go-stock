@@ -82,6 +82,7 @@ import {
   LogOutOutline,
   PersonCircleOutline,
   CalendarOutline,
+  HomeOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
@@ -203,6 +204,7 @@ onMounted(() => {
 
 // 主Tab定义：只负责一级页面切换，子页面内部自己管Tab
 const mainTabs = [
+  { key: 'home', label: '首页', icon: HomeOutline, route: { name: 'home' } },
   { key: 'stock', label: '自选', icon: StarOutline, route: { name: 'stock' } },
   { key: 'market', label: '行情', icon: NewspaperOutline, route: { name: 'market' } },
   { key: 'klineAnalysis', label: 'K线', icon: StatsChartOutline, route: { name: 'klineAnalysis' } },
@@ -257,6 +259,7 @@ const activeMainTab = computed(() => {
   const key = props.activeKey
   if (mainTabs.find(t => t.key === key)) return key
   if (!isNaN(key) && key !== '') return 'stock'
+  if (key === 'home') return 'home'
   if (key.startsWith('market')) return 'market'
   if (key.startsWith('research') || ['uplimitLadder', 'promptPlaza', 'promptQa',
       'stockChanges', 'mcpServers', 'skills'].includes(key)) return 'research'

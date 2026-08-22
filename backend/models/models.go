@@ -1903,3 +1903,154 @@ type ConceptFundFlowPoint struct {
 	SnapTime  string `json:"snapTime"`
 	NetInflow int64  `json:"netInflow"`
 }
+
+// ConceptEventDay 同花顺每日炒作题材接口按日分组的数据
+type ConceptEventDay struct {
+	Date      string         `json:"date" md:"日期"`
+	EventList []ConceptEvent `json:"eventList" md:"事件列表"`
+}
+
+// ConceptEvent 炒作题材事件
+type ConceptEvent struct {
+	EventID             string            `json:"eventId" md:"-"`
+	Title               string            `json:"title" md:"事件标题"`
+	Heat                int64             `json:"heat" md:"热度"`
+	Themes              []ConceptTheme    `json:"themes" md:"关联题材"`
+	TopStocks           []ConceptTopStock `json:"topStocks" md:"龙头"`
+	CreateTime          int64             `json:"createTime" md:"创建时间"`
+	HasTopped           bool              `json:"hasTopped" md:"-"`
+	InvestmentDirection string            `json:"investmentDirection" md:"投资方向"`
+}
+
+// ConceptTheme 事件关联的题材/行业
+type ConceptTheme struct {
+	ID        string  `json:"id" md:"-"`
+	Type      string  `json:"type" md:"类型"`
+	ShowName  string  `json:"showName" md:"题材名称"`
+	IndexCode string  `json:"indexCode" md:"指数代码"`
+	MarketID  string  `json:"marketId" md:"-"`
+	IndexName string  `json:"indexName" md:"指数名称"`
+	BlockID   *string `json:"blockId" md:"-"`
+}
+
+// ConceptTopStock 事件龙头股
+type ConceptTopStock struct {
+	MarketID     string  `json:"marketId" md:"-"`
+	StockCode    string  `json:"stockCode" md:"股票代码"`
+	StockName    string  `json:"stockName" md:"股票名称"`
+	RisePercent  float64 `json:"risePercent" md:"涨幅(%)"`
+	LimitUpState *int    `json:"limitUpState" md:"涨停状态"`
+	Reason       *string `json:"reason" md:"-"`
+}
+
+// ConceptDetailInfo 同花顺概念详情页解析结果
+type ConceptDetailInfo struct {
+	ConceptCode string         `json:"conceptCode"`
+	PlateCode   string         `json:"plateCode"`
+	Name        string         `json:"name"`
+	Definition  string         `json:"definition"`
+	Market      ConceptMarket  `json:"market"`
+	Stocks      []ConceptStock `json:"stocks"`
+}
+
+// ConceptMarket 概念板块行情数据
+type ConceptMarket struct {
+	Open          string `json:"open"`
+	PreClose      string `json:"preClose"`
+	Low           string `json:"low"`
+	High          string `json:"high"`
+	Volume        string `json:"volume"`
+	ChangePercent string `json:"changePercent"`
+	ChangeRank    string `json:"changeRank"`
+	UpDownCount   string `json:"upDownCount"`
+	NetInflow     string `json:"netInflow"`
+	DealAmount    string `json:"dealAmount"`
+}
+
+// ConceptStock 概念成分股
+type ConceptStock struct {
+	Code          string `json:"code"`
+	Name          string `json:"name"`
+	Price         string `json:"price"`
+	ChangePercent string `json:"changePercent"`
+	Change        string `json:"change"`
+	Speed         string `json:"speed"`
+	Turnover      string `json:"turnover"`
+	VolumeRatio   string `json:"volumeRatio"`
+	Amplitude     string `json:"amplitude"`
+	DealAmount    string `json:"dealAmount"`
+	FlowShares    string `json:"flowShares"`
+	FlowMarketCap string `json:"flowMarketCap"`
+	PERatio       string `json:"peRatio"`
+}
+
+// ConceptKLineData 同花顺概念板块 K 线数据
+type ConceptKLineData struct {
+	Name       string             `json:"name"`
+	Total      int                `json:"total"`
+	Start      string             `json:"start"`
+	Factor     float64            `json:"factor"`
+	IssuePrice float64            `json:"issuePrice"`
+	KLines     []ConceptKLineItem `json:"kLines"`
+}
+
+// ConceptKLineItem 单根 K 线
+type ConceptKLineItem struct {
+	Date   string  `json:"date"`
+	Open   float64 `json:"open"`
+	Close  float64 `json:"close"`
+	Low    float64 `json:"low"`
+	High   float64 `json:"high"`
+	Volume float64 `json:"volume"`
+}
+
+// ConceptPlate 概念板块（用于 GetAllConceptPlates）
+type ConceptPlate struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
+// RzrqRankItem 融资融券排名项
+type RzrqRankItem struct {
+	StockCode   string `json:"stockCode"`
+	StockName   string `json:"stockName"`
+	Date        int64  `json:"date"`
+	Lrye        string `json:"lrye"`
+	LryeRate    string `json:"lryeRate"`
+	Rzye        string `json:"rzye"`
+	RzyeRate    string `json:"rzyeRate"`
+	Rqye        string `json:"rqye"`
+	RqyeRate    string `json:"rqyeRate"`
+	Jmr         string `json:"jmr"`
+	JmrRate     string `json:"jmrRate"`
+	Rzmre       string `json:"rzmre"`
+	Rzche       string `json:"rzche"`
+	Rzjmce      string `json:"rzjmce"`
+	Yezf        string `json:"yezf"`
+	ClosePrice  string `json:"close_price"`
+	CloseProfit string `json:"close_profit"`
+	MarketId    string `json:"marketId"`
+}
+
+// RzrqRankData 融资融券排名数据
+type RzrqRankData struct {
+	Type string         `json:"type"`
+	List []RzrqRankItem `json:"list"`
+}
+
+// RzrqTrendItem 融资融券余额走势项
+type RzrqTrendItem struct {
+	Date   string `json:"date"`
+	Rzye   string `json:"rzye"`
+	Rqye   string `json:"rqye"`
+	Rzmre  string `json:"rzmre"`
+	Rzche  string `json:"rzche"`
+	Rqmcl  string `json:"rqmcl"`
+	Rqchl  string `json:"rqchl"`
+}
+
+// RzrqTrendData 融资融券余额走势数据
+type RzrqTrendData struct {
+	Type string          `json:"type"`
+	List []RzrqTrendItem `json:"list"`
+}

@@ -2676,3 +2676,64 @@ export function QuitApp() {
   }
   return Promise.resolve();
 }
+
+// ========== 概念板块/炒作题材/融资融券 ==========
+
+export function ConceptDetail(arg1) {
+  if (isWailsMode()) return window.go.main.App.ConceptDetail(arg1);
+  return apiService.client.get('/market/concept-detail', { params: { conceptCode: arg1 }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => null);
+}
+
+export function ConceptKLine(arg1) {
+  if (isWailsMode()) return window.go.main.App.ConceptKLine(arg1);
+  return apiService.client.get('/market/concept-kline', { params: { plateCode: arg1 }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => null);
+}
+
+export function ConceptRealHead(arg1) {
+  if (isWailsMode()) return window.go.main.App.ConceptRealHead(arg1);
+  return apiService.client.get('/market/concept-realhead', { params: { plateCode: arg1 }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => null);
+}
+
+export function ConceptStocks(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.ConceptStocks(arg1, arg2);
+  return apiService.client.get('/market/concept-stocks', { params: { conceptCode: arg1, page: arg2 }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => []);
+}
+
+export function FindConceptCodeByName(arg1) {
+  if (isWailsMode()) return window.go.main.App.FindConceptCodeByName(arg1);
+  return apiService.client.get('/market/concept-code-by-name', { params: { name: arg1 }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => '');
+}
+
+export function GetAllConceptPlates() {
+  if (isWailsMode()) return window.go.main.App.GetAllConceptPlates();
+  return apiService.client.get('/market/concept-plates', { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => []);
+}
+
+export function ConceptEventList(arg1) {
+  if (isWailsMode()) return window.go.main.App.ConceptEventList(arg1);
+  return apiService.client.get('/market/concept-events', { params: { date: arg1 }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => []);
+}
+
+export function RzrqRank(arg1, arg2, arg3, arg4, arg5, arg6) {
+  if (isWailsMode()) return window.go.main.App.RzrqRank(arg1, arg2, arg3, arg4, arg5, arg6);
+  return apiService.client.get('/market/rzrq-rank', {
+    params: { type: arg1, sortKey: arg2, sortType: arg3, date: arg4, length: arg5, offset: arg6 },
+    headers: getAuthHeaders()
+  })
+    .then(extractApiData)
+    .catch(() => ({ type: arg1, list: [] }));
+}

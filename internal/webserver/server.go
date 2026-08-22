@@ -307,6 +307,20 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/concept-fund-flow/list", handlers.GetConceptFundFlowListByDate)
 			protected.GET("/market/concept-fund-flow/top", handlers.GetConceptFundFlowTopListByDate)
 
+			// 概念板块详情/K线/成分股/实时行情
+			protected.GET("/market/concept-detail", handlers.GetConceptDetail)
+			protected.GET("/market/concept-kline", handlers.GetConceptKLine)
+			protected.GET("/market/concept-realhead", handlers.GetConceptRealHead)
+			protected.GET("/market/concept-stocks", handlers.GetConceptStocks)
+			protected.GET("/market/concept-plates", handlers.GetAllConceptPlates)
+			protected.GET("/market/concept-code-by-name", handlers.FindConceptCodeByName)
+
+			// 每日炒作题材
+			protected.GET("/market/concept-events", handlers.GetConceptEventList)
+
+			// 融资融券排名
+			protected.GET("/market/rzrq-rank", handlers.GetRzrqRank)
+
 			// 异动监控
 			protected.GET("/stock-changes", handlers.GetStockChanges)
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)

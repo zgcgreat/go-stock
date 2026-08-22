@@ -15,12 +15,14 @@ import loginView from "../components/Login.vue"
 import registerView from "../components/Register.vue"
 import dailyOperationPlanView from "../components/DailyOperationPlan.vue"
 import aiConfigManagerView from "../components/ai-config-manager.vue"
+import homeView from "../components/Home.vue"
 import Auth from '../utils/auth.js'
 
 const routes = [
     { path: '/login', component: loginView, name: 'login', meta: { public: true } },
     { path: '/register', component: registerView, name: 'register', meta: { public: true } },
     { path: '/', component: stockView, name: 'stock'},
+    { path: '/home', component: homeView, name: 'home'},
     { path: '/fund', component: fundView, name: 'fund' },
     { path: '/settings', component: settingsView, name: 'settings' },
     { path: '/about', component: aboutView, name: 'about' },

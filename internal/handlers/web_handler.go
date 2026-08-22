@@ -1877,3 +1877,85 @@ func DeleteCustomStrategy(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": -1, "message": result})
 	}
 }
+
+// GetConceptDetail 获取概念板块详情
+func GetConceptDetail(c *gin.Context) {
+	conceptCode := c.Query("conceptCode")
+	if conceptCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "conceptCode 参数不能为空"})
+		return
+	}
+	result := data.NewMarketNewsApi().ConceptDetail(conceptCode)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetConceptKLine 获取概念板块K线
+func GetConceptKLine(c *gin.Context) {
+	plateCode := c.Query("plateCode")
+	if plateCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "plateCode 参数不能为空"})
+		return
+	}
+	result := data.NewMarketNewsApi().ConceptKLine(plateCode)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetConceptRealHead 获取概念板块实时行情
+func GetConceptRealHead(c *gin.Context) {
+	plateCode := c.Query("plateCode")
+	if plateCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "plateCode 参数不能为空"})
+		return
+	}
+	result := data.NewMarketNewsApi().ConceptRealHead(plateCode)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetConceptStocks 获取概念板块成分股
+func GetConceptStocks(c *gin.Context) {
+	conceptCode := c.Query("conceptCode")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if conceptCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "conceptCode 参数不能为空"})
+		return
+	}
+	result := data.NewMarketNewsApi().ConceptStocks(conceptCode, page)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// FindConceptCodeByName 通过名称查找概念代码
+func FindConceptCodeByName(c *gin.Context) {
+	name := c.Query("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "name 参数不能为空"})
+		return
+	}
+	result := data.NewMarketNewsApi().FindConceptCodeByName(name)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetAllConceptPlates 获取所有概念板块
+func GetAllConceptPlates(c *gin.Context) {
+	result := data.NewMarketNewsApi().GetAllConceptPlates()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetConceptEventList 获取每日炒作题材事件列表
+func GetConceptEventList(c *gin.Context) {
+	date := c.DefaultQuery("date", "")
+	result := data.NewMarketNewsApi().ConceptEventList(date)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetRzrqRank 获取融资融券排名
+func GetRzrqRank(c *gin.Context) {
+	rzrqType := c.DefaultQuery("type", "hyList")
+	sortKey := c.DefaultQuery("sortKey", "jmr")
+	sortType := c.DefaultQuery("sortType", "desc")
+	date := c.DefaultQuery("date", "")
+	length, _ := strconv.Atoi(c.DefaultQuery("length", "20"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	result := data.NewMarketNewsApi().RzrqRank(rzrqType, sortKey, sortType, date, length, offset)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
