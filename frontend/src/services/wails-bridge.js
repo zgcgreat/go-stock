@@ -2737,3 +2737,36 @@ export function RzrqRank(arg1, arg2, arg3, arg4, arg5, arg6) {
     .then(extractApiData)
     .catch(() => ({ type: arg1, list: [] }));
 }
+
+// ========== 技能广场 ==========
+
+export function PromptPlazaRequest(method, apiBase, path, query, body, token) {
+  if (isWailsMode()) return window.go.main.App.PromptPlazaRequest(method, apiBase, path, query, body, token);
+  // Web 模式：直接调用远程 API
+  const url = apiBase.replace(/\/+$/, '') + path;
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const config = { headers, params: query || {} };
+  if (method === 'POST') {
+    return apiService.client.post(url, body, config).then(res => res.data).catch(() => ({ code: -1, message: '请求失败' }));
+  }
+  return apiService.client.get(url, config).then(res => res.data).catch(() => ({ code: -1, message: '请求失败' }));
+}
+
+export function ListFilesystemSkills() {
+  if (isWailsMode()) return window.go.main.App.ListFilesystemSkills();
+  // Web 模式：返回空列表（本地技能目录不可访问）
+  return [];
+}
+
+export function PackSkillToBase64(arg1) {
+  if (isWailsMode()) return window.go.main.App.PackSkillToBase64(arg1);
+  // Web 模式：不支持本地打包
+  return { code: -1, msg: 'Web 模式不支持本地技能打包', data: null };
+}
+
+export function ImportSkillFromBase64(arg1) {
+  if (isWailsMode()) return window.go.main.App.ImportSkillFromBase64(arg1);
+  // Web 模式：不支持本地导入
+  return 'Web 模式不支持本地技能导入，请使用远程技能广场';
+}

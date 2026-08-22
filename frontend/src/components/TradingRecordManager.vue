@@ -753,13 +753,37 @@ onUnmounted(() => {
       </n-statistic>
     </n-grid-item>
     <n-grid-item>
-
       <n-statistic label="收益率">
         <n-text :type="statisticsRef?.profitRate > 0 ? 'error' : 'success'">
           <n-number-animation :from="0" :to="statisticsRef?.profitRate || 0" :precision="2"  />%
         </n-text>
       </n-statistic>
-
+    </n-grid-item>
+  </n-grid>
+  <n-grid :cols="4" :x-gap="12" style="padding: 12px; border-radius: 4px; background: var(--n-color, #fafafa);">
+    <n-grid-item>
+      <n-statistic label="今日买入(元)" size="small">
+        <n-number-animation :from="0" :to="statisticsRef?.todayBuyAmount || 0" :precision="2" />
+      </n-statistic>
+    </n-grid-item>
+    <n-grid-item>
+      <n-statistic label="今日卖出(元)" size="small">
+        <n-number-animation :from="0" :to="statisticsRef?.todaySellAmount || 0" :precision="2" />
+      </n-statistic>
+    </n-grid-item>
+    <n-grid-item>
+      <n-statistic label="今日已实现盈亏(元)" size="small">
+        <n-text :type="(statisticsRef?.todayRealizedProfit || 0) > 0 ? 'error' : 'success'">
+          <n-number-animation :from="0" :to="statisticsRef?.todayRealizedProfit || 0" :precision="2" />
+        </n-text>
+      </n-statistic>
+    </n-grid-item>
+    <n-grid-item>
+      <n-statistic label="今日总盈亏(元)" size="small">
+        <n-text :type="(statisticsRef?.todayProfit || 0) > 0 ? 'error' : 'success'">
+          <n-number-animation :from="0" :to="statisticsRef?.todayProfit || 0" :precision="2" />
+        </n-text>
+      </n-statistic>
     </n-grid-item>
   </n-grid>
 

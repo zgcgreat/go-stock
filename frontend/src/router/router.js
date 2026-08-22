@@ -16,6 +16,7 @@ import registerView from "../components/Register.vue"
 import dailyOperationPlanView from "../components/DailyOperationPlan.vue"
 import aiConfigManagerView from "../components/ai-config-manager.vue"
 import homeView from "../components/Home.vue"
+import skillPlazaView from "../components/skillPlaza.vue"
 import Auth from '../utils/auth.js'
 
 const routes = [
@@ -35,6 +36,7 @@ const routes = [
     { path: '/user-management', component: userManager, name: 'userManagement' },
     { path: '/daily-operation-plans', component: dailyOperationPlanView, name: 'dailyOperationPlans' },
     { path: '/ai-config-manager', component: aiConfigManagerView, name: 'aiConfigManager' },
+    { path: '/skills-plaza', component: skillPlazaView, name: 'skillsPlaza' },
 
 ]
 
