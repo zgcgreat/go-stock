@@ -321,6 +321,9 @@ func (ws *WebServer) initRouter() {
 			// 融资融券排名
 			protected.GET("/market/rzrq-rank", handlers.GetRzrqRank)
 
+			// 股指期货持仓
+			protected.GET("/market/futures-position", handlers.GetFuturesPositionTrend)
+
 			// 异动监控
 			protected.GET("/stock-changes", handlers.GetStockChanges)
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)

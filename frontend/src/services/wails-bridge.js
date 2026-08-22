@@ -2770,3 +2770,15 @@ export function ImportSkillFromBase64(arg1) {
   // Web 模式：不支持本地导入
   return 'Web 模式不支持本地技能导入，请使用远程技能广场';
 }
+
+// ========== 股指期货持仓 ==========
+
+export function GetFuturesPositionTrend(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.GetFuturesPositionTrend(arg1, arg2, arg3);
+  return apiService.client.get('/market/futures-position', {
+    params: { variety: arg1, contract: arg2, days: arg3 },
+    headers: getAuthHeaders()
+  })
+    .then(extractApiData)
+    .catch(() => null);
+}

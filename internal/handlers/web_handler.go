@@ -1959,3 +1959,13 @@ func GetRzrqRank(c *gin.Context) {
 	result := data.NewMarketNewsApi().RzrqRank(rzrqType, sortKey, sortType, date, length, offset)
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
+
+// GetFuturesPositionTrend 获取股指期货持仓趋势
+func GetFuturesPositionTrend(c *gin.Context) {
+	variety := c.DefaultQuery("variety", "IF")
+	contract := c.DefaultQuery("contract", "")
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "60"))
+
+	result := data.NewFuturesPositionApi().GetFuturesPositionTrend(variety, contract, days)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
