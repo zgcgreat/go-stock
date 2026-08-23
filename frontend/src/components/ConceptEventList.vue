@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, onBeforeMount, ref} from 'vue'
 import {ConceptEventList, GetConfig} from "../services/wails-bridge.js";
 import {useMessage} from "naive-ui";
@@ -50,11 +50,12 @@ const expandedNames = ref<string[]>([])
 
 const queryDate = computed(() => dateTs.value ? format(new Date(dateTs.value), 'yyyy-MM-dd') : '')
 
-// 鎸夋棩鏈熷垎缁勶紙涓€绾ф爣棰橈級锛屾棩鏈熷唴鎸夋姇璧勬柟鍚戝垎缁勶紙浜岀骇鏍囬锛夛紝浜嬩欢鏍囬涓轰笁绾?const groupedByDate = computed(() => {
+// 按日期分组（一级标题），日期内按投资方向分组（二级标题），事件标题为三级
+const groupedByDate = computed(() => {
   return list.value.map(day => {
     const dirMap = new Map<string, ConceptEvent[]>()
     for (const ev of day.eventList) {
-      const dir = ev.investmentDirection || '鏈垎绫?
+      const dir = ev.investmentDirection || '未分类'
       if (!dirMap.has(dir)) dirMap.set(dir, [])
       dirMap.get(dir)!.push(ev)
     }
@@ -71,19 +72,21 @@ const queryDate = computed(() => dateTs.value ? format(new Date(dateTs.value), '
   })
 })
 
-// 涓婚鑹诧紙K绾垮脊绐楅渶瑕侊級
+// 主题色（K线弹窗需要）
 const darkTheme = ref(false)
 
-// K绾垮脊绐楃姸鎬?const klineModalShow = ref(false)
+// K线弹窗状态
+const klineModalShow = ref(false)
 const klineCode = ref('')
 const klineName = ref('')
 
-// 姒傚康璇︽儏寮圭獥鐘舵€?const conceptModalShow = ref(false)
+// 概念详情弹窗状态
+const conceptModalShow = ref(false)
 const conceptCode = ref('')
 const conceptName = ref('')
 const conceptPlateCode = ref('')
 
-/** 鍚岃姳椤?marketId 鈫?浜ゆ槗鎵€鍚庣紑 */
+/** 同花顺 marketId → 交易所后缀 */
 function marketIdToSuffix(marketId: string): string {
   switch (marketId) {
     case '17':
@@ -100,11 +103,12 @@ function marketIdToSuffix(marketId: string): string {
   }
 }
 
-/** 鍏滃簳锛氭寜鑲＄エ浠ｇ爜鍓嶇紑鎺ㄦ柇浜ゆ槗鎵€鍚庣紑 */
+/** 兜底：按股票代码前缀推断交易所后缀 */
 function codeToSuffix(stockCode: string): string {
   const code = String(stockCode || '').trim()
   if (!code) return ''
-  // 娓偂锛?浣嶄笖浠?/1/2/3寮€澶?  if (/^\d{5}$/.test(code)) return '.HK'
+  // 港股：5位且以0/1/2/3开头
+  if (/^\d{5}$/.test(code)) return '.HK'
   const first = code.charAt(0)
   if (first === '6' || first === '9' || first === '5' || first === '1') return '.SH'
   if (first === '0' || first === '3') return '.SZ'
@@ -112,7 +116,7 @@ function codeToSuffix(stockCode: string): string {
   return ''
 }
 
-/** 鎷兼帴 StockLightweightKlineChart 鎵€闇€鐨勪唬鐮侊紙濡?600000.SH锛?*/
+/** 拼接 StockLightweightKlineChart 所需的代码（如 600000.SH） */
 function toKlineCode(stockCode: string, marketId: string): string {
   let suffix = marketIdToSuffix(marketId)
   if (!suffix) suffix = codeToSuffix(stockCode)
@@ -122,11 +126,11 @@ function toKlineCode(stockCode: string, marketId: string): string {
 function themeTypeText(type: string) {
   switch (type) {
     case 'concept':
-      return '姒傚康'
+      return '概念'
     case 'industry':
-      return '琛屼笟'
+      return '行业'
     case 'concept-subdivision':
-      return '缁嗗垎'
+      return '细分'
     default:
       return type
   }
@@ -147,9 +151,9 @@ function themeTagType(type: string): 'info' | 'success' | 'warning' {
 
 function limitUpText(state: number | null): string {
   if (state == null) return ''
-  if (state === 1) return '棣栨澘'
-  if (state === 2) return '浜屾澘'
-  if (state >= 3) return state + '鏉?
+  if (state === 1) return '首板'
+  if (state === 2) return '二板'
+  if (state >= 3) return state + '板'
   return ''
 }
 
@@ -173,8 +177,9 @@ function openStock(stock: TopStock) {
 }
 
 function openConcept(theme: Theme) {
-  // 鎵撳紑鍚岃姳椤烘蹇佃鎯呭脊绐楋紝灞曠ず鏉垮潡琛屾儏銆並绾裤€佹垚鍒嗚偂
-  // plateCode 浼犻鏉?indexCode锛堟澘鍧椾唬鐮?88xxxx锛岀敤浜?K绾?realhead锛?  // conceptCode 鐣欑┖锛岀敱 modal 鍐呴儴閫氳繃 conceptName 瀛楀吀鍖归厤鐪熸鐨勬蹇典唬鐮?30xxxx)
+  // 打开同花顺概念详情弹窗，展示板块行情、K线、成分股
+  // plateCode 传题材 indexCode（板块代码 88xxxx，用于 K线/realhead）
+  // conceptCode 留空，由 modal 内部通过 conceptName 字典匹配真正的概念代码(30xxxx)
   conceptPlateCode.value = theme.indexCode || ''
   conceptCode.value = ''
   conceptName.value = theme.showName || theme.indexName || ''
@@ -186,12 +191,13 @@ async function fetchData() {
   try {
     const res = await ConceptEventList(queryDate.value)
     list.value = res || []
-    // 榛樿灞曞紑绗竴澶?    expandedNames.value = list.value.length ? [list.value[0].date] : []
+    // 默认展开第一天
+    expandedNames.value = list.value.length ? [list.value[0].date] : []
     if (!list.value.length) {
-      message.info(`${queryDate.value || '浠婃棩'} 鏆傛棤鐐掍綔棰樻潗鏁版嵁`)
+      message.info(`${queryDate.value || '今日'} 暂无炒作题材数据`)
     }
   } catch (e) {
-    message.error('鑾峰彇鏁版嵁澶辫触: ' + e)
+    message.error('获取数据失败: ' + e)
   } finally {
     loading.value = false
   }
@@ -218,8 +224,8 @@ onBeforeMount(() => {
   <n-card size="small" style="--wails-draggable:no-drag">
     <template #header>
       <n-flex align="center" :wrap="false">
-        <n-text strong>姣忔棩鐐掍綔棰樻潗</n-text>
-        <n-text depth="3" style="font-size: 12px;">绔為鏉?/n-text>
+        <n-text strong>每日炒作题材</n-text>
+        <n-text depth="3" style="font-size: 12px;">竞题材</n-text>
       </n-flex>
     </template>
     <template #header-extra>
@@ -227,7 +233,7 @@ onBeforeMount(() => {
         <n-date-picker v-model:value="dateTs" type="date" size="small" clearable
                        :is-date-disabled="(ts:number) => ts > Date.now()"
                        @update:value="onDateChange" style="width: 160px"/>
-        <n-button size="small" type="primary" :loading="loading" @click="refresh">鍒锋柊</n-button>
+        <n-button size="small" type="primary" :loading="loading" @click="refresh">刷新</n-button>
       </n-flex>
     </template>
 
@@ -239,9 +245,9 @@ onBeforeMount(() => {
               <n-flex align="center" :wrap="false">
                 <n-text strong>{{ day.date }}</n-text>
                 <n-text depth="3" style="font-size: 14px;">{{ weekday(day.date) }}</n-text>
-                <n-tag size="small" round :bordered="false" type="info">{{ day.totalEvents }} 浜嬩欢</n-tag>
+                <n-tag size="small" round :bordered="false" type="info">{{ day.totalEvents }} 事件</n-tag>
                 <n-tag size="small" round :bordered="false" type="error">
-                  鐑害 <n-number-animation :from="0" :to="day.totalHeat" show-separator/>
+                  热度 <n-number-animation :from="0" :to="day.totalHeat" show-separator/>
                 </n-tag>
               </n-flex>
             </template>
@@ -261,7 +267,7 @@ onBeforeMount(() => {
                     <template #header-extra>
                       <n-flex align="center" :wrap="false">
                         <!-- <n-tag size="small" type="error" round :bordered="false">
-                          鐑害 <n-number-animation :from="0" :to="ev.heat" show-separator/>
+                          热度 <n-number-animation :from="0" :to="ev.heat" show-separator/>
                         </n-tag> -->
                         <n-text depth="3" style="font-size: 12px;">{{ formatTime(ev.createTime) }}</n-text>
                       </n-flex>
@@ -273,14 +279,14 @@ onBeforeMount(() => {
                                @click="openConcept(t)" style="cursor:pointer">
                           {{ t.showName }}
                           <n-text depth="3" style="font-size: 11px; margin-left: 2px;">
-                            路{{ themeTypeText(t.type) }}
+                            ·{{ themeTypeText(t.type) }}
                           </n-text>
                         </n-tag>
                       </n-flex>
                     </template>
                     <template #footer>
                       <n-flex size="small" align="center" style="margin-top: 6px;">
-                        <n-text depth="3" style="font-size: 12px;">榫欏ご鑲★細</n-text>
+                        <n-text depth="3" style="font-size: 12px;">龙头股：</n-text>
                         <n-tag v-for="s in ev.topStocks" :key="s.stockCode"
                                size="small" :bordered="true"
                                :type="s.risePercent > 0 ? 'error' : 'success'"
@@ -302,14 +308,14 @@ onBeforeMount(() => {
             </div>
           </n-collapse-item>
         </n-collapse>
-        <n-empty v-else-if="!loading" description="鏆傛棤鏁版嵁" style="padding: 40px 0;"/>
+        <n-empty v-else-if="!loading" description="暂无数据" style="padding: 40px 0;"/>
       </n-scrollbar>
     </n-spin>
   </n-card>
 
-  <!-- 榫欏ご鑲?K绾垮脊绐楋紙椤圭洰鍐呯粍浠讹紝涓嶆墦寮€澶栭儴閾炬帴锛?-->
+  <!-- 龙头股 K线弹窗（项目内组件，不打开外部链接） -->
   <n-modal v-model:show="klineModalShow"
-           :title="klineName + ' 鈥?K绾?"
+           :title="klineName + ' — K线'"
            preset="card"
            style="width: min(1100px, 96vw); max-width: 96vw; box-sizing: border-box"
            :content-style="{
@@ -329,7 +335,7 @@ onBeforeMount(() => {
     />
   </n-modal>
 
-  <!-- 姒傚康璇︽儏寮圭獥 -->
+  <!-- 概念详情弹窗 -->
   <concept-detail-modal
     v-model:show="conceptModalShow"
     :concept-code="conceptCode"
@@ -339,4 +345,3 @@ onBeforeMount(() => {
 
 <style scoped>
 </style>
-
