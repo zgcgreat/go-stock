@@ -364,10 +364,10 @@ func (ws *WebServer) initRouter() {
 				admin.PUT("/users/password", handlers.ResetUserPasswordHandler)
 				admin.PUT("/users/:id/role", handlers.UpdateUserRoleHandler)
 				admin.PUT("/users/:id/vip", handlers.UpdateUserVipInfoHandler)
-			}
 
-			// 临时工具：修复 admin 用户角色（生产环境应删除）
-			protected.POST("/tools/fix-admin-role", handlers.FixAdminRole)
+				// 临时工具：修复 admin 用户角色（生产环境应删除）
+				admin.POST("/tools/fix-admin-role", handlers.FixAdminRole)
+			}
 		}
 	}
 

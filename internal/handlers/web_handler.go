@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -700,6 +701,21 @@ func FetchAiModels(c *gin.Context) {
 		return
 	}
 
+	// SSRF 防护: 验证 URL 格式和协议
+	parsedURL, err := url.Parse(baseUrl)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "baseUrl 必须是 http 或 https 协议"})
+		return
+	}
+	// 阻止访问内网地址
+	hostname := parsedURL.Hostname()
+	if hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1" ||
+		strings.HasPrefix(hostname, "10.") || strings.HasPrefix(hostname, "172.") ||
+		strings.HasPrefix(hostname, "192.168.") || hostname == "169.254.169.254" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "不允许访问内网地址"})
+		return
+	}
+
 	type modelItem struct {
 		ID string `json:"id"`
 	}
@@ -749,35 +765,46 @@ func FetchAiModelInfo(c *gin.Context) {
 	info := &AiModelInfo{ModelName: modelName}
 
 	if apiKey != "" && baseUrl != "" && modelName != "" {
-		type modelDetail struct {
-			ID             string `json:"id"`
-			MaxContextLen  int    `json:"max_context_length"`
-			ContextLength  int    `json:"context_length"`
-			MaxOutputTok   int    `json:"max_output_tokens"`
-			MaxTokensField int    `json:"max_tokens"`
-		}
-		var detail modelDetail
+		// SSRF 防护: 验证 URL 格式和协议
+		parsedURL, err := url.Parse(baseUrl)
+		if err == nil && (parsedURL.Scheme == "http" || parsedURL.Scheme == "https") {
+			hostname := parsedURL.Hostname()
+			// 阻止访问内网地址
+			if hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1" &&
+				!strings.HasPrefix(hostname, "10.") && !strings.HasPrefix(hostname, "172.") &&
+				!strings.HasPrefix(hostname, "192.168.") && hostname != "169.254.169.254" {
 
-		client := resty.New()
-		client.SetBaseURL(baseUrl)
-		client.SetHeader("Authorization", "Bearer "+apiKey)
-		client.SetHeader("Content-Type", "application/json")
+				type modelDetail struct {
+					ID             string `json:"id"`
+					MaxContextLen  int    `json:"max_context_length"`
+					ContextLength  int    `json:"context_length"`
+					MaxOutputTok   int    `json:"max_output_tokens"`
+					MaxTokensField int    `json:"max_tokens"`
+				}
+				var detail modelDetail
 
-		resp, err := client.R().SetResult(&detail).Get("/models/" + modelName)
-		if err == nil && !resp.IsError() && detail.ID != "" {
-			switch {
-			case detail.MaxContextLen > 0:
-				info.MaxTokens = detail.MaxContextLen
-				info.Source = "api"
-			case detail.ContextLength > 0:
-				info.MaxTokens = detail.ContextLength
-				info.Source = "api"
-			case detail.MaxOutputTok > 0:
-				info.MaxTokens = detail.MaxOutputTok
-				info.Source = "api"
-			case detail.MaxTokensField > 0:
-				info.MaxTokens = detail.MaxTokensField
-				info.Source = "api"
+				client := resty.New()
+				client.SetBaseURL(baseUrl)
+				client.SetHeader("Authorization", "Bearer "+apiKey)
+				client.SetHeader("Content-Type", "application/json")
+
+				resp, err := client.R().SetResult(&detail).Get("/models/" + modelName)
+				if err == nil && !resp.IsError() && detail.ID != "" {
+					switch {
+					case detail.MaxContextLen > 0:
+						info.MaxTokens = detail.MaxContextLen
+						info.Source = "api"
+					case detail.ContextLength > 0:
+						info.MaxTokens = detail.ContextLength
+						info.Source = "api"
+					case detail.MaxOutputTok > 0:
+						info.MaxTokens = detail.MaxOutputTok
+						info.Source = "api"
+					case detail.MaxTokensField > 0:
+						info.MaxTokens = detail.MaxTokensField
+						info.Source = "api"
+					}
+				}
 			}
 		}
 	}

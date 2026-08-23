@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -161,8 +162,16 @@ func GetPlazaQuestionDetail(c *gin.Context) {
 // SyncPlazaData 手动触发提示词广场数据同步
 func SyncPlazaData(c *gin.Context) {
 	apiBase := c.Query("apiBase")
-	username := c.DefaultQuery("username", "Joy")
-	password := c.DefaultQuery("password", "zgc@202123")
+	username := c.Query("username")
+	password := c.Query("password")
+
+	if username == "" || password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "username 和 password 参数不能为空",
+		})
+		return
+	}
 
 	sync := data.NewPlazaSyncService(apiBase)
 
@@ -209,8 +218,18 @@ func SyncPlazaData(c *gin.Context) {
 func CreatePlazaSyncCronTask(c *gin.Context) {
 	var req struct {
 		CronExpr string `json:"cronExpr"` // 定时表达式，默认每天凌晨2点
+		Username string `json:"username"`
+		Password string `json:"password"`
 	}
 	c.ShouldBindJSON(&req)
+
+	if req.Username == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "username 和 password 不能为空",
+		})
+		return
+	}
 
 	if req.CronExpr == "" {
 		req.CronExpr = "0 0 2 * * *" // 默认每天凌晨2点执行
@@ -231,7 +250,7 @@ func CreatePlazaSyncCronTask(c *gin.Context) {
 		CronExpr:    req.CronExpr,
 		TaskType:    "prompt_plaza_sync",
 		Target:      "plaza",
-		Params:      `{"username":"Joy","password":"zgc@202123"}`,
+		Params:      fmt.Sprintf(`{"username":"%s","password":"%s"}`, req.Username, req.Password),
 		Enable:      true,
 		Status:      "active",
 		Description: "定时同步提示词广场和问答广场数据到本地数据库",
