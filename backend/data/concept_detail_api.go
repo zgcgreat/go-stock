@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,6 +14,9 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/duke-git/lancet/v2/convertor"
 )
+
+// cleanMarketValueRe 折叠内部空白的正则（包级别预编译）
+var cleanMarketValueRe = regexp.MustCompile(`\s+`)
 
 // @Author spark
 // @Date 2026/8/6
@@ -27,7 +31,9 @@ func (m MarketNewsApi) ConceptDetail(conceptCode string) *models.ConceptDetailIn
 	if conceptCode == "" {
 		return info
 	}
-	url := fmt.Sprintf("https://q.10jqka.com.cn/gn/detail/code/%s/", conceptCode)
+	// URL 编码用户输入，防止路径注入
+	encodedCode := url.PathEscape(conceptCode)
+	url := fmt.Sprintf("https://q.10jqka.com.cn/gn/detail/code/%s/", encodedCode)
 	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("Host", "q.10jqka.com.cn").
 		SetHeader("Referer", "https://q.10jqka.com.cn/").
@@ -35,6 +41,10 @@ func (m MarketNewsApi) ConceptDetail(conceptCode string) *models.ConceptDetailIn
 		Get(url)
 	if err != nil {
 		logger.SugaredLogger.Errorf("ConceptDetail request err: %s", err.Error())
+		return info
+	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("ConceptDetail request status: %d", resp.StatusCode())
 		return info
 	}
 
@@ -157,7 +167,9 @@ func (m MarketNewsApi) ConceptStocks(conceptCode string, page int) []models.Conc
 	if conceptCode == "" || page < 1 {
 		return nil
 	}
-	url := fmt.Sprintf("https://q.10jqka.com.cn/gn/detail/field/199112/order/desc/page/%d/ajax/1/code/%s", page, conceptCode)
+	// URL 编码用户输入
+	encodedCode := url.PathEscape(conceptCode)
+	url := fmt.Sprintf("https://q.10jqka.com.cn/gn/detail/field/199112/order/desc/page/%d/ajax/1/code/%s", page, encodedCode)
 	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("Host", "q.10jqka.com.cn").
 		SetHeader("Referer", "https://q.10jqka.com.cn/").
@@ -168,6 +180,10 @@ func (m MarketNewsApi) ConceptStocks(conceptCode string, page int) []models.Conc
 		Get(url)
 	if err != nil {
 		logger.SugaredLogger.Errorf("ConceptStocks request err: %s", err.Error())
+		return nil
+	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("ConceptStocks request status: %d", resp.StatusCode())
 		return nil
 	}
 	htmlContent := GB18030ToUTF8(resp.Body())
@@ -235,8 +251,7 @@ func cleanMarketValue(v string) string {
 		return ""
 	}
 	// 折叠内部空白
-	re := regexp.MustCompile(`\s+`)
-	v = re.ReplaceAllString(v, "")
+	v = cleanMarketValueRe.ReplaceAllString(v, "")
 	return v
 }
 
@@ -264,7 +279,9 @@ func (m MarketNewsApi) ConceptKLine(plateCode string) *models.ConceptKLineData {
 	if plateCode == "" {
 		return result
 	}
-	url := fmt.Sprintf("https://d.10jqka.com.cn/v6/line/bk_%s/01/all.js", plateCode)
+	// URL 编码用户输入
+	encodedCode := url.PathEscape(plateCode)
+	url := fmt.Sprintf("https://d.10jqka.com.cn/v6/line/bk_%s/01/all.js", encodedCode)
 	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("Host", "d.10jqka.com.cn").
 		SetHeader("Referer", "https://q.10jqka.com.cn/").
@@ -272,6 +289,10 @@ func (m MarketNewsApi) ConceptKLine(plateCode string) *models.ConceptKLineData {
 		Get(url)
 	if err != nil {
 		logger.SugaredLogger.Errorf("ConceptKLine request err: %s", err.Error())
+		return result
+	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("ConceptKLine request status: %d", resp.StatusCode())
 		return result
 	}
 	body := string(resp.Body())
@@ -353,7 +374,9 @@ func (m MarketNewsApi) ConceptRealHead(plateCode string) *models.ConceptMarket {
 	if plateCode == "" {
 		return result
 	}
-	url := fmt.Sprintf("https://d.10jqka.com.cn/v2/realhead/bk_%s/last.js", plateCode)
+	// URL 编码用户输入
+	encodedCode := url.PathEscape(plateCode)
+	url := fmt.Sprintf("https://d.10jqka.com.cn/v2/realhead/bk_%s/last.js", encodedCode)
 	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("Host", "d.10jqka.com.cn").
 		SetHeader("Referer", "https://q.10jqka.com.cn/").
@@ -361,6 +384,10 @@ func (m MarketNewsApi) ConceptRealHead(plateCode string) *models.ConceptMarket {
 		Get(url)
 	if err != nil {
 		logger.SugaredLogger.Errorf("ConceptRealHead request err: %s", err.Error())
+		return result
+	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("ConceptRealHead request status: %d", resp.StatusCode())
 		return result
 	}
 	body := GB18030ToUTF8(resp.Body())
@@ -567,7 +594,9 @@ func (m MarketNewsApi) IndustryDetail(industryCode string) *models.ConceptDetail
 	if industryCode == "" {
 		return info
 	}
-	url := fmt.Sprintf("https://q.10jqka.com.cn/thshy/detail/code/%s/", industryCode)
+	// URL 编码用户输入
+	encodedCode := url.PathEscape(industryCode)
+	url := fmt.Sprintf("https://q.10jqka.com.cn/thshy/detail/code/%s/", encodedCode)
 	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("Host", "q.10jqka.com.cn").
 		SetHeader("Referer", "https://q.10jqka.com.cn/").
@@ -575,6 +604,10 @@ func (m MarketNewsApi) IndustryDetail(industryCode string) *models.ConceptDetail
 		Get(url)
 	if err != nil {
 		logger.SugaredLogger.Errorf("IndustryDetail request err: %s", err.Error())
+		return info
+	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("IndustryDetail request status: %d", resp.StatusCode())
 		return info
 	}
 

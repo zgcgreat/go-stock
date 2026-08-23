@@ -10,6 +10,7 @@ import (
 	"go-stock/backend/models"
 	"go-stock/backend/util"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1586,18 +1587,27 @@ func (m MarketNewsApi) GetUplimitHot(date string, limit int) map[string]any {
 
 // ConceptEventList 获取同花顺每日炒作题材事件列表
 func (m MarketNewsApi) ConceptEventList(date string) *[]models.ConceptEventDay {
-	url := "https://news.10jqka.com.cn/app/concept_v2_api/open/api/concept/event/jtcsm/v1/event/list"
+	reqURL := "https://news.10jqka.com.cn/app/concept_v2_api/open/api/concept/event/jtcsm/v1/event/list"
 	if date != "" {
-		url += "?date=" + date
+		// 验证日期格式 (YYYY-MM-DD)
+		if matched, _ := regexp.MatchString(`^\d{4}-\d{2}-\d{2}$`, date); !matched {
+			logger.SugaredLogger.Errorf("ConceptEventList invalid date format: %s", date)
+			return &[]models.ConceptEventDay{}
+		}
+		reqURL += "?date=" + url.QueryEscape(date)
 	}
 	resp, err := SharedHTTPClient.SetTimeout(30*time.Second).R().
 		SetHeader("Host", "news.10jqka.com.cn").
 		SetHeader("Origin", "https://news.10jqka.com.cn").
 		SetHeader("Referer", "https://news.10jqka.com.cn/").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
-		Get(url)
+		Get(reqURL)
 	if err != nil {
 		logger.SugaredLogger.Errorf("ConceptEventList err:%s", err.Error())
+		return &[]models.ConceptEventDay{}
+	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("ConceptEventList status:%d", resp.StatusCode())
 		return &[]models.ConceptEventDay{}
 	}
 	respMap := struct {
@@ -1618,21 +1628,48 @@ func (m MarketNewsApi) RzrqRank(rzrqType, sortKey, sortType, date string, length
 	if rzrqType == "" {
 		return res
 	}
+	// 验证 rzrqType 允许值
+	validTypes := map[string]bool{"hyList": true, "rqList": true, "rzrqTotal": true}
+	if !validTypes[rzrqType] {
+		logger.SugaredLogger.Errorf("RzrqRank invalid rzrqType: %s", rzrqType)
+		return res
+	}
 	if sortKey == "" {
 		sortKey = "jmr"
+	}
+	// 验证 sortKey 允许值
+	validSortKeys := map[string]bool{"jmr": true, "jmre": true, "jmrz": true, "jmrq": true, "rqye": true, "rzrqye": true}
+	if !validSortKeys[sortKey] {
+		logger.SugaredLogger.Errorf("RzrqRank invalid sortKey: %s", sortKey)
+		return res
 	}
 	if sortType == "" {
 		sortType = "desc"
 	}
+	// 验证 sortType 允许值
+	if sortType != "asc" && sortType != "desc" {
+		logger.SugaredLogger.Errorf("RzrqRank invalid sortType: %s", sortType)
+		return res
+	}
 	if length <= 0 {
 		length = 5
+	}
+	if length > 100 {
+		length = 100
 	}
 	if offset < 0 {
 		offset = 0
 	}
-	apiUrl := fmt.Sprintf("https://eq.10jqka.com.cn/rzrqEnhance/index.php?op=getRankData&type=%s&sortKey=%s&sortType=%s&length=%d&offset=%d", rzrqType, sortKey, sortType, length, offset)
+	// URL 编码参数
+	apiUrl := fmt.Sprintf("https://eq.10jqka.com.cn/rzrqEnhance/index.php?op=getRankData&type=%s&sortKey=%s&sortType=%s&length=%d&offset=%d",
+		url.QueryEscape(rzrqType), url.QueryEscape(sortKey), url.QueryEscape(sortType), length, offset)
 	if date != "" {
-		apiUrl += "&date=" + date
+		// 验证日期格式
+		if matched, _ := regexp.MatchString(`^\d{4}-\d{2}-\d{2}$`, date); !matched {
+			logger.SugaredLogger.Errorf("RzrqRank invalid date format: %s", date)
+			return res
+		}
+		apiUrl += "&date=" + url.QueryEscape(date)
 	}
 	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("Host", "eq.10jqka.com.cn").
@@ -1641,6 +1678,10 @@ func (m MarketNewsApi) RzrqRank(rzrqType, sortKey, sortType, date string, length
 		Get(apiUrl)
 	if err != nil {
 		logger.SugaredLogger.Errorf("RzrqRank err:%s", err.Error())
+		return res
+	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("RzrqRank status:%d", resp.StatusCode())
 		return res
 	}
 	respMap := struct {
