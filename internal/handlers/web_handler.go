@@ -1969,3 +1969,73 @@ func GetFuturesPositionTrend(c *gin.Context) {
 	result := data.NewFuturesPositionApi().GetFuturesPositionTrend(variety, contract, days)
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
+
+// ========== 知识库 Handler ==========
+// 注: 知识库功能依赖 chromem-go 向量数据库，Web端暂提供 stub 实现
+
+func ListKnowledgeBases(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []interface{}{}})
+}
+
+func CreateKnowledgeBase(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "知识库功能需要 chromem-go 向量数据库支持，Web端暂未启用"})
+}
+
+func DeleteKnowledgeBase(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "知识库功能需要 chromem-go 向量数据库支持，Web端暂未启用"})
+}
+
+func GetKnowledgeBaseInfo(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "知识库功能需要 chromem-go 向量数据库支持，Web端暂未启用"})
+}
+
+func AddKBDocument(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "知识库功能需要 chromem-go 向量数据库支持，Web端暂未启用"})
+}
+
+func SearchKnowledgeBaseHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []interface{}{}})
+}
+
+func ListKBDocuments(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []interface{}{}, "total": 0})
+}
+
+func DeleteKBDocument(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "知识库功能需要 chromem-go 向量数据库支持，Web端暂未启用"})
+}
+
+func GetKBVectorizingStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": nil})
+}
+
+func GetAllKBVectorizingStatuses(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []interface{}{}})
+}
+
+func SearchAllKnowledge(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []interface{}{}})
+}
+
+// ========== 用户画像 Handler ==========
+// 注: 用户画像功能依赖 agent 内部模块，Web端暂提供 stub 实现
+
+func GetUserProfileHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": nil})
+}
+
+func SaveUserProfileHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "用户画像功能需要 agent 内部模块支持，Web端暂未启用"})
+}
+
+func GetUserProfileEnabled(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": false})
+}
+
+func SetUserProfileEnabled(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "用户画像功能需要 agent 内部模块支持，Web端暂未启用"})
+}
+
+func GetUserProfileUpdatedAt(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": ""})
+}

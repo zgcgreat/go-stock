@@ -324,6 +324,26 @@ func (ws *WebServer) initRouter() {
 			// 股指期货持仓
 			protected.GET("/market/futures-position", handlers.GetFuturesPositionTrend)
 
+			// 知识库
+			protected.GET("/knowledge-base/list", handlers.ListKnowledgeBases)
+			protected.POST("/knowledge-base/create", handlers.CreateKnowledgeBase)
+			protected.POST("/knowledge-base/delete", handlers.DeleteKnowledgeBase)
+			protected.GET("/knowledge-base/info", handlers.GetKnowledgeBaseInfo)
+			protected.POST("/knowledge-base/add-doc", handlers.AddKBDocument)
+			protected.POST("/knowledge-base/search", handlers.SearchKnowledgeBaseHandler)
+			protected.GET("/knowledge-base/documents", handlers.ListKBDocuments)
+			protected.POST("/knowledge-base/delete-doc", handlers.DeleteKBDocument)
+			protected.GET("/knowledge-base/vectorizing-status", handlers.GetKBVectorizingStatus)
+			protected.GET("/knowledge-base/vectorizing-statuses", handlers.GetAllKBVectorizingStatuses)
+			protected.POST("/knowledge-base/search-all", handlers.SearchAllKnowledge)
+
+			// 用户画像
+			protected.GET("/user-profile", handlers.GetUserProfileHandler)
+			protected.POST("/user-profile/save", handlers.SaveUserProfileHandler)
+			protected.GET("/user-profile/enabled", handlers.GetUserProfileEnabled)
+			protected.POST("/user-profile/enabled", handlers.SetUserProfileEnabled)
+			protected.GET("/user-profile/updated-at", handlers.GetUserProfileUpdatedAt)
+
 			// 异动监控
 			protected.GET("/stock-changes", handlers.GetStockChanges)
 			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)

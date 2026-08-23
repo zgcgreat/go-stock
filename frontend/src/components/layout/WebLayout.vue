@@ -83,6 +83,8 @@ import {
   PersonCircleOutline,
   CalendarOutline,
   HomeOutline,
+  LibraryOutline,
+  PersonOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
@@ -212,6 +214,8 @@ const mainTabs = [
   { key: 'fund', label: '基金', icon: SparklesOutline, route: { name: 'fund' }, fundOnly: true },
   { key: 'agent', label: 'AI', icon: Robot, route: { name: 'agent' }, agentOnly: true },
   { key: 'research', label: '研究', icon: FlaskOutline, route: { name: 'research' } },
+  { key: 'knowledgeBase', label: '知识库', icon: LibraryOutline, route: { name: 'knowledgeBase' } },
+  { key: 'userProfile', label: '画像', icon: PersonOutline, route: { name: 'userProfile' } },
   { key: 'settings', label: '设置', icon: SettingsOutline, route: { name: 'settings' } },
   { key: 'admin', label: '用户管理', icon: PeopleOutline, route: { name: 'userManagement' }, adminOnly: true },
 ]

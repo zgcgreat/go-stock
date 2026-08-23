@@ -18,6 +18,8 @@ import aiConfigManagerView from "../components/ai-config-manager.vue"
 import homeView from "../components/Home.vue"
 import skillPlazaView from "../components/skillPlaza.vue"
 import futuresPositionView from "../components/FuturesPositionChart.vue"
+import knowledgeBaseManager from "../components/knowledge-base-manager.vue"
+import userProfileView from "../components/user-profile.vue"
 import Auth from '../utils/auth.js'
 
 const routes = [
@@ -39,6 +41,8 @@ const routes = [
     { path: '/ai-config-manager', component: aiConfigManagerView, name: 'aiConfigManager' },
     { path: '/skills-plaza', component: skillPlazaView, name: 'skillsPlaza' },
     { path: '/futures-position', component: futuresPositionView, name: 'futuresPosition' },
+    { path: '/knowledge-base', component: knowledgeBaseManager, name: 'knowledgeBase' },
+    { path: '/user-profile', component: userProfileView, name: 'userProfile' },
 
 ]
 

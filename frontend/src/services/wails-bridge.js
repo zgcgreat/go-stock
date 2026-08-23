@@ -1047,6 +1047,155 @@ export function AbortChatWithAgent() {
   return Promise.resolve();
 }
 
+// ========== 知识库 (knowledge-base-manager.vue) ==========
+
+export function ListKnowledgeBases() {
+  if (isWailsMode()) return window.go.main.App.ListKnowledgeBases();
+  return fetch('/api/v1/knowledge-base/list').then(r => r.json());
+}
+
+export function CreateKnowledgeBase(name, desc) {
+  if (isWailsMode()) return window.go.main.App.CreateKnowledgeBase(name, desc);
+  return fetch('/api/v1/knowledge-base/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description: desc }) }).then(r => r.json());
+}
+
+export function DeleteKnowledgeBase(name) {
+  if (isWailsMode()) return window.go.main.App.DeleteKnowledgeBase(name);
+  return fetch('/api/v1/knowledge-base/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }).then(r => r.json());
+}
+
+export function UploadKBFiles(name, files) {
+  if (isWailsMode()) return window.go.main.App.UploadKBFiles(name, files);
+  return Promise.resolve({ success: false, error: 'Web端暂不支持文件上传' });
+}
+
+export function AddKBDocument(name, text, metadata) {
+  if (isWailsMode()) return window.go.main.App.AddKBDocument(name, text, metadata);
+  return fetch('/api/v1/knowledge-base/add-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, text, metadata }) }).then(r => r.json());
+}
+
+export function SearchKnowledgeBase(name, query, topK) {
+  if (isWailsMode()) return window.go.main.App.SearchKnowledgeBase(name, query, topK);
+  return fetch('/api/v1/knowledge-base/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, query, topK }) }).then(r => r.json());
+}
+
+export function ListKBDocuments(name, page, pageSize) {
+  if (isWailsMode()) return window.go.main.App.ListKBDocuments(name, page, pageSize);
+  return fetch(`/api/v1/knowledge-base/documents?name=${encodeURIComponent(name)}&page=${page || 1}&pageSize=${pageSize || 20}`).then(r => r.json());
+}
+
+export function ListKBDocumentsPaged(name, page, pageSize) {
+  if (isWailsMode()) return window.go.main.App.ListKBDocumentsPaged(name, page, pageSize);
+  return fetch(`/api/v1/knowledge-base/documents-paged?name=${encodeURIComponent(name)}&page=${page || 1}&pageSize=${pageSize || 20}`).then(r => r.json());
+}
+
+export function DeleteKBDocument(name, docId) {
+  if (isWailsMode()) return window.go.main.App.DeleteKBDocument(name, docId);
+  return fetch('/api/v1/knowledge-base/delete-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, docId }) }).then(r => r.json());
+}
+
+export function PickKBFilePaths() {
+  if (isWailsMode()) return window.go.main.App.PickKBFilePaths();
+  return Promise.resolve({ success: false, error: 'Web端暂不支持文件选择' });
+}
+
+export function ListAIServicesForKB() {
+  if (isWailsMode()) return window.go.main.App.ListAIServicesForKB();
+  return fetch('/api/v1/ai-config/list').then(r => r.json());
+}
+
+export function GetLongTermMemoryAiConfigId() {
+  if (isWailsMode()) return window.go.main.App.GetLongTermMemoryAiConfigId();
+  return fetch('/api/v1/settings/long-term-memory-ai-config-id').then(r => r.json());
+}
+
+export function SetLongTermMemoryAiConfigId(id) {
+  if (isWailsMode()) return window.go.main.App.SetLongTermMemoryAiConfigId(id);
+  return fetch('/api/v1/settings/long-term-memory-ai-config-id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).then(r => r.json());
+}
+
+export function GetAllKBVectorizingStatuses() {
+  if (isWailsMode()) return window.go.main.App.GetAllKBVectorizingStatuses();
+  return fetch('/api/v1/knowledge-base/vectorizing-statuses').then(r => r.json());
+}
+
+export function GetKBVectorizingStatus(name) {
+  if (isWailsMode()) return window.go.main.App.GetKBVectorizingStatus(name);
+  return fetch(`/api/v1/knowledge-base/vectorizing-status?name=${encodeURIComponent(name)}`).then(r => r.json());
+}
+
+export function GetKnowledgeBase(name) {
+  if (isWailsMode()) return window.go.main.App.GetKnowledgeBase(name);
+  return fetch(`/api/v1/knowledge-base/info?name=${encodeURIComponent(name)}`).then(r => r.json());
+}
+
+export function GetLongTermMemoryInfo() {
+  if (isWailsMode()) return window.go.main.App.GetLongTermMemoryInfo();
+  return fetch('/api/v1/knowledge-base/long-term-memory-info').then(r => r.json());
+}
+
+export function SearchLongTermMemory(query, topK) {
+  if (isWailsMode()) return window.go.main.App.SearchLongTermMemory(query, topK);
+  return fetch('/api/v1/knowledge-base/search-long-term-memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, topK }) }).then(r => r.json());
+}
+
+export function SearchAllKnowledge(query, topK) {
+  if (isWailsMode()) return window.go.main.App.SearchAllKnowledge(query, topK);
+  return fetch('/api/v1/knowledge-base/search-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, topK }) }).then(r => r.json());
+}
+
+export function ChatWithAgentKBQA(message, kbName) {
+  if (isWailsMode()) return window.go.main.App.ChatWithAgentKBQA(message, kbName);
+  return fetch('/api/v1/knowledge-base/chat-qa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, kbName }) }).then(r => r.json());
+}
+
+// ========== 用户画像 (user-profile.vue) ==========
+
+export function GetUserProfile() {
+  if (isWailsMode()) return window.go.main.App.GetUserProfile();
+  return fetch('/api/v1/user-profile').then(r => r.json());
+}
+
+export function SaveUserProfile(profile) {
+  if (isWailsMode()) return window.go.main.App.SaveUserProfile(profile);
+  return fetch('/api/v1/user-profile/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) }).then(r => r.json());
+}
+
+export function RelearnUserProfile() {
+  if (isWailsMode()) return window.go.main.App.RelearnUserProfile();
+  return fetch('/api/v1/user-profile/relearn', { method: 'POST' }).then(r => r.json());
+}
+
+export function ClearUserProfile() {
+  if (isWailsMode()) return window.go.main.App.ClearUserProfile();
+  return fetch('/api/v1/user-profile/clear', { method: 'POST' }).then(r => r.json());
+}
+
+export function GetAgentFeedbackStats() {
+  if (isWailsMode()) return window.go.main.App.GetAgentFeedbackStats();
+  return fetch('/api/v1/user-profile/feedback-stats').then(r => r.json());
+}
+
+export function ListAgentFeedback(page, pageSize) {
+  if (isWailsMode()) return window.go.main.App.ListAgentFeedback(page, pageSize);
+  return fetch(`/api/v1/user-profile/feedback-list?page=${page || 1}&pageSize=${pageSize || 20}`).then(r => r.json());
+}
+
+export function GetUserProfileEnabled() {
+  if (isWailsMode()) return window.go.main.App.GetUserProfileEnabled();
+  return fetch('/api/v1/user-profile/enabled').then(r => r.json());
+}
+
+export function SetUserProfileEnabled(enabled) {
+  if (isWailsMode()) return window.go.main.App.SetUserProfileEnabled(enabled);
+  return fetch('/api/v1/user-profile/enabled', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }).then(r => r.json());
+}
+
+export function GetUserProfileUpdatedAt() {
+  if (isWailsMode()) return window.go.main.App.GetUserProfileUpdatedAt();
+  return fetch('/api/v1/user-profile/updated-at').then(r => r.json());
+}
+
 export function AbortSummaryStockNews() {
   if (isWailsMode()) return window.go.main.App.AbortSummaryStockNews();
   abortSSEByKey('SummaryStockNews_summary-news');
