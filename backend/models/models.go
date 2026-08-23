@@ -1698,6 +1698,8 @@ type MCPServer struct {
 	Enable      bool      `json:"enable" gorm:"default:true"`
 	Status      string    `json:"status" gorm:"size:20;default:stopped"`
 	TestResult  string    `json:"testResult" gorm:"size:500"`
+	AuthType    string    `json:"authType" gorm:"size:20;default:none"`
+	AuthConfig  string    `json:"authConfig" gorm:"type:text"`
 }
 
 func (MCPServer) TableName() string {
@@ -2054,3 +2056,41 @@ type RzrqTrendData struct {
 	Type string          `json:"type"`
 	List []RzrqTrendItem `json:"list"`
 }
+
+// AgentFeedback 用户对 Agent 单次回答的显式反馈
+type AgentFeedback struct {
+	gorm.Model
+	UserKey    string    `json:"userKey" gorm:"index;size:64"`
+	SessionID  string    `json:"sessionId" gorm:"index;size:64"`
+	Question   string    `json:"question" gorm:"type:text"`
+	Response   string    `json:"response" gorm:"type:text"`
+	Rating     int       `json:"rating"`
+	Reason     string    `json:"reason" gorm:"type:text"`
+	Mode       string    `json:"mode"`
+	FeedbackAt time.Time `json:"feedbackAt"`
+	Processed  bool      `json:"processed" gorm:"default:false"`
+}
+
+func (AgentFeedback) TableName() string { return "agent_feedback" }
+
+// AiRecommendBacktest AI 推荐效果回测结果
+type AiRecommendBacktest struct {
+	gorm.Model
+	RecommendID    uint      `json:"recommendId" gorm:"index"`
+	StockCode      string    `json:"stockCode" gorm:"index;size:20"`
+	StockName      string    `json:"stockName" gorm:"size:50"`
+	Rating         string    `json:"rating" gorm:"size:20"`
+	PeriodDays     int       `json:"periodDays"`
+	RecommendTime  time.Time `json:"recommendTime"`
+	RecommendPrice float64   `json:"recommendPrice"`
+	EndPrice       float64   `json:"endPrice"`
+	ReturnPct      float64   `json:"returnPct"`
+	BenchmarkPct   float64   `json:"benchmarkPct"`
+	ExcessPct      float64   `json:"excessPct"`
+	Outcome        string    `json:"outcome" gorm:"size:20"`
+	ModelName      string    `json:"modelName" gorm:"size:100;index"`
+	SystemPrompt   string    `json:"systemPrompt" gorm:"type:text"`
+	UserPrompt     string    `json:"userPrompt" gorm:"type:text"`
+}
+
+func (AiRecommendBacktest) TableName() string { return "ai_recommend_backtest" }

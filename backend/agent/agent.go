@@ -33,10 +33,20 @@ import (
 
 type AgentMode string
 
+// Mode 是 AgentMode 的别名，兼容上游 fc78422 新文件
+type Mode = AgentMode
+
 const (
 	AgentModeReact       AgentMode = "react"
 	AgentModePlanExecute AgentMode = "plan_execute"
 	AgentModeDeepAgents  AgentMode = "deepagents"
+)
+
+// 兼容上游 fc78422 新文件中的常量名
+const (
+	React       = AgentModeReact
+	PlanExecute = AgentModePlanExecute
+	DeepAgents  = AgentModeDeepAgents
 )
 
 type AgentInstance struct {
