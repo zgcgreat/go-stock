@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import {onBeforeMount, onBeforeUnmount, onMounted, ref, computed} from 'vue'
 import {GetConfig, GetTelegraphList, ReFleshTelegraphList} from "../services/wails-bridge.js";
 import {EventsOff, EventsOn} from "../services/wails-bridge.js";
@@ -31,7 +31,7 @@ onBeforeMount(() => {
 
 onMounted(() => {
   timer = setInterval(updateTime, 1000)
-  GetTelegraphList("璐㈣仈绀剧數鎶?).then(res => {
+  GetTelegraphList("财联社电报").then(res => {
     telegraphList.value = res || []
   }).catch(err => {
     console.error('GetTelegraphList error:', err)
@@ -54,7 +54,7 @@ onBeforeUnmount(() => {
 })
 
 function refreshTelegraph() {
-  ReFleshTelegraphList("璐㈣仈绀剧數鎶?).then(res => {
+  ReFleshTelegraphList("财联社电报").then(res => {
     telegraphList.value = res || []
   })
 }
@@ -64,23 +64,23 @@ function refreshTelegraph() {
   <n-card size="small" style="--wails-draggable:no-drag">
     <template #header>
       <n-flex align="center" :wrap="false">
-        <n-text strong>棣栭〉</n-text>
-        <n-text depth="3" style="font-size: 12px;">甯傚満鎬昏 路 鐐掍綔棰樻潗 路 璐㈣仈绀剧數鎶?/n-text>
+        <n-text strong>首页</n-text>
+        <n-text depth="3" style="font-size: 12px;">市场总览 · 炒作题材 · 财联社电报</n-text>
         <n-tag :bordered="false" type="info">{{ timeText }}</n-tag>
       </n-flex>
     </template>
 
     <n-flex vertical :size="12">
-      <!-- 澶х洏鍒嗘瀽锛氬叏鐞冭偂鎸囪窇椹伅 + 甯傚満鎯呯华 + 娑ㄨ穼鍋?鍒嗘椂/铻嶈祫铻嶅埜璧板娍 -->
+      <!-- 大盘分析：全球股指跑马灯 + 市场情绪 + 涨跌停/分时/融资融券走势 -->
       <AnalyzeMartket :dark-theme="darkTheme" :chart-height="280"/>
 
-      <!-- 姣忔棩鐐掍綔棰樻潗 + 铻嶈祫铻嶅埜 + 璐㈣仈绀剧數鎶?涓夊垪绛夐珮 -->
+      <!-- 每日炒作题材 + 融资融券 + 财联社电报 三列等高 -->
       <n-flex :size="12" :wrap="false" style="align-items: stretch;">
         <div class="thin-scroll" style="flex: 1; min-width: 0; max-height: 600px; overflow-y: auto;">
           <ConceptEventList/>
         </div>
         <div class="thin-scroll" style="flex: 1; min-width: 0; max-height: 600px; overflow-y: auto;">
-          <NewsList :newsList="telegraphList" :headerTitle="'璐㈣仈绀剧數鎶?" @update:message="refreshTelegraph"/>
+          <NewsList :newsList="telegraphList" :headerTitle="'财联社电报'" @update:message="refreshTelegraph"/>
         </div>
         <div class="thin-scroll" style="flex: 1; min-width: 0; max-height: 600px; overflow-y: auto;">
           <RzrqRank :dark-theme="darkTheme"/>
@@ -98,4 +98,3 @@ function refreshTelegraph() {
   display: none;
 }
 </style>
-
