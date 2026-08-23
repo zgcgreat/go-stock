@@ -18,8 +18,8 @@ import {
   ShareAnalysis,
   SummaryStockNews,
   GetAiConfigs,
-} from "../../wailsjs/go/main/App";
-import {EventsOff, EventsOn} from "../../wailsjs/runtime";
+} from "../services/wails-bridge.js";
+import {EventsOff, EventsOn} from "../services/wails-bridge.js";
 import NewsList from "./newsList.vue";
 import KLineChart from "./KLineChart.vue";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
@@ -36,11 +36,14 @@ import IndustryResearchReportList from "./IndustryResearchReportList.vue";
 import HotStockList from "./HotStockList.vue";
 import HotEvents from "./HotEvents.vue";
 import HotTopics from "./HotTopics.vue";
+import ConceptEventList from "./ConceptEventList.vue";
 import InvestCalendarTimeLine from "./InvestCalendarTimeLine.vue";
 import ClsCalendarTimeLine from "./ClsCalendarTimeLine.vue";
 import Stockhotmap from "./stockhotmap.vue";
 import BKFundFlowChart from "./bkFundFlowChart.vue";
 import ConceptFundFlowChart from "./conceptFundFlowChart.vue";
+import RzrqRank from "./RzrqRank.vue";
+import FuturesPositionChart from "./FuturesPositionChart.vue";
 
 const route = useRoute()
 const icon = ref('https://raw.githubusercontent.com/ArvinLovegood/go-stock/master/build/appicon.png');
@@ -618,6 +621,9 @@ function ReFlesh(source) {
           </n-tab-pane>
         </n-tabs>
       </n-tab-pane>
+      <n-tab-pane name="期指多空" tab="期指多空">
+        <FuturesPositionChart variety="IF" :days="120" :chart-height="panelHeight-60" :dark-theme="true"/>
+      </n-tab-pane>
       <n-tab-pane name="行业排名" tab="行业排名">
         <n-tabs type="card" animated>
           <n-tab-pane name="行业涨幅排名" tab="行业涨幅排名">
@@ -798,6 +804,9 @@ function ReFlesh(source) {
           <n-tab-pane name="财经日历" tab="财经日历">
             <ClsCalendarTimeLine />
           </n-tab-pane>
+          <n-tab-pane name="每日炒作题材" tab="每日炒作题材">
+            <ConceptEventList />
+          </n-tab-pane>
           <n-tab-pane name="PolyMarket预测" tab="PolyMarket预测">
             <n-grid :cols="2" :x-gap="12" :y-gap="12" responsive="screen" style="--wails-draggable:no-drag">
               <n-grid-item v-for="m in polymarketMarkets" :key="m.marketSlug">
@@ -849,6 +858,9 @@ function ReFlesh(source) {
       </n-tab-pane>
       <n-tab-pane name="名站优选" tab="名站优选">
         <Stockhotmap />
+      </n-tab-pane>
+      <n-tab-pane name="融资融券" tab="融资融券">
+        <RzrqRank :dark-theme="darkTheme"/>
       </n-tab-pane>
     </n-tabs>
   </n-card>
