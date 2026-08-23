@@ -4,7 +4,7 @@ import {
   GetConfig, GetSponsorInfo, GetMachineId, CheckDeviceBinding, QuitApp,
   GetEffectiveSponsorVip, PromptPlazaRequest, ListFilesystemSkills,
   PackSkillToBase64, ImportSkillFromBase64
-} from "../../wailsjs/go/main/App";
+} from "../services/wails-bridge.js";
 import {useMessage, useDialog} from "naive-ui";
 import {MdPreview} from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'

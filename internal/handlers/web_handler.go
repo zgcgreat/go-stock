@@ -459,7 +459,7 @@ func CreateCronTask(c *gin.Context) {
 
 	err := agent.NewCronTaskApi().Create(&task)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "创建失败：" + err.Error()})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "创建失败：" + err.Error()})
 		return
 	}
 
@@ -513,7 +513,7 @@ func GetCronTaskByID(c *gin.Context) {
 
 	task, err := agent.NewCronTaskApi().GetByID(uint(id), userID)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务不存在"})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "任务不存在"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": task})
@@ -531,7 +531,7 @@ func ExecuteCronTaskNow(c *gin.Context) {
 
 	task, err := agent.NewCronTaskApi().GetByID(uint(id), userID)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "任务不存在：" + err.Error()})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "任务不存在：" + err.Error()})
 		return
 	}
 
@@ -559,7 +559,7 @@ func UpdateCronTask(c *gin.Context) {
 
 	err := agent.NewCronTaskApi().Update(&task)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "更新失败：" + err.Error()})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "更新失败：" + err.Error()})
 		return
 	}
 
@@ -583,7 +583,7 @@ func DeleteCronTask(c *gin.Context) {
 
 	err = agent.NewCronTaskApi().Delete(uint(id), userID)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除失败：" + err.Error()})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "删除失败：" + err.Error()})
 		return
 	}
 
@@ -615,7 +615,7 @@ func EnableCronTask(c *gin.Context) {
 
 	err = agent.NewCronTaskApi().EnableTask(uint(id), req.Enable, userID)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "操作失败：" + err.Error()})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "操作失败：" + err.Error()})
 		return
 	}
 
@@ -672,7 +672,7 @@ func SendDingDingMessage(c *gin.Context) {
 	userID, _ := middleware.GetUserIDFromContext(c)
 	cfg := data.GetSettingConfigByUserID(userID)
 	if cfg == nil || cfg.Settings == nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "用户配置不存在"})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "用户配置不存在"})
 		return
 	}
 	result := data.NewDingDingAPI().SendToDingDingWithConfig(title, msg, cfg.DingPushEnable, cfg.DingRobot)
@@ -1508,7 +1508,7 @@ func GetSkillByID(c *gin.Context) {
 
 	skill, err := data.NewSkillApi().GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "技能不存在", "data": nil})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "技能不存在", "data": nil})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": skill})
@@ -1703,7 +1703,7 @@ func GetMCPServerByID(c *gin.Context) {
 	}
 	server, err := data.NewMCPServerApi().GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "服务器不存在", "data": nil})
+		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "服务器不存在", "data": nil})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": server})

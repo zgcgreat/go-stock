@@ -1,7 +1,7 @@
 <script setup>
 import {onBeforeUnmount, onMounted, ref} from 'vue'
 import * as echarts from 'echarts'
-import {GetFuturesPositionTrend, GetStockKLine} from '../../wailsjs/go/main/App'
+import {GetFuturesPositionTrend, GetStockKLine} from '../services/wails-bridge.js'
 
 const props = defineProps({
   variety: {

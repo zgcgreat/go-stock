@@ -481,6 +481,10 @@ func (m MarketNewsApi) GetAllConceptPlates() []ConceptPlate {
 		logger.SugaredLogger.Errorf("GetAllConceptPlates request err: %s", err.Error())
 		return nil
 	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("GetAllConceptPlates request status: %d", resp.StatusCode())
+		return nil
+	}
 	htmlContent := GB18030ToUTF8(resp.Body())
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
@@ -553,6 +557,10 @@ func (m MarketNewsApi) GetAllIndustryPlates() []IndustryPlate {
 		Get(url)
 	if err != nil {
 		logger.SugaredLogger.Errorf("GetAllIndustryPlates request err: %s", err.Error())
+		return nil
+	}
+	if resp.StatusCode() != 200 {
+		logger.SugaredLogger.Errorf("GetAllIndustryPlates request status: %d", resp.StatusCode())
 		return nil
 	}
 	htmlContent := GB18030ToUTF8(resp.Body())
