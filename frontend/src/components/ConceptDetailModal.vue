@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {ref, watch, computed, nextTick, onBeforeUnmount} from 'vue'
 import {ConceptDetail, ConceptKLine, ConceptRealHead, ConceptStocks, FindConceptCodeByName, GetAllConceptPlates, GetConfig} from "../services/wails-bridge.js"
 import {useMessage} from "naive-ui"
@@ -76,15 +76,17 @@ const detail = ref<ConceptDetailInfo | null>(null)
 const klineData = ref<ConceptKLineData | null>(null)
 const marketData = ref<ConceptMarket | null>(null)
 const darkTheme = ref(false)
-const klineRange = ref<number>(120) // 榛樿灞曠ず鏈€杩?20鏍筀绾?const chartRef = ref<HTMLElement | null>(null)
+const klineRange = ref<number>(120) // 默认展示最近120根K线
+const chartRef = ref<HTMLElement | null>(null)
 let chart: echarts.ECharts | null = null
 
-// 鎴愬垎鑲″垎椤垫暟鎹?const stocks = ref<any[]>([])
+// 成分股分页数据
+const stocks = ref<any[]>([])
 const stocksLoading = ref(false)
 const stocksPage = ref(1)
 const stocksHasMore = ref(false)
 
-// 閫氳繃鍚嶇О鍖归厤鍒扮殑姒傚康浠ｇ爜锛?0xxxx锛夛紝鐢ㄤ簬璇︽儏椤?鎴愬垎鑲★紱涓庢澘鍧椾唬鐮?88xxxx)鍒嗗紑
+// 通过名称匹配到的概念代码（30xxxx），用于详情页/成分股；与板块代码(88xxxx)分开
 const resolvedConceptCode = ref('')
 
 const showDialog = computed({
@@ -92,10 +94,10 @@ const showDialog = computed({
   set: (v: boolean) => emit('update:show', v)
 })
 
-// 浼樺厛浣跨敤 realhead 瀹炴椂琛屾儏锛屽洖閫€鍒拌鎯呴〉鎶撳彇鐨?market
+// 优先使用 realhead 实时行情，回退到详情页抓取的 market
 const displayMarket = computed(() => marketData.value || detail.value?.market || null)
 
-// 瀹為檯鐢ㄤ簬璇︽儏椤?鎴愬垎鑲＄殑姒傚康浠ｇ爜锛氫紭鍏?resolvedConceptCode锛屽叾娆￠潪鏉垮潡浠ｇ爜鐨?conceptCode
+// 实际用于详情页/成分股的概念代码：优先 resolvedConceptCode，其次非板块代码的 conceptCode
 const isPlateCode = (code: string) => /^88\d{4}$/.test(code || '')
 const effectiveConceptCode = computed(() => {
   if (resolvedConceptCode.value) return resolvedConceptCode.value
@@ -103,24 +105,24 @@ const effectiveConceptCode = computed(() => {
   return ''
 })
 
-// 鎴愬垎鑲¤〃鏍煎垪
+// 成分股表格列
 const stockColumns = [
-  {title: '浠ｇ爜', key: 'code', width: 80, fixed: 'left'},
-  {title: '鍚嶇О', key: 'name', width: 90, fixed: 'left'},
-  {title: '鐜颁环', key: 'price', width: 70, align: 'right' as const},
+  {title: '代码', key: 'code', width: 80, fixed: 'left'},
+  {title: '名称', key: 'name', width: 90, fixed: 'left'},
+  {title: '现价', key: 'price', width: 70, align: 'right' as const},
   {
-    title: '娑ㄨ穼骞?%)', key: 'changePercent', width: 90, align: 'right' as const,
+    title: '涨跌幅(%)', key: 'changePercent', width: 90, align: 'right' as const,
     sorter: (a: ConceptStock, b: ConceptStock) => parseFloat(a.changePercent) - parseFloat(b.changePercent)
   },
-  {title: '娑ㄨ穼', key: 'change', width: 70, align: 'right' as const},
-  {title: '娑ㄩ€?%)', key: 'speed', width: 80, align: 'right' as const},
-  {title: '鎹㈡墜(%)', key: 'turnover', width: 80, align: 'right' as const},
-  {title: '閲忔瘮', key: 'volumeRatio', width: 70, align: 'right' as const},
-  {title: '鎸箙(%)', key: 'amplitude', width: 80, align: 'right' as const},
-  {title: '鎴愪氦棰?, key: 'dealAmount', width: 100, align: 'right' as const},
-  {title: '娴侀€氳偂', key: 'flowShares', width: 100, align: 'right' as const},
-  {title: '娴侀€氬競鍊?, key: 'flowMarketCap', width: 110, align: 'right' as const},
-  {title: '甯傜泩鐜?, key: 'peRatio', width: 80, align: 'right' as const}
+  {title: '涨跌', key: 'change', width: 70, align: 'right' as const},
+  {title: '涨速(%)', key: 'speed', width: 80, align: 'right' as const},
+  {title: '换手(%)', key: 'turnover', width: 80, align: 'right' as const},
+  {title: '量比', key: 'volumeRatio', width: 70, align: 'right' as const},
+  {title: '振幅(%)', key: 'amplitude', width: 80, align: 'right' as const},
+  {title: '成交额', key: 'dealAmount', width: 100, align: 'right' as const},
+  {title: '流通股', key: 'flowShares', width: 100, align: 'right' as const},
+  {title: '流通市值', key: 'flowMarketCap', width: 110, align: 'right' as const},
+  {title: '市盈率', key: 'peRatio', width: 80, align: 'right' as const}
 ]
 
 function rowClassName(row: ConceptStock) {
@@ -135,12 +137,13 @@ function rowClassName(row: ConceptStock) {
 function formatYi(v: string): string {
   const n = parseFloat(v)
   if (isNaN(n)) return v
-  if (Math.abs(n) >= 1e8) return (n / 1e8).toFixed(2) + '浜?
-  if (Math.abs(n) >= 1e4) return (n / 1e4).toFixed(2) + '涓?
+  if (Math.abs(n) >= 1e8) return (n / 1e8).toFixed(2) + '亿'
+  if (Math.abs(n) >= 1e4) return (n / 1e4).toFixed(2) + '万'
   return n.toFixed(2)
 }
 
-// 娑ㄨ穼骞呴鑹?function pctColor(p: string): string {
+// 涨跌幅颜色
+function pctColor(p: string): string {
   const n = parseFloat(p)
   if (isNaN(n)) return ''
   if (n > 0) return darkTheme.value ? '#ff6b6b' : '#c23531'
@@ -157,9 +160,10 @@ async function loadConfig() {
 }
 
 async function fetchDetail() {
-  // 鏉垮潡浠ｇ爜锛?8xxxx锛夛細鐢ㄤ簬 K绾?realhead
+  // 板块代码（88xxxx）：用于 K线/realhead
   const pc = props.plateCode || (isPlateCode(props.conceptCode) ? props.conceptCode : '')
-  // 姒傚康浠ｇ爜锛?0xxxx锛夛細鐢ㄤ簬璇︽儏椤?鎴愬垎鑲°€傝嫢 conceptCode 鐪嬭捣鏉ユ槸鏉垮潡浠ｇ爜锛屽垯閫氳繃鍚嶇О鍖归厤鐪熸鐨勬蹇典唬鐮?  let cc = props.conceptCode && !isPlateCode(props.conceptCode) ? props.conceptCode : ''
+  // 概念代码（30xxxx）：用于详情页/成分股。若 conceptCode 看起来是板块代码，则通过名称匹配真正的概念代码
+  let cc = props.conceptCode && !isPlateCode(props.conceptCode) ? props.conceptCode : ''
   if (!cc && props.conceptName) {
     try {
       const resolved = await FindConceptCodeByName(props.conceptName)
@@ -168,18 +172,20 @@ async function fetchDetail() {
         resolvedConceptCode.value = resolved
       }
     } catch (e) {
-      // 鍖归厤澶辫触锛屽拷鐣?    }
+      // 匹配失败，忽略
+    }
   }
   if (!pc && !cc) return
   loading.value = true
-  // 骞惰鎷夊彇锛欿绾?瀹炴椂琛屾儏鐢ㄦ澘鍧椾唬鐮?pc锛岃鎯?鎴愬垎鑲＄敤姒傚康浠ｇ爜 cc
+  // 并行拉取：K线/实时行情用板块代码 pc，详情/成分股用概念代码 cc
   const tasks: Promise<any>[] = []
   if (pc) {
     tasks.push(fetchKLine(pc))
     tasks.push(fetchRealHead(pc))
   }
   if (cc) tasks.push(fetchConceptDetail(cc))
-  // 鎴愬垎鑲″垎椤碉細浼樺厛鐢ㄦ蹇典唬鐮侊紝鍏舵鐢ㄦ澘鍧椾唬鐮?  tasks.push(fetchStocks(cc || pc, 1))
+  // 成分股分页：优先用概念代码，其次用板块代码
+  tasks.push(fetchStocks(cc || pc, 1))
   await Promise.all(tasks)
   loading.value = false
 }
@@ -189,7 +195,7 @@ async function fetchConceptDetail(conceptCode: string) {
     const res = await ConceptDetail(conceptCode)
     detail.value = res || null
   } catch (e) {
-    message.error('鑾峰彇姒傚康璇︽儏澶辫触: ' + e)
+    message.error('获取概念详情失败: ' + e)
   }
 }
 
@@ -208,9 +214,10 @@ async function fetchStocks(code: string, page: number) {
       stocks.value = stocks.value.concat(list)
       stocksPage.value = page
     }
-    // 姣忛〉閫氬父 20 鏉★紝涓嶈冻 20 鏉¤鏄庢槸鏈€鍚庝竴椤?    stocksHasMore.value = list.length >= 20
+    // 每页通常 20 条，不足 20 条说明是最后一页
+    stocksHasMore.value = list.length >= 20
   } catch (e) {
-    message.error('鑾峰彇鎴愬垎鑲″け璐? ' + e)
+    message.error('获取成分股失败: ' + e)
   } finally {
     if (page === 1) {
       stocksLoading.value = false
@@ -223,7 +230,7 @@ async function fetchRealHead(plateCode: string) {
     const res = await ConceptRealHead(plateCode)
     marketData.value = res || null
   } catch (e) {
-    message.error('鑾峰彇瀹炴椂琛屾儏澶辫触: ' + e)
+    message.error('获取实时行情失败: ' + e)
   }
 }
 
@@ -236,7 +243,7 @@ async function fetchKLine(plateCode: string) {
     await nextTick()
     renderKLine()
   } catch (e) {
-    message.error('鑾峰彇K绾挎暟鎹け璐? ' + e)
+    message.error('获取K线数据失败: ' + e)
   } finally {
     klineLoading.value = false
   }
@@ -259,7 +266,8 @@ function renderKLine() {
   const data = all.slice(startIdx)
 
   const dates = data.map(k => formatDate(k.date))
-  // 鍚岃姳椤?K 绾夸环鏍奸渶闄や互 factor 杩樺師涓虹湡瀹炵偣浣?  const factor = klineData.value.factor && klineData.value.factor > 0 ? klineData.value.factor : 1
+  // 同花顺 K 线价格需除以 factor 还原为真实点位
+  const factor = klineData.value.factor && klineData.value.factor > 0 ? klineData.value.factor : 1
   const ohlc = data.map(k => [k.open / factor, k.close / factor, k.low / factor, k.high / factor])
   const volumes = data.map(k => k.volume)
 
@@ -273,7 +281,7 @@ function renderKLine() {
     backgroundColor: bgColor,
     animation: false,
     title: {
-      text: `${klineData.value.name || props.conceptName} K绾縛,
+      text: `${klineData.value.name || props.conceptName} K线`,
       left: 10,
       textStyle: {color: darkTheme.value ? '#ccc' : '#456', fontSize: 14}
     },
@@ -325,7 +333,7 @@ function renderKLine() {
     ],
     series: [
       {
-        name: 'K绾?,
+        name: 'K线',
         type: 'candlestick',
         data: ohlc,
         itemStyle: {
@@ -338,13 +346,13 @@ function renderKLine() {
           symbol: 'pin', symbolSize: 40,
           label: {fontSize: 9},
           data: [
-            {type: 'max', name: '鏈€楂?, valueIndex: 3},
-            {type: 'min', name: '鏈€浣?, valueIndex: 2}
+            {type: 'max', name: '最高', valueIndex: 3},
+            {type: 'min', name: '最低', valueIndex: 2}
           ]
         }
       },
       {
-        name: '鎴愪氦閲?,
+        name: '成交量',
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
@@ -401,7 +409,7 @@ onBeforeUnmount(() => {
 
 <template>
   <n-modal v-model:show="showDialog"
-           :title="(detail?.name || conceptName || '姒傚康') + ' 鈥?璇︽儏'"
+           :title="(detail?.name || conceptName || '概念') + ' — 详情'"
            preset="card"
            :bordered="false"
            style="width: min(1280px, 96vw); max-width: 96vw"
@@ -412,29 +420,29 @@ onBeforeUnmount(() => {
              padding: '12px'
            }">
     <n-spin :show="loading">
-      <!-- 姒傚康绠€浠?+ 琛屾儏鏁版嵁 -->
+      <!-- 概念简介 + 行情数据 -->
       <n-card v-if="marketData || (detail && (detail.name || detail.market.changePercent))" size="small" :bordered="true" class="detail-card">
         <n-descriptions :column="4" size="small" label-placement="left" bordered>
-          <n-descriptions-item label="姒傚康浠ｇ爜">{{ resolvedConceptCode || detail?.conceptCode || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="鏉垮潡浠ｇ爜">{{ detail?.plateCode || plateCode || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="鏉垮潡娑ㄥ箙">
+          <n-descriptions-item label="概念代码">{{ resolvedConceptCode || detail?.conceptCode || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="板块代码">{{ detail?.plateCode || plateCode || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="板块涨幅">
             <span :style="{color: pctColor(displayMarket?.changePercent || ''), fontWeight: 600}">
               {{ displayMarket?.changePercent || '-' }}%
             </span>
           </n-descriptions-item>
-          <n-descriptions-item label="娑ㄥ箙鎺掑悕">{{ displayMarket?.changeRank || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="浠婂紑">{{ displayMarket?.open || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="鏄ㄦ敹">{{ displayMarket?.preClose || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="鏈€楂?>{{ displayMarket?.high || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="鏈€浣?>{{ displayMarket?.low || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="鎴愪氦閲?>{{ displayMarket?.volume || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="鎴愪氦棰?>{{ formatYi(displayMarket?.dealAmount || '') }}</n-descriptions-item>
-          <n-descriptions-item label="璧勯噾鍑€娴佸叆">
+          <n-descriptions-item label="涨幅排名">{{ displayMarket?.changeRank || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="今开">{{ displayMarket?.open || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="昨收">{{ displayMarket?.preClose || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="最高">{{ displayMarket?.high || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="最低">{{ displayMarket?.low || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="成交量">{{ displayMarket?.volume || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="成交额">{{ formatYi(displayMarket?.dealAmount || '') }}</n-descriptions-item>
+          <n-descriptions-item label="资金净流入">
             <span :style="{color: pctColor(displayMarket?.netInflow || ''), fontWeight: 600}">
               {{ formatYi(displayMarket?.netInflow || '') }}
             </span>
           </n-descriptions-item>
-          <n-descriptions-item label="娑ㄨ穼瀹舵暟">{{ displayMarket?.upDownCount || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="涨跌家数">{{ displayMarket?.upDownCount || '-' }}</n-descriptions-item>
         </n-descriptions>
         <n-divider v-if="detail?.definition" style="margin: 8px 0"/>
         <n-text v-if="detail?.definition" depth="2" style="font-size: 13px; line-height: 1.6; white-space: pre-wrap;">
@@ -442,29 +450,29 @@ onBeforeUnmount(() => {
         </n-text>
       </n-card>
 
-      <!-- K绾垮浘锛堝彧瑕佹湁 plateCode 灏卞睍绀猴紝涓嶄緷璧?detail锛?-->
+      <!-- K线图（只要有 plateCode 就展示，不依赖 detail） -->
       <n-card v-if="plateCode || conceptCode" size="small" :bordered="true" class="detail-card" style="margin-top: 10px">
         <template #header>
           <n-flex align="center" :wrap="false">
-            <n-text strong>鏉垮潡K绾?/n-text>
+            <n-text strong>板块K线</n-text>
             <n-text depth="3" style="font-size: 12px" v-if="klineData">
-              鍏?{{ klineData.total }} 鏍癸紝鍩哄噯浠?{{ klineData.issuePrice.toFixed(2) }}
+              共 {{ klineData.total }} 根，基准价 {{ klineData.issuePrice.toFixed(2) }}
             </n-text>
             <n-text depth="3" style="font-size: 12px" v-else-if="!klineLoading && plateCode">
-              鏉垮潡浠ｇ爜锛歿{ plateCode }}
+              板块代码：{{ plateCode }}
             </n-text>
           </n-flex>
         </template>
         <template #header-extra>
           <n-flex align="center" :wrap="false" size="small">
-            <n-text depth="3" style="font-size: 12px">鏄剧ず</n-text>
+            <n-text depth="3" style="font-size: 12px">显示</n-text>
             <n-select v-model:value="klineRange" size="small" style="width: 100px"
                       :options="[
-                        {label: '鏈€杩?0', value: 30},
-                        {label: '鏈€杩?0', value: 60},
-                        {label: '鏈€杩?20', value: 120},
-                        {label: '鏈€杩?50', value: 250},
-                        {label: '鍏ㄩ儴', value: 9999}
+                        {label: '最近30', value: 30},
+                        {label: '最近60', value: 60},
+                        {label: '最近120', value: 120},
+                        {label: '最近250', value: 250},
+                        {label: '全部', value: 9999}
                       ]"
                       @update:value="onRangeChange"/>
           </n-flex>
@@ -472,17 +480,18 @@ onBeforeUnmount(() => {
         <n-spin :show="klineLoading">
           <div ref="chartRef" style="width: 100%; height: 420px;"></div>
           <n-empty v-if="!klineLoading && !klineData?.kLines?.length"
-                   description="鏆傛棤K绾挎暟鎹? style="padding: 40px 0;"/>
+                   description="暂无K线数据" style="padding: 40px 0;"/>
         </n-spin>
       </n-card>
 
-      <!-- 鎴愬垎鑲″垪琛紙浼樺厛鐢?stocks 鍒嗛〉鏁版嵁锛屽洖閫€ detail.stocks锛?-->
+      <!-- 成分股列表（优先用 stocks 分页数据，回退 detail.stocks） -->
       <n-card v-if="stocks.length > 0 || (detail && detail.stocks && detail.stocks.length)" size="small" :bordered="true" class="detail-card" style="margin-top: 10px">
         <template #header>
           <n-flex align="center" :wrap="false">
-            <n-text strong>鎴愬垎鑲?/n-text>
+            <n-text strong>成分股</n-text>
             <n-tag size="small" round :bordered="false" type="info">
-              {{ stocks.length || detail.stocks?.length || 0 }} 鍙?            </n-tag>
+              {{ stocks.length || detail.stocks?.length || 0 }} 只
+            </n-tag>
           </n-flex>
         </template>
         <n-spin :show="stocksLoading">
@@ -497,14 +506,14 @@ onBeforeUnmount(() => {
             striped/>
           <div v-if="stocksHasMore" style="text-align: center; padding: 10px 0;">
             <n-button :loading="stocksLoading" size="small" type="primary" ghost @click="fetchStocks(effectiveConceptCode || plateCode, stocksPage + 1)">
-              鍔犺浇鏇村
+              加载更多
             </n-button>
           </div>
         </n-spin>
       </n-card>
 
       <n-empty v-if="!loading && !detail && !klineData?.kLines?.length"
-               description="鏆傛棤鏁版嵁锛堥鏉愭棤鏉垮潡浠ｇ爜锛屾棤娉曡幏鍙朘绾匡級" style="padding: 40px 0;"/>
+               description="暂无数据（题材无板块代码，无法获取K线）" style="padding: 40px 0;"/>
     </n-spin>
   </n-modal>
 </template>
@@ -532,4 +541,3 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-

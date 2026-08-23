@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {ref, onMounted, computed, h} from 'vue'
 import {RzrqRank} from '../services/wails-bridge.js'
 import {NDataTable, NDatePicker, NSelect, NSwitch, NButton, NFlex, NStatistic, NCard, NTag} from 'naive-ui'
@@ -43,40 +43,40 @@ const queryDate = computed(() => {
 })
 
 const typeOptions = [
-  {label: '琛屼笟', value: 'hyList'},
-  {label: '姒傚康', value: 'gnList'},
-  {label: '涓偂', value: 'ggList'},
+  {label: '行业', value: 'hyList'},
+  {label: '概念', value: 'gnList'},
+  {label: '个股', value: 'ggList'},
 ]
 
 const sortKeyOptions = [
-  {label: '鍑€涔板叆棰?, value: 'jmr'},
-  {label: '铻嶈祫浣欓', value: 'rzye'},
-  {label: '铻嶅埜浣欓', value: 'rqye'},
-  {label: '铻嶈祫涔板叆棰?, value: 'rzmre'},
-  {label: '铻嶈祫鍑€涔板叆棰?, value: 'rzjmce'},
-  {label: '铻嶈祫铻嶅埜浣欓', value: 'lrye'},
-  {label: '浣欓澧炲箙', value: 'yezf'},
-  {label: '娑ㄨ穼骞?, value: 'close_profit'},
+  {label: '净买入额', value: 'jmr'},
+  {label: '融资余额', value: 'rzye'},
+  {label: '融券余额', value: 'rqye'},
+  {label: '融资买入额', value: 'rzmre'},
+  {label: '融资净买入额', value: 'rzjmce'},
+  {label: '融资融券余额', value: 'lrye'},
+  {label: '余额增幅', value: 'yezf'},
+  {label: '涨跌幅', value: 'close_profit'},
 ]
 
 const sortTypeOptions = [
-  {label: '闄嶅簭', value: 'desc'},
-  {label: '鍗囧簭', value: 'asc'},
+  {label: '降序', value: 'desc'},
+  {label: '升序', value: 'asc'},
 ]
 
 const lengthOptions = [
-  {label: '10鏉?, value: 10},
-  {label: '20鏉?, value: 20},
-  {label: '50鏉?, value: 50},
-  {label: '100鏉?, value: 100},
+  {label: '10条', value: 10},
+  {label: '20条', value: 20},
+  {label: '50条', value: 50},
+  {label: '100条', value: 100},
 ]
 
 function fmtAmount(v: string): string {
-  // API 杩斿洖閲戦瀛楁鍗曚綅涓哄崈鍏冿紝杞崲涓哄厓鍚庢牸寮忓寲
+  // API 返回金额字段单位为千元，转换为元后格式化
   const n = parseFloat(v) * 1000
   if (isNaN(n)) return v
-  if (Math.abs(n) >= 100000000) return (n / 100000000).toFixed(2) + '浜?
-  if (Math.abs(n) >= 10000) return (n / 10000).toFixed(2) + '涓?
+  if (Math.abs(n) >= 100000000) return (n / 100000000).toFixed(2) + '亿'
+  if (Math.abs(n) >= 10000) return (n / 10000).toFixed(2) + '万'
   return n.toFixed(2)
 }
 
@@ -93,14 +93,14 @@ function profitColor(v: string): string {
 }
 
 const columns = computed(() => [
-  {title: '鎺掑悕', key: 'rank', width: 60, render: (_: any, i: number) => i + 1},
-  {title: '鍚嶇О', key: 'stockName', width: 100},
+  {title: '排名', key: 'rank', width: 60, render: (_: any, i: number) => i + 1},
+  {title: '名称', key: 'stockName', width: 100},
   {
-    title: '鏀剁洏浠?, key: 'close_price', width: 80, align: 'right' as const,
+    title: '收盘价', key: 'close_price', width: 80, align: 'right' as const,
     render: (r: RzrqItem) => parseFloat(r.close_price).toFixed(2)
   },
   {
-    title: '娑ㄨ穼骞?, key: 'close_profit', width: 90, align: 'right' as const,
+    title: '涨跌幅', key: 'close_profit', width: 90, align: 'right' as const,
     render: (r: RzrqItem) => {
       const v = parseFloat(r.close_profit)
       const color = v > 0 ? '#e88080' : v < 0 ? '#00b42a' : ''
@@ -109,24 +109,24 @@ const columns = computed(() => [
     }
   },
   {
-    title: '鍑€涔板叆棰?, key: 'jmr', width: 110, align: 'right' as const,
+    title: '净买入额', key: 'jmr', width: 110, align: 'right' as const,
     render: (r: RzrqItem) => {
       const v = parseFloat(r.jmr)
       const color = v > 0 ? '#e88080' : v < 0 ? '#00b42a' : ''
       return h('span', {style: `color:${color}`}, fmtAmount(r.jmr))
     }
   },
-  {title: '鍑€涔板叆鍗犳瘮', key: 'jmrRate', width: 100, align: 'right' as const, render: (r: RzrqItem) => fmtPct(r.jmrRate)},
-  {title: '铻嶈祫浣欓', key: 'rzye', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rzye)},
-  {title: '铻嶈祫鍗犳瘮', key: 'rzyeRate', width: 90, align: 'right' as const, render: (r: RzrqItem) => fmtPct(r.rzyeRate)},
-  {title: '铻嶈祫涔板叆棰?, key: 'rzmre', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rzmre)},
-  {title: '铻嶈祫鍋胯繕棰?, key: 'rzche', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rzche)},
-  {title: '铻嶈祫鍑€涔板叆', key: 'rzjmce', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rzjmce)},
-  {title: '铻嶅埜浣欓', key: 'rqye', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rqye)},
-  {title: '铻嶅埜鍗犳瘮', key: 'rqyeRate', width: 90, align: 'right' as const, render: (r: RzrqItem) => fmtPct(r.rqyeRate)},
-  {title: '涓よ瀺浣欓', key: 'lrye', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.lrye)},
-  {title: '浣欓鍗犳瘮', key: 'lryeRate', width: 90, align: 'right' as const, render: (r: RzrqItem) => fmtPct(r.lryeRate)},
-  {title: '浣欓澧炲箙', key: 'yezf', width: 90, align: 'right' as const, render: (r: RzrqItem) => {
+  {title: '净买入占比', key: 'jmrRate', width: 100, align: 'right' as const, render: (r: RzrqItem) => fmtPct(r.jmrRate)},
+  {title: '融资余额', key: 'rzye', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rzye)},
+  {title: '融资占比', key: 'rzyeRate', width: 90, align: 'right' as const, render: (r: RzrqItem) => fmtPct(r.rzyeRate)},
+  {title: '融资买入额', key: 'rzmre', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rzmre)},
+  {title: '融资偿还额', key: 'rzche', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rzche)},
+  {title: '融资净买入', key: 'rzjmce', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rzjmce)},
+  {title: '融券余额', key: 'rqye', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.rqye)},
+  {title: '融券占比', key: 'rqyeRate', width: 90, align: 'right' as const, render: (r: RzrqItem) => fmtPct(r.rqyeRate)},
+  {title: '两融余额', key: 'lrye', width: 110, align: 'right' as const, render: (r: RzrqItem) => fmtAmount(r.lrye)},
+  {title: '余额占比', key: 'lryeRate', width: 90, align: 'right' as const, render: (r: RzrqItem) => fmtPct(r.lryeRate)},
+  {title: '余额增幅', key: 'yezf', width: 90, align: 'right' as const, render: (r: RzrqItem) => {
       const v = parseFloat(r.yezf)
       const color = v > 0 ? '#e88080' : v < 0 ? '#00b42a' : ''
       return h('span', {style: `color:${color}`}, `${v.toFixed(2)}%`)
@@ -148,7 +148,8 @@ const dataDate = computed(() => {
   if (!data.value.length) return ''
   const ts = data.value[0].date
   if (!ts) return ''
-  // 鍏煎绉掔骇鍜屾绉掔骇鏃堕棿鎴?  const d = ts > 1e12 ? new Date(ts) : new Date(ts * 1000)
+  // 兼容秒级和毫秒级时间戳
+  const d = ts > 1e12 ? new Date(ts) : new Date(ts * 1000)
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
 })
 
@@ -156,7 +157,8 @@ async function fetchData() {
   loading.value = true
   try {
     let res = await RzrqRank(activeType.value, sortKey.value, sortType.value, queryDate.value, length.value, 0)
-    // 鏃犳暟鎹椂閫愭棩鍥為€€锛屾渶澶氬皾璇曞墠 7 澶?    if (!res?.list?.length) {
+    // 无数据时逐日回退，最多尝试前 7 天
+    if (!res?.list?.length) {
       const baseTs = dateTs.value ?? Date.now()
       for (let i = 1; i <= 7; i++) {
         const d = new Date(baseTs - i * 24 * 60 * 60 * 1000)
@@ -191,8 +193,8 @@ onMounted(() => {
   <n-card size="small" style="--wails-draggable:no-drag">
     <template #header>
       <n-flex align="center" :wrap="false">
-        <n-text strong>铻嶈祫铻嶅埜浣欓</n-text>
-        <n-text depth="3" style="font-size: 12px;">琛屼笟/姒傚康/涓偂{{ dataDate ? ' 路 ' + dataDate : '' }}</n-text>
+        <n-text strong>融资融券余额</n-text>
+        <n-text depth="3" style="font-size: 12px;">行业/概念/个股{{ dataDate ? ' · ' + dataDate : '' }}</n-text>
       </n-flex>
     </template>
 
@@ -207,21 +209,21 @@ onMounted(() => {
                 style="width: 90px;" @update:value="fetchData"/>
       <n-date-picker v-model:value="dateTs" type="date" size="small" clearable
                      :is-date-disabled="isDateDisabled"
-                     placeholder="鏈€鏂版棩鏈? style="width: 140px;" @update:value="fetchData"/>
-      <n-button size="small" type="primary" @click="fetchData" :loading="loading">鍒锋柊</n-button>
+                     placeholder="最新日期" style="width: 140px;" @update:value="fetchData"/>
+      <n-button size="small" type="primary" @click="fetchData" :loading="loading">刷新</n-button>
     </n-flex>
 
     <n-card v-if="summary" size="small" style="margin-bottom: 12px;" :bordered="false">
       <n-flex align="center" gap="24">
-        <n-statistic label="鍑€涔板叆鍚堣" :value="fmtAmount(String(summary.totalJmr))"/>
-        <n-statistic label="铻嶈祫浣欓鍚堣" :value="fmtAmount(String(summary.totalRzye))"/>
-        <n-statistic label="铻嶅埜浣欓鍚堣" :value="fmtAmount(String(summary.totalRqye))"/>
-        <n-statistic label="涓婃定">
+        <n-statistic label="净买入合计" :value="fmtAmount(String(summary.totalJmr))"/>
+        <n-statistic label="融资余额合计" :value="fmtAmount(String(summary.totalRzye))"/>
+        <n-statistic label="融券余额合计" :value="fmtAmount(String(summary.totalRqye))"/>
+        <n-statistic label="上涨">
           <template #default>
             <n-tag type="error" size="small" :bordered="false">{{ summary.upCount }}</n-tag>
           </template>
         </n-statistic>
-        <n-statistic label="涓嬭穼">
+        <n-statistic label="下跌">
           <template #default>
             <n-tag type="success" size="small" :bordered="false">{{ summary.downCount }}</n-tag>
           </template>
@@ -249,5 +251,3 @@ onMounted(() => {
   z-index: 2;
 }
 </style>
-
-
