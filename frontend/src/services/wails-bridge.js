@@ -1051,149 +1051,149 @@ export function AbortChatWithAgent() {
 
 export function ListKnowledgeBases() {
   if (isWailsMode()) return window.go.main.App.ListKnowledgeBases();
-  return fetch('/api/v1/knowledge-base/list').then(r => r.json());
+  return apiService.client.get('/knowledge-base/list', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function CreateKnowledgeBase(name, desc) {
   if (isWailsMode()) return window.go.main.App.CreateKnowledgeBase(name, desc);
-  return fetch('/api/v1/knowledge-base/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description: desc }) }).then(r => r.json());
+  return apiService.client.post('/knowledge-base/create', { name, description: desc }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function DeleteKnowledgeBase(name) {
   if (isWailsMode()) return window.go.main.App.DeleteKnowledgeBase(name);
-  return fetch('/api/v1/knowledge-base/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }).then(r => r.json());
+  return apiService.client.post('/knowledge-base/delete', { name }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function UploadKBFiles(name, files) {
   if (isWailsMode()) return window.go.main.App.UploadKBFiles(name, files);
-  return Promise.resolve({ success: false, error: 'Web端暂不支持文件上传' });
+  return Promise.resolve({ code: 1, message: 'Web端暂不支持文件上传' });
 }
 
 export function AddKBDocument(name, text, metadata) {
   if (isWailsMode()) return window.go.main.App.AddKBDocument(name, text, metadata);
-  return fetch('/api/v1/knowledge-base/add-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, text, metadata }) }).then(r => r.json());
+  return apiService.client.post('/knowledge-base/add-doc', { name, text, metadata }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function SearchKnowledgeBase(name, query, topK) {
   if (isWailsMode()) return window.go.main.App.SearchKnowledgeBase(name, query, topK);
-  return fetch('/api/v1/knowledge-base/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, query, topK }) }).then(r => r.json());
+  return apiService.client.post('/knowledge-base/search', { name, query, topK }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function ListKBDocuments(name, page, pageSize) {
   if (isWailsMode()) return window.go.main.App.ListKBDocuments(name, page, pageSize);
-  return fetch(`/api/v1/knowledge-base/documents?name=${encodeURIComponent(name)}&page=${page || 1}&pageSize=${pageSize || 20}`).then(r => r.json());
+  return apiService.client.get('/knowledge-base/documents', { params: { name, page: page || 1, pageSize: pageSize || 20 }, headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function ListKBDocumentsPaged(name, page, pageSize) {
   if (isWailsMode()) return window.go.main.App.ListKBDocumentsPaged(name, page, pageSize);
-  return fetch(`/api/v1/knowledge-base/documents-paged?name=${encodeURIComponent(name)}&page=${page || 1}&pageSize=${pageSize || 20}`).then(r => r.json());
+  return apiService.client.get('/knowledge-base/documents-paged', { params: { name, page: page || 1, pageSize: pageSize || 20 }, headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function DeleteKBDocument(name, docId) {
   if (isWailsMode()) return window.go.main.App.DeleteKBDocument(name, docId);
-  return fetch('/api/v1/knowledge-base/delete-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, docId }) }).then(r => r.json());
+  return apiService.client.post('/knowledge-base/delete-doc', { name, docId }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function PickKBFilePaths() {
   if (isWailsMode()) return window.go.main.App.PickKBFilePaths();
-  return Promise.resolve({ success: false, error: 'Web端暂不支持文件选择' });
+  return Promise.resolve({ code: 1, message: 'Web端暂不支持文件选择' });
 }
 
 export function ListAIServicesForKB() {
   if (isWailsMode()) return window.go.main.App.ListAIServicesForKB();
-  return fetch('/api/v1/ai-config/list').then(r => r.json());
+  return apiService.client.get('/ai/configs', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function GetLongTermMemoryAiConfigId() {
   if (isWailsMode()) return window.go.main.App.GetLongTermMemoryAiConfigId();
-  return fetch('/api/v1/settings/long-term-memory-ai-config-id').then(r => r.json());
+  return apiService.client.get('/settings/long-term-memory-ai-config-id', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function SetLongTermMemoryAiConfigId(id) {
   if (isWailsMode()) return window.go.main.App.SetLongTermMemoryAiConfigId(id);
-  return fetch('/api/v1/settings/long-term-memory-ai-config-id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).then(r => r.json());
+  return apiService.client.post('/settings/long-term-memory-ai-config-id', { id }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function GetAllKBVectorizingStatuses() {
   if (isWailsMode()) return window.go.main.App.GetAllKBVectorizingStatuses();
-  return fetch('/api/v1/knowledge-base/vectorizing-statuses').then(r => r.json());
+  return apiService.client.get('/knowledge-base/vectorizing-statuses', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function GetKBVectorizingStatus(name) {
   if (isWailsMode()) return window.go.main.App.GetKBVectorizingStatus(name);
-  return fetch(`/api/v1/knowledge-base/vectorizing-status?name=${encodeURIComponent(name)}`).then(r => r.json());
+  return apiService.client.get('/knowledge-base/vectorizing-status', { params: { name }, headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function GetKnowledgeBase(name) {
   if (isWailsMode()) return window.go.main.App.GetKnowledgeBase(name);
-  return fetch(`/api/v1/knowledge-base/info?name=${encodeURIComponent(name)}`).then(r => r.json());
+  return apiService.client.get('/knowledge-base/info', { params: { name }, headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function GetLongTermMemoryInfo() {
   if (isWailsMode()) return window.go.main.App.GetLongTermMemoryInfo();
-  return fetch('/api/v1/knowledge-base/long-term-memory-info').then(r => r.json());
+  return apiService.client.get('/knowledge-base/long-term-memory-info', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function SearchLongTermMemory(query, topK) {
   if (isWailsMode()) return window.go.main.App.SearchLongTermMemory(query, topK);
-  return fetch('/api/v1/knowledge-base/search-long-term-memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, topK }) }).then(r => r.json());
+  return apiService.client.post('/knowledge-base/search-long-term-memory', { query, topK }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function SearchAllKnowledge(query, topK) {
   if (isWailsMode()) return window.go.main.App.SearchAllKnowledge(query, topK);
-  return fetch('/api/v1/knowledge-base/search-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, topK }) }).then(r => r.json());
+  return apiService.client.post('/knowledge-base/search-all', { query, topK }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function ChatWithAgentKBQA(message, kbName) {
   if (isWailsMode()) return window.go.main.App.ChatWithAgentKBQA(message, kbName);
-  return fetch('/api/v1/knowledge-base/chat-qa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, kbName }) }).then(r => r.json());
+  return apiService.client.post('/knowledge-base/chat-qa', { message, kbName }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 // ========== 用户画像 (user-profile.vue) ==========
 
 export function GetUserProfile() {
   if (isWailsMode()) return window.go.main.App.GetUserProfile();
-  return fetch('/api/v1/user-profile').then(r => r.json());
+  return apiService.client.get('/user-profile', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function SaveUserProfile(profile) {
   if (isWailsMode()) return window.go.main.App.SaveUserProfile(profile);
-  return fetch('/api/v1/user-profile/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) }).then(r => r.json());
+  return apiService.client.post('/user-profile/save', profile, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function RelearnUserProfile() {
   if (isWailsMode()) return window.go.main.App.RelearnUserProfile();
-  return fetch('/api/v1/user-profile/relearn', { method: 'POST' }).then(r => r.json());
+  return apiService.client.post('/user-profile/relearn', {}, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function ClearUserProfile() {
   if (isWailsMode()) return window.go.main.App.ClearUserProfile();
-  return fetch('/api/v1/user-profile/clear', { method: 'POST' }).then(r => r.json());
+  return apiService.client.post('/user-profile/clear', {}, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function GetAgentFeedbackStats() {
   if (isWailsMode()) return window.go.main.App.GetAgentFeedbackStats();
-  return fetch('/api/v1/user-profile/feedback-stats').then(r => r.json());
+  return apiService.client.get('/user-profile/feedback-stats', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function ListAgentFeedback(page, pageSize) {
   if (isWailsMode()) return window.go.main.App.ListAgentFeedback(page, pageSize);
-  return fetch(`/api/v1/user-profile/feedback-list?page=${page || 1}&pageSize=${pageSize || 20}`).then(r => r.json());
+  return apiService.client.get('/user-profile/feedback-list', { params: { page: page || 1, pageSize: pageSize || 20 }, headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function GetUserProfileEnabled() {
   if (isWailsMode()) return window.go.main.App.GetUserProfileEnabled();
-  return fetch('/api/v1/user-profile/enabled').then(r => r.json());
+  return apiService.client.get('/user-profile/enabled', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function SetUserProfileEnabled(enabled) {
   if (isWailsMode()) return window.go.main.App.SetUserProfileEnabled(enabled);
-  return fetch('/api/v1/user-profile/enabled', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) }).then(r => r.json());
+  return apiService.client.post('/user-profile/enabled', { enabled }, { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function GetUserProfileUpdatedAt() {
   if (isWailsMode()) return window.go.main.App.GetUserProfileUpdatedAt();
-  return fetch('/api/v1/user-profile/updated-at').then(r => r.json());
+  return apiService.client.get('/user-profile/updated-at', { headers: getAuthHeaders() }).then(r => r.data);
 }
 
 export function AbortSummaryStockNews() {
@@ -2872,7 +2872,8 @@ export function GetAllConceptPlates() {
 
 export function ConceptEventList(arg1) {
   if (isWailsMode()) return window.go.main.App.ConceptEventList(arg1);
-  return apiService.client.get('/market/concept-events', { params: { date: arg1 }, headers: getAuthHeaders() })
+  const params = arg1 ? { date: arg1 } : {};
+  return apiService.client.get('/market/concept-events', { params, headers: getAuthHeaders() })
     .then(extractApiData)
     .catch(() => []);
 }

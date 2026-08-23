@@ -242,7 +242,7 @@ func cleanMarketValue(v string) string {
 
 // ConceptKLine 获取同花顺概念板块 K 线数据
 // plateCode 为板块代码（如 886112），由 ConceptDetail 返回的 PlateCode 字段提供
-// 数据来源：http://d.10jqka.com.cn/v6/line/bk_{plateCode}/01/all.js （JSONP）
+// 数据来源：https://d.10jqka.com.cn/v6/line/bk_{plateCode}/01/all.js （JSONP）
 //
 // 响应格式：
 //
@@ -264,7 +264,7 @@ func (m MarketNewsApi) ConceptKLine(plateCode string) *models.ConceptKLineData {
 	if plateCode == "" {
 		return result
 	}
-	url := fmt.Sprintf("http://d.10jqka.com.cn/v6/line/bk_%s/01/all.js", plateCode)
+	url := fmt.Sprintf("https://d.10jqka.com.cn/v6/line/bk_%s/01/all.js", plateCode)
 	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("Host", "d.10jqka.com.cn").
 		SetHeader("Referer", "https://q.10jqka.com.cn/").
@@ -346,14 +346,14 @@ func (m MarketNewsApi) ConceptKLine(plateCode string) *models.ConceptKLineData {
 }
 
 // ConceptRealHead 获取同花顺概念板块实时行情数据
-// plateCode 为板块代码（如 886112），数据来源：http://d.10jqka.com.cn/v2/realhead/bk_{plateCode}/last.js
+// plateCode 为板块代码（如 886112），数据来源：https://d.10jqka.com.cn/v2/realhead/bk_{plateCode}/last.js
 // 响应 JSONP，外层 key 为 items，值是字段代码到数值的映射（与个股 realhead 字段一致）
 func (m MarketNewsApi) ConceptRealHead(plateCode string) *models.ConceptMarket {
 	result := &models.ConceptMarket{}
 	if plateCode == "" {
 		return result
 	}
-	url := fmt.Sprintf("http://d.10jqka.com.cn/v2/realhead/bk_%s/last.js", plateCode)
+	url := fmt.Sprintf("https://d.10jqka.com.cn/v2/realhead/bk_%s/last.js", plateCode)
 	resp, err := SharedHTTPClient.SetTimeout(15*time.Second).R().
 		SetHeader("Host", "d.10jqka.com.cn").
 		SetHeader("Referer", "https://q.10jqka.com.cn/").
