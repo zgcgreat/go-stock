@@ -2884,7 +2884,10 @@ export function RzrqRank(arg1, arg2, arg3, arg4, arg5, arg6) {
     params: { type: arg1, sortKey: arg2, sortType: arg3, date: arg4, length: arg5, offset: arg6 },
     headers: getAuthHeaders()
   })
-    .then(extractApiData)
+    .then((response) => {
+      const list = extractApiData(response)
+      return { type: arg1, list: Array.isArray(list) ? list : [] }
+    })
     .catch(() => ({ type: arg1, list: [] }));
 }
 

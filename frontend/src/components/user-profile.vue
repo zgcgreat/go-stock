@@ -202,15 +202,21 @@ function loadFeedback(p) {
 
 function loadStats() {
   GetAgentFeedbackStats().then((res) => {
-    stats.value = res || stats.value
+    stats.value = {
+      total: res?.total ?? 0,
+      upCount: res?.upCount ?? 0,
+      downCount: res?.downCount ?? 0,
+      upRate: res?.upRate ?? 0,
+    }
   })
 }
 
 function loadProfile() {
   GetUserProfile().then((res) => {
-    profile.value = res || ''
+    const raw = res?.data ?? res
+    profile.value = typeof raw === 'string' ? raw : ''
   })
-  GetUserProfileUpdatedAt().then((res) => { profileUpdatedAt.value = res || '' })
+  GetUserProfileUpdatedAt().then((res) => { profileUpdatedAt.value = (res?.data ?? res) || '' })
 }
 
 function loadProfileEnabled() {

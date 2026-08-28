@@ -770,6 +770,10 @@ export function RestartAsAdmin() {
   return window['go']['main']['App']['RestartAsAdmin']();
 }
 
+export function RzrqRank(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['RzrqRank'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 export function SaveAIResponseResult(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SaveAIResponseResult'](arg1, arg2, arg3, arg4, arg5, arg6);
 }

@@ -3595,6 +3595,10 @@ func (a *App) GetIndexQuotes() []data.IndexQuoteItem {
 	return res
 }
 
+func (a *App) RzrqRank(rzrqType, sortKey, sortType, date string, length, offset int) *models.RzrqRankData {
+	return data.NewMarketNewsApi().RzrqRank(rzrqType, sortKey, sortType, date, length, offset)
+}
+
 func (a *App) CreateMCPServer(server *models.MCPServer) string {
 	err := data.NewMCPServerApi().Create(server)
 	if err != nil {

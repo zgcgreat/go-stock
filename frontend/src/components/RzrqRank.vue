@@ -44,19 +44,17 @@ const queryDate = computed(() => {
 
 const typeOptions = [
   {label: '行业', value: 'hyList'},
-  {label: '概念', value: 'gnList'},
-  {label: '个股', value: 'ggList'},
+  {label: '融券', value: 'rqList'},
+  {label: '融资融券合计', value: 'rzrqTotal'},
 ]
 
 const sortKeyOptions = [
   {label: '净买入额', value: 'jmr'},
-  {label: '融资余额', value: 'rzye'},
+  {label: '净买入额2', value: 'jmre'},
+  {label: '融资净买入', value: 'jmrz'},
+  {label: '融券净卖出', value: 'jmrq'},
   {label: '融券余额', value: 'rqye'},
-  {label: '融资买入额', value: 'rzmre'},
-  {label: '融资净买入额', value: 'rzjmce'},
-  {label: '融资融券余额', value: 'lrye'},
-  {label: '余额增幅', value: 'yezf'},
-  {label: '涨跌幅', value: 'close_profit'},
+  {label: '融资融券余额', value: 'rzrqye'},
 ]
 
 const sortTypeOptions = [
