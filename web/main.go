@@ -1,7 +1,9 @@
-﻿// cmd/web/main.go - go-stock Web 鏈嶅姟鍣ㄧ嫭绔嬪惎鍔ㄥ叆鍙?//
-// 缂栬瘧鏂规硶锛堝湪椤圭洰鏍圭洰褰曟墽琛岋級锛?//   go build -o go-stock-web.exe ./cmd/web
+﻿// cmd/web/main.go - go-stock Web 服务器独立启动入口
 //
-// 杩愯鏂规硶锛堝墠绔?dist 闇€瑕佸湪褰撳墠鐩綍鎴?GO_STOCK_STATIC_DIR 鎸囧畾鐩綍锛夛細
+// 编译方法（在项目根目录执行）：
+//   go build -o go-stock-web.exe ./web
+//
+// 运行方法（前端 dist 需要在当前目录或 GO_STOCK_STATIC_DIR 指定目录）：
 //   GO_STOCK_WEB_PORT=8080 ./go-stock-web.exe
 
 package main
@@ -24,28 +26,34 @@ func main() {
 		port = "8080"
 	}
 
-	// 鏁版嵁搴撳垵濮嬪寲
+	// 数据库初始化
 	dbPath := os.Getenv("GO_STOCK_DB_PATH")
 	db.Init(dbPath)
 
-	// 鍒濆鍖栨儏鎰熷垎鏋?	data.InitAnalyzeSentiment()
+	// 初始化情感分析
+	data.InitAnalyzeSentiment()
 
-	// 鏁版嵁搴撹縼绉?	webserver.MigrateAllTables()
+	// 数据库迁移
+	webserver.MigrateAllTables()
 
-	// 纭繚鍒濆绠＄悊鍛樿处鎴峰瓨鍦?	handlers.AdminEnsureInitialAdmin()
+	// 确保初始管理员账户存在
+	handlers.AdminEnsureInitialAdmin()
 
-	// 璁剧疆闈欐€佽祫婧愮洰褰曪紙纾佺洏璺緞锛岄粯璁?frontend/dist锛?	if staticDir := os.Getenv("GO_STOCK_STATIC_DIR"); staticDir != "" {
+	// 设置静态资源目录（磁盘路径，默认 frontend/dist）
+	if staticDir := os.Getenv("GO_STOCK_STATIC_DIR"); staticDir != "" {
 		webserver.StaticDir = staticDir
 	}
-	// WebAssets 涓?nil锛屽皢浣跨敤 StaticDir 纾佺洏璺緞
+	// WebAssets 为 nil，将使用 StaticDir 磁盘路径
 
-	// 鍚姩 Web 鏈嶅姟鍣?	server := webserver.NewWebServer(port)
+	// 启动 Web 服务器
+	server := webserver.NewWebServer(port)
 	log.Printf("go-stock Web server starting on http://0.0.0.0:%s", port)
 
-	// 鍚姩瀹氭椂浠诲姟璋冨害鍣紙甯傚満缁熻銆佺儹璇嶉噰闆嗙瓑锛?	scheduler := webserver.GetScheduler()
+	// 启动定时任务调度器（市场统计、热词采集等）
+	scheduler := webserver.GetScheduler()
 	scheduler.Start()
 
-	// 浼橀泤鍏抽棴
+	// 优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
