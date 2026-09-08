@@ -12,7 +12,6 @@
     "types": ["vite/client"],
     "skipLibCheck": true,
     "noEmit": true,
-    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"]
     }

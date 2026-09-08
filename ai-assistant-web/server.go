@@ -4,13 +4,10 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
-	"go-stock/backend/agent"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
-	"go-stock/internal/handlers"
-	"go-stock/internal/middleware"
 	"io/fs"
 	"net/http"
 	"os"
@@ -65,16 +62,12 @@ func Start() error {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/health", a.health)
-	mux.HandleFunc("/api/auth/login", handlers.HandleLogin)
-	mux.HandleFunc("/api/auth/register", handlers.HandleRegister)
-	mux.HandleFunc("/api/user/profile", middleware.RequireVipRole(http.HandlerFunc(handlers.HandleGetUserProfile)).ServeHTTP)
 	mux.HandleFunc("/api/vip-status", a.vipStatus)
-	mux.HandleFunc("/api/ai-configs", middleware.RequireVipRole(http.HandlerFunc(a.getAIConfigs)).ServeHTTP)
-	mux.HandleFunc("/api/prompts", middleware.RequireVipRole(http.HandlerFunc(a.getPrompts)).ServeHTTP)
-	mux.HandleFunc("/api/session", middleware.RequireVipRole(http.HandlerFunc(a.session)).ServeHTTP)
-	mux.HandleFunc("/api/chat/summary-stream", middleware.RequireVipRole(http.HandlerFunc(a.summaryChatStream)).ServeHTTP)
-	mux.HandleFunc("/api/chat/agent-chat", middleware.RequireVipRole(http.HandlerFunc(a.agentChatStream)).ServeHTTP)
-	mux.HandleFunc("/api/share", middleware.RequireVipRole(http.HandlerFunc(a.shareText)).ServeHTTP)
+	mux.HandleFunc("/api/ai-configs", a.getAIConfigs)
+	mux.HandleFunc("/api/prompts", a.getPrompts)
+	mux.HandleFunc("/api/session", a.session)
+	mux.HandleFunc("/api/chat/summary-stream", a.summaryChatStream)
+	mux.HandleFunc("/api/share", a.shareText)
 
 	subFS, err := fs.Sub(staticFS, "static")
 	if err != nil {
@@ -100,83 +93,44 @@ func (a *app) vipStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	// 从请求头中获取用户ID
-	userID, ok := middleware.GetUserIDFromHTTPContext(r)
-	if !ok || userID == 0 {
-		// 未登录用户，返回未授权状态
-		writeJSON(w, http.StatusOK, map[string]any{
-			"ok":       false,
-			"vipLevel": 0,
-			"active":   false,
-			"message":  "请先登录",
-		})
-		return
-	}
-
-	// 查询用户信息
-	var user models.User
-	if err := db.Dao.Where("id = ?", userID).First(&user).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{
-			"ok":      false,
-			"message": "用户信息查询失败",
-		})
-		return
-	}
-
-	// 检查用户是否激活
-	if !user.IsActive {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"ok":      false,
-			"message": "账户已被禁用",
-		})
-		return
-	}
-
-	// 获取用户角色
-	role := middleware.GetUserRole(user)
-
-	// 根据角色判断VIP权限
-	isVip := role == middleware.RoleVIP || role == middleware.RoleAdmin || role == middleware.RoleSuperAdmin
-
-	// 同时检查用户表中的VIP信息（VipLevel + VipEndAt）
-	if !isVip && user.VipLevel > 0 && user.VipEndAt != nil && !user.VipEndAt.IsZero() {
-		if time.Now().Before(*user.VipEndAt) {
-			isVip = true
-		}
-	}
-
-	// 映射角色到vipLevel（兼容前端）
-	vipLevel := 0
-	if isVip {
-		switch role {
-		case middleware.RoleVIP:
-			vipLevel = 2
-		case middleware.RoleAdmin:
-			vipLevel = 3
-		case middleware.RoleSuperAdmin:
-			vipLevel = 4
-		}
-	} else if user.VipLevel > 0 && user.VipEndAt != nil && !user.VipEndAt.IsZero() && time.Now().Before(*user.VipEndAt) {
-		// 使用用户管理中的VIP等级
-		vipLevel = user.VipLevel
-	}
-
+	level, active := data.EffectiveSponsorVipLevel()
+	ok := active && level >= 2
 	payload := map[string]any{
-		"ok":       isVip,
-		"vipLevel": vipLevel,
-		"active":   isVip,
-		"role":     string(role),
+		"ok":       ok,
+		"vipLevel": level,
+		"active":   active,
 	}
-
-	if !isVip {
-		payload["message"] = "当前用户不是VIP，请联系管理员升级权限"
+	if !ok {
+		payload["message"] = vipDeniedMessage(level, active)
 	}
-
 	writeJSON(w, http.StatusOK, payload)
 }
 
+func vipDeniedMessage(level int, active bool) string {
+	if !active && level > 0 {
+		return "检测到赞助信息，但当前不在 VIP 有效期内或尚未到授权生效时间。请在 go-stock 客户端「关于」确认赞助状态。"
+	}
+	return "go-stock AI 助手（Web）仅对 VIP2 及以上有效赞助用户开放。请在 go-stock 桌面客户端「关于」页面填写赞助码后，使用与本机相同的 data 目录启动服务。"
+}
+
+func requireVip2(w http.ResponseWriter) bool {
+	level, active := data.EffectiveSponsorVipLevel()
+	if active && level >= 2 {
+		return true
+	}
+	writeJSON(w, http.StatusForbidden, map[string]any{
+		"code":     "VIP2_REQUIRED",
+		"message":  vipDeniedMessage(level, active),
+		"vipLevel": level,
+		"active":   active,
+	})
+	return false
+}
+
 func (a *app) getAIConfigs(w http.ResponseWriter, _ *http.Request) {
+	if !requireVip2(w) {
+		return
+	}
 	cfgs := data.GetSettingConfig().AiConfigs
 	resp := make([]aiConfigResp, 0, len(cfgs))
 	for _, c := range cfgs {
@@ -191,6 +145,9 @@ func (a *app) getAIConfigs(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *app) getPrompts(w http.ResponseWriter, r *http.Request) {
+	if !requireVip2(w) {
+		return
+	}
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	promptType := strings.TrimSpace(r.URL.Query().Get("type"))
 	res := data.NewPromptTemplateApi().GetPromptTemplates(name, promptType)
@@ -198,17 +155,13 @@ func (a *app) getPrompts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) session(w http.ResponseWriter, r *http.Request) {
-	// 从请求头中获取用户ID（session 接口需要用户隔离）
-	userID, ok := middleware.GetUserIDFromHTTPContext(r)
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "未登录"})
+	if !requireVip2(w) {
 		return
 	}
-
 	switch r.Method {
 	case http.MethodGet:
 		sessionId := r.URL.Query().Get("sessionId")
-		res, err := data.GetAiAssistantSession(sessionId, userID)
+		res, err := data.GetAiAssistantSession(sessionId)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -220,7 +173,7 @@ func (a *app) session(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-		if err := data.SaveAiAssistantSession(req.SessionId, userID, req.Messages); err != nil {
+		if err := data.SaveAiAssistantSession(req.SessionId, req.Messages); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
@@ -233,6 +186,9 @@ func (a *app) session(w http.ResponseWriter, r *http.Request) {
 func (a *app) summaryChatStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if !requireVip2(w) {
 		return
 	}
 
@@ -282,9 +238,9 @@ func (a *app) summaryChatStream(w http.ResponseWriter, r *http.Request) {
 	o := data.NewDeepSeekOpenAi(ctx, req.AIConfigID)
 	var ch <-chan map[string]any
 	if req.EnableTools {
-		ch = o.NewSummaryStockNewsStreamWithTools(req.Question, sysPromptID, tools, req.Thinking, history)
+		ch = o.NewSummaryStockNewsStreamWithTools(req.Question, sysPromptID, tools, req.Thinking, history, nil)
 	} else {
-		ch = o.NewSummaryStockNewsStream(req.Question, sysPromptID, req.Thinking, history)
+		ch = o.NewSummaryStockNewsStream(req.Question, sysPromptID, req.Thinking, history, nil)
 	}
 
 	for {
@@ -312,6 +268,9 @@ func (a *app) shareText(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	if !requireVip2(w) {
+		return
+	}
 	var req shareRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
@@ -327,12 +286,18 @@ func (a *app) shareText(w http.ResponseWriter, r *http.Request) {
 		req.Title = "AI助手"
 	}
 	analysisTime := time.Now().Format("2006/01/02")
+	// 上传地址：广场服务地址为固定配置（定制版不可修改）
+	uploadBase := strings.TrimSpace(data.GetSettingConfig().PromptPlazaApiBase)
+	if uploadBase == "" {
+		uploadBase = data.DefaultPromptPlazaApiBase
+	}
+	uploadURL := strings.TrimSuffix(uploadBase, "/") + "/upload"
 	resp, err := data.SharedHTTPClient.SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{
 		"text":         req.Text,
 		"stockCode":    req.Title,
 		"stockName":    req.Title,
 		"analysisTime": analysisTime,
-	}).Post("http://go-stock.sparkmemory.top:16688/upload")
+	}).Post(uploadURL)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -368,99 +333,6 @@ func (a *app) chatStream(w http.ResponseWriter, r *http.Request) {
 	a.summaryChatStream(w, r)
 }
 
-// agentChatStream 使用 Agent 模式（带工具调用的 React Agent）进行对话
-func (a *app) agentChatStream(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req chatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	req.Question = strings.TrimSpace(req.Question)
-	if req.Question == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "question is required"})
-		return
-	}
-
-	if req.AIConfigID <= 0 {
-		cfgs := data.GetSettingConfig().AiConfigs
-		if len(cfgs) == 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no ai config found"})
-			return
-		}
-		req.AIConfigID = int(cfgs[0].ID)
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "stream not supported"})
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	var sysPromptID *int
-	if req.SysPromptID > 0 {
-		sysPromptID = &req.SysPromptID
-	}
-
-	aiAgent := agent.NewStockAiAgentApi()
-	msgCh := aiAgent.ChatWithContext(ctx, req.Question, req.AIConfigID, sysPromptID, false, 10, req.Thinking, "")
-
-	for msg := range msgCh {
-		if msg == nil {
-			continue
-		}
-
-		// 创建符合前端期望的消息对象
-		responseData := make(map[string]interface{})
-		responseData["role"] = "assistant"
-
-		// 同时发送 reasoning_content 和 content（修复原 agent-chat 只发一个的问题）
-		if msg.ReasoningContent != "" {
-			responseData["reasoning_content"] = msg.ReasoningContent
-		}
-		if msg.Content != "" {
-			responseData["content"] = msg.Content
-		}
-
-		// 检查是否有工具调用
-		if len(msg.ToolCalls) > 0 {
-			var toolCalls []map[string]interface{}
-			for _, tc := range msg.ToolCalls {
-				toolCall := map[string]interface{}{
-					"id":   tc.ID,
-					"type": tc.Type,
-					"function": map[string]interface{}{
-						"name":      tc.Function.Name,
-						"arguments": tc.Function.Arguments,
-					},
-				}
-				toolCalls = append(toolCalls, toolCall)
-			}
-			responseData["tool_calls"] = toolCalls
-		}
-
-		// 发送消息给客户端（使用与 summary-stream 相同的格式：data: {...}\n\n）
-		raw, _ := json.Marshal(responseData)
-		_, _ = w.Write([]byte("data: " + string(raw) + "\n\n"))
-		flusher.Flush()
-	}
-
-	// 发送完成信号
-	_, _ = w.Write([]byte("event: done\ndata: [DONE]\n\n"))
-	flusher.Flush()
-}
-
 func autoMigrate() {
 	db.Dao.AutoMigrate(&data.Settings{})
 	db.Dao.AutoMigrate(&data.AIConfig{})
@@ -492,7 +364,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
