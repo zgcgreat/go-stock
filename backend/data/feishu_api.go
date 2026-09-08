@@ -52,6 +52,26 @@ func (FeishuAPI) SendFeishuMessage(message string) string {
 	return parseFeishuResponse(resp.String())
 }
 
+// SendFeishuMessageWithConfig 使用指定配置发送原始消息体（Web端用户隔离，对齐 SendToDingDingWithConfig）
+func (FeishuAPI) SendFeishuMessageWithConfig(message string, enabled bool, robotURL string) string {
+ if !enabled {
+ return "飞书推送未开启"
+ }
+ if strings.TrimSpace(robotURL) == "" {
+ return "飞书推送未配置机器人地址"
+ }
+ resp, err := SharedHTTPClient.R().
+ SetHeader("Content-Type", "application/json").
+ SetBody(message).
+ Post(robotURL)
+ if err != nil {
+ logger.SugaredLogger.Error(err.Error())
+ return "发送飞书消息失败"
+ }
+ logger.SugaredLogger.Infof("send feishu message: %s", resp.String())
+ return parseFeishuResponse(resp.String())
+}
+
 // SendToFeishu 构造 interactive 卡片消息（header 标题 + markdown 内容 + @所有人）发送到飞书机器人
 func (f FeishuAPI) SendToFeishu(title, message string) string {
 	cfg := GetSettingConfig()

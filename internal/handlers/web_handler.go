@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
-	"strconv"
+ "net/http"
+ "net/url"
+ "os"
+ "path/filepath"
+ "strconv"
 	"strings"
 	"time"
 
@@ -676,8 +678,34 @@ func SendDingDingMessage(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 1, "message": "用户配置不存在"})
 		return
 	}
-	result := data.NewDingDingAPI().SendToDingDingWithConfig(title, msg, cfg.DingPushEnable, cfg.DingRobot)
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+ result := data.NewDingDingAPI().SendToDingDingWithConfig(title, msg, cfg.DingPushEnable, cfg.DingRobot)
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// SendFeishuMessage 发送飞书消息（Web端用户隔离，读取当前用户配置）
+func SendFeishuMessage(c *gin.Context) {
+ var req struct {
+ Message   string `json:"message"`
+ StockCode string `json:"stockCode"`
+ MsgType   int    `json:"msgType"`
+ }
+ if err := c.ShouldBindJSON(&req); err != nil {
+ c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+ return
+ }
+ msg := req.Message
+ if msg == "" {
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "消息为空，跳过发送"})
+ return
+ }
+ userID, _ := middleware.GetUserIDFromContext(c)
+ cfg := data.GetSettingConfigByUserID(userID)
+ if cfg == nil || cfg.Settings == nil {
+ c.JSON(http.StatusOK, gin.H{"code": 1, "message": "用户配置不存在"})
+ return
+ }
+ result := data.NewFeishuAPI().SendFeishuMessageWithConfig(msg, cfg.FeishuPushEnable, cfg.FeishuRobot)
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
 
 // CheckFrequentTrading 检查频繁交易
@@ -2045,24 +2073,190 @@ func SearchAllKnowledge(c *gin.Context) {
 }
 
 // ========== 用户画像 Handler ==========
-// 注: 用户画像功能依赖 agent 内部模块，Web端暂提供 stub 实现
+// Web端用户画像：agent 自动学习模块未启用，画像文本持久化到 user_settings 表（按用户隔离）
 
-func GetUserProfileHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": nil})
+const (
+ user_profile_text_key         = "user_profile_text"
+ user_profile_enabled_key      = "user_profile_enabled"
+ user_profile_updated_at_key   = "user_profile_updated_at"
+)
+
+func readUserProfileValue(userID uint, key string) (string, error) {
+ var s UserSetting
+ if err := db.Dao.Where("user_id = ? AND `key` = ?", userID, key).First(&s).Error; err != nil {
+ return "", err
+ }
+ return s.Value, nil
 }
 
+func writeUserProfileValue(userID uint, key string, value string) error {
+ if _, err := readUserProfileValue(userID, key); err == nil {
+ if err := db.Dao.Model(&UserSetting{}).Where("user_id = ? AND `key` = ?", userID, key).Update("value", value).Error; err != nil {
+ return err
+ }
+ return nil
+ }
+ s := UserSetting{UserID: userID, Type: "profile", Key: key, Value: value}
+ if result := db.Dao.Where(UserSetting{UserID: userID, Key: key}).FirstOrCreate(&s); result.Error != nil {
+ return result.Error
+ }
+ return nil
+}
+
+// GetUserProfileHandler 获取用户画像文本（Web端持久化存储）
+func GetUserProfileHandler(c *gin.Context) {
+ userID, _ := middleware.GetUserIDFromContext(c)
+ v, err := readUserProfileValue(userID, user_profile_text_key)
+ if err != nil || v == "" {
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": nil})
+ return
+ }
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": v})
+}
+
+// SaveUserProfileHandler 保存用户画像文本（Web端持久化存储）
 func SaveUserProfileHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "用户画像功能需要 agent 内部模块支持，Web端暂未启用"})
+ var body struct {
+ Profile string `json:"profile"`
+ }
+ raw, _ := io.ReadAll(c.Request.Body)
+ if err := json.Unmarshal(raw, &body); err != nil || strings.TrimSpace(body.Profile) == "" {
+ c.JSON(http.StatusOK, gin.H{"code": 1, "message": "画像内容为空"})
+ return
+ }
+ userID, _ := middleware.GetUserIDFromContext(c)
+ now := time.Now().Format("2006-01-02 15:04:05")
+ if err := writeUserProfileValue(userID, user_profile_text_key, body.Profile); err != nil {
+ c.JSON(http.StatusOK, gin.H{"code": 1, "message": "保存失败: " + err.Error()})
+ return
+ }
+ _ = writeUserProfileValue(userID, user_profile_updated_at_key, now)
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
 }
 
 func GetUserProfileEnabled(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": false})
+ userID, _ := middleware.GetUserIDFromContext(c)
+ v, err := readUserProfileValue(userID, user_profile_enabled_key)
+ if err != nil || v == "false" {
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": false})
+ return
+ }
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": true})
 }
 
 func SetUserProfileEnabled(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "用户画像功能需要 agent 内部模块支持，Web端暂未启用"})
+ var req struct {
+ Enabled bool `json:"enabled"`
+ }
+ if err := c.ShouldBindJSON(&req); err != nil {
+ c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误: " + err.Error()})
+ return
+ }
+ userID, _ := middleware.GetUserIDFromContext(c)
+ if err := writeUserProfileValue(userID, user_profile_enabled_key, fmt.Sprintf("%t", req.Enabled)); err != nil {
+ c.JSON(http.StatusOK, gin.H{"code": 1, "message": "设置失败: " + err.Error()})
+ return
+ }
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
 }
 
 func GetUserProfileUpdatedAt(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": ""})
+ userID, _ := middleware.GetUserIDFromContext(c)
+ v, err := readUserProfileValue(userID, user_profile_updated_at_key)
+ if err != nil {
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": ""})
+ return
+ }
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": v})
+}
+
+// RelearnUserProfile 重新学习用户画像（Web端：agent 模块未启用，返回当前已存储的画像文本）
+func RelearnUserProfile(c *gin.Context) {
+ userID, _ := middleware.GetUserIDFromContext(c)
+ v, err := readUserProfileValue(userID, user_profile_text_key)
+ if err != nil || v == "" {
+ c.JSON(http.StatusOK, gin.H{"code": 1, "message": "暂无可重学的画像数据，请先保存用户画像"})
+ return
+ }
+ if err := writeUserProfileValue(userID, user_profile_updated_at_key, time.Now().Format("2006-01-02 15:04:05")); err != nil {
+ c.JSON(http.StatusOK, gin.H{"code": 1, "message": "更新时间写入失败: " + err.Error()})
+ return
+ }
+ c.JSON(http.StatusOK, v)
+}
+
+// ClearUserProfile 清空用户画像（Web端）
+func ClearUserProfile(c *gin.Context) {
+ userID, _ := middleware.GetUserIDFromContext(c)
+ if err := db.Dao.Where("user_id = ? AND `key` IN ?", userID, []string{user_profile_text_key, user_profile_updated_at_key}).Delete(&UserSetting{}).Error; err != nil {
+ c.JSON(http.StatusOK, gin.H{"code": 1, "message": "清空失败: " + err.Error()})
+ return
+ }
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+// GetAgentFeedbackStats 反馈统计（Web端：agent 反馈未落库，返回空统计）
+func GetAgentFeedbackStats(c *gin.Context) {
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": map[string]any{"total": 0, "upCount": 0, "downCount": 0, "upRate": 0}})
+}
+
+// ListAgentFeedbackPaged 反馈列表（Web端：agent 反馈未落库，返回空列表）
+func ListAgentFeedbackPaged(c *gin.Context) {
+ page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+ pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+ if page <= 0 {
+ page = 1
+ }
+ if pageSize <= 0 {
+ pageSize = 20
+ }
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": map[string]any{"list": []interface{}{}, "total": 0}})
+}
+
+// GetUserManual 获取用户手册（Web端：读取 docs/go-stock使用手册.md，兼容多种工作目录）
+func GetUserManual(c *gin.Context) {
+ rel := filepath.Join("docs", "go-stock使用手册.md")
+ candidates := []string{rel}
+ if wd, err := os.Getwd(); err == nil {
+ // Web 服务器可能在项目根目录或 frontend/dist 下启动，两种布局都兼容
+ candidates = append(candidates, filepath.Join(wd, "..", rel), filepath.Join(wd, "../../docs/go-stock使用手册.md"))
+ }
+ for _, p := range candidates {
+ content, err := os.ReadFile(p)
+ if err == nil && len(content) > 0 {
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": string(content)})
+ return
+ }
+ }
+ c.JSON(http.StatusNotFound, gin.H{"code": 1, "message": "用户手册文件未找到"})
+}
+
+// GetDailyDimensionStatsHandler 按维度(股票/行业/概念/异动类型)的每日异动趋势（Web端对齐桌面端 GetDailyDimensionStats）
+func GetDailyDimensionStatsHandler(c *gin.Context) {
+ dimension := c.Query("dimension")
+ name := c.Query("name")
+ days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+ if days <= 0 {
+ days = 30
+ }
+ result, err := data.NewStockChangeHistoryService().GetDailyDimensionStats(dimension, name, days)
+ if err != nil {
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []data.DailyDimensionStats{}})
+ return
+ }
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetTypeStatsByDateHandler 指定日期按异动类型的统计（Web端对齐桌面端 GetTypeStatsByDate）
+func GetTypeStatsByDateHandler(c *gin.Context) {
+ date := c.Query("date")
+ if date == "" {
+ date = time.Now().Format("2006-01-02")
+ }
+ result, err := data.NewStockChangeHistoryService().GetTypeStatsByDate(date)
+ if err != nil {
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []data.TypeCountStats{}})
+ return
+ }
+ c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }

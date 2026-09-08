@@ -1541,13 +1541,19 @@ export function GetChangeTypeDailyStats(arg1) {
 }
 
 export function GetDailyDimensionStats(arg1, arg2, arg3) {
-  if (isWailsMode()) return window.go.main.App.GetDailyDimensionStats(arg1, arg2, arg3);
-  return Promise.resolve([]);
+ if (isWailsMode()) return window.go.main.App.GetDailyDimensionStats(arg1, arg2, arg3);
+ // Web端：对齐桌面端按维度(股票/行业/概念/异动类型)每日趋势接口
+ return apiService.client.get('/stock-changes/dimension-stats', { params: { dimension: arg1, name: arg2, days: arg3 }, headers: getAuthHeaders() })
+ .then(res => res.data?.data || [])
+ .catch(() => []);
 }
 
 export function GetTypeStatsByDate(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetTypeStatsByDate(arg1);
-  return Promise.resolve([]);
+ if (isWailsMode()) return window.go.main.App.GetTypeStatsByDate(arg1);
+ // Web端：对齐桌面端指定日期按异动类型统计接口
+ return apiService.client.get('/stock-changes/type-stats-by-date', { params: { date: arg1 }, headers: getAuthHeaders() })
+ .then(res => res.data?.data || [])
+ .catch(() => []);
 }
 
 export function GetChangeRank(arg1, arg2) {

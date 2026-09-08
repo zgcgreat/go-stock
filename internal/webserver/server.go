@@ -270,8 +270,11 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/share/text", handlers.ShareText)
 			protected.POST("/share/analysis", handlers.ShareAnalysis)
 
-			// 钉钉
-			protected.POST("/dingding/message", handlers.SendDingDingMessage)
+ // 钉钉
+ protected.POST("/dingding/message", handlers.SendDingDingMessage)
+
+ // 飞书消息推送（用户隔离，与桌面端 SendFeishuMessageByType 对齐）
+ protected.POST("/feishu/message", handlers.SendFeishuMessage)
 
 			// 赞助
 			protected.GET("/sponsor/info", handlers.GetSponsorInfo)
@@ -337,20 +340,29 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/knowledge-base/vectorizing-statuses", handlers.GetAllKBVectorizingStatuses)
 			protected.POST("/knowledge-base/search-all", handlers.SearchAllKnowledge)
 
-			// 用户画像
-			protected.GET("/user-profile", handlers.GetUserProfileHandler)
-			protected.POST("/user-profile/save", handlers.SaveUserProfileHandler)
-			protected.GET("/user-profile/enabled", handlers.GetUserProfileEnabled)
-			protected.POST("/user-profile/enabled", handlers.SetUserProfileEnabled)
-			protected.GET("/user-profile/updated-at", handlers.GetUserProfileUpdatedAt)
+ // 用户画像
+ protected.GET("/user-profile", handlers.GetUserProfileHandler)
+ protected.POST("/user-profile/save", handlers.SaveUserProfileHandler)
+ protected.GET("/user-profile/enabled", handlers.GetUserProfileEnabled)
+ protected.POST("/user-profile/enabled", handlers.SetUserProfileEnabled)
+ protected.GET("/user-profile/updated-at", handlers.GetUserProfileUpdatedAt)
+ protected.POST("/user-profile/relearn", handlers.RelearnUserProfile)
+ protected.POST("/user-profile/clear", handlers.ClearUserProfile)
+ protected.GET("/user-profile/feedback-stats", handlers.GetAgentFeedbackStats)
+ protected.GET("/user-profile/feedback-list", handlers.ListAgentFeedbackPaged)
 
-			// 异动监控
-			protected.GET("/stock-changes", handlers.GetStockChanges)
-			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
-			protected.GET("/stock-changes/history", handlers.GetStockChangeHistoryHandler)
-			protected.POST("/stock-changes/save", handlers.SaveStockChangesToHistoryHandler)
-			protected.GET("/stock-changes/daily-stats", handlers.GetDailyChangeStats)
-			protected.GET("/stock-changes/type-stats", handlers.GetChangeTypeDailyStats)
+ // 异动监控
+ protected.GET("/stock-changes", handlers.GetStockChanges)
+ protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
+ protected.GET("/stock-changes/history", handlers.GetStockChangeHistoryHandler)
+ protected.POST("/stock-changes/save", handlers.SaveStockChangesToHistoryHandler)
+ protected.GET("/stock-changes/daily-stats", handlers.GetDailyChangeStats)
+ protected.GET("/stock-changes/type-stats", handlers.GetChangeTypeDailyStats)
+ protected.GET("/stock-changes/dimension-stats", handlers.GetDailyDimensionStatsHandler)
+ protected.GET("/stock-changes/type-stats-by-date", handlers.GetTypeStatsByDateHandler)
+
+ // 用户手册
+ protected.GET("/manual", handlers.GetUserManual)
 
 			// 用户管理（仅管理员）
 			admin := protected.Group("/admin")
