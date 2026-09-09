@@ -44,6 +44,8 @@ func (s *SettingsService) UpdateConfig(settingConfig *data.SettingConfig) string
 			"http_proxy_enabled":         settingConfig.HttpProxyEnabled,
 			"enable_agent":               settingConfig.EnableAgent,
 			"qgqp_b_id":                  settingConfig.QgqpBId,
+			"iwencai_api_key":            settingConfig.IwencaiApiKey,
+			"em_api_key":                 settingConfig.EmApiKey,
 			"window_width":               settingConfig.WindowWidth,
 			"window_height":              settingConfig.WindowHeight,
 		})

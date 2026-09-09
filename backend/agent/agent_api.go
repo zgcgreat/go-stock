@@ -156,6 +156,18 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 			sysPrompt = sysPrompt + "\n\n" + skillPrompt
 		}
 
+		// 追加强制工具调用规则与当前时间/市场环境上下文（对齐桌面端 ai-assistant 的 NewSummaryStockNewsStreamWithTools 设计）
+		// 现状：Web/桌面 Agent 走 Eino Agent，若不注入当前时间，模型无从知晓"今天"，导致按日期查询的
+		// 涨幅榜/跌幅榜/板块排名/龙虎榜等工具传错日期或被跳过，最终"获取不到数据"。
+		sysPrompt += `
+
+【强制规则】你必须通过工具调用获取实时数据，严禁凭记忆编造或使用过时数据。以下场景必须先调用工具：
+1. 股票/指数行情（价格、涨跌幅、成交量）——必须调用工具获取实时数据
+2. 今日涨幅榜、涨幅/资金板块排名、龙虎榜、涨停/连板等"当日"数据——必须先通过 GetCurrentTime 确认当前日期，再用正确日期调用对应工具
+3. 财务数据、新闻资讯、宏观经济——必须调用工具获取最新数据
+任何涉及具体数字的回答，都必须先通过工具查询确认。若未获取到最新数据，必须明确告知用户"当前未能获取到最新数据"，绝不能编造。`
+		sysPrompt += buildAgentTimeContext()
+
 		// 从 optsOverride 提取 userID（Web 端传入），默认 0（桌面端）
 		var userIDForConfig uint
 		if len(optsOverride) > 2 && optsOverride[2] != "" {

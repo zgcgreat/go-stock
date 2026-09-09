@@ -764,10 +764,14 @@ func (m MarketNewsApi) LongTiger(date string) *[]models.LongTigerRankData {
 	value, err := vm.Get("data")
 	//logger.SugaredLogger.Infof("resp-json:%s", value.String())
 	data := gjson.Get(value.String(), "result.data")
-	//logger.SugaredLogger.Infof("resp:%v", data)
+	// 容错：东财接口无数据时返回 result:null（如当日盘中龙虎榜尚未发布），
+	// 此时 data 为空串，直接返回空结果，避免无意义的 "unexpected end of JSON input" 错误日志。
+	if !data.Exists() || data.String() == "" || data.String() == "null" {
+		return ranks
+	}
 	err = json.Unmarshal([]byte(data.String()), ranks)
 	if err != nil {
-		logger.SugaredLogger.Error(err)
+		logger.SugaredLogger.Errorf("LongTiger result 解析失败: %v", err)
 		return ranks
 	}
 	for _, rankData := range *ranks {

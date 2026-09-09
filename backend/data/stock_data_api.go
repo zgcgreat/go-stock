@@ -2046,44 +2046,46 @@ func (receiver StockDataApi) GetStockMoneyData() models.StockMoneyDataResp {
 
 	var resData models.StockMoneyDataResp
 	url := "https://push2.eastmoney.com/api/qt/clist/get?cb=data&fid=f62&po=1&pz=50&pn=1&np=1&fltt=2&invt=2&ut=8dec03ba335b81bf4ebdf7b29ec27d15&fs=m:0+t:6+f:!2,m:0+t:13+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2,m:0+t:7+f:!2,m:1+t:3+f:!2&fields=f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87,f204,f205,f124,f1,f13,f100,f265"
-	req := receiver.client.SetTimeout(time.Duration(receiver.config.CrawlTimeOut) * time.Second).R()
+	// 最多尝试两次：首次请求失败（EOF/连接被重置）或响应为空时重试一次，
+	// 兼容东财 push2 接口偶发的风控断开。
+	for attempt := 0; attempt < 2; attempt++ {
+		req := receiver.client.SetTimeout(time.Duration(receiver.config.CrawlTimeOut) * time.Second).R()
+		setEastMoneyKlineBrowserHeaders(req, "https://quote.eastmoney.com")
 
-	setEastMoneyKlineBrowserHeaders(req, "https://quote.eastmoney.com")
-	// 使用缓存的 Cookie，pageURL 参数传空字符串由函数内部使用默认值
-	//cookieHeader, err := FetchEastMoneyCookiesViaChromedp("", time.Second*3, quoteEastMoneyPage)
-	//if err == nil {
-	//	//logger.SugaredLogger.Infof("Cookie: %s", cookieHeader)
-	//	req.SetHeader("Cookie", cookieHeader)
-	//}
-
-	resp, err := req.
-		SetHeader("Host", "push2.eastmoney.com").
-		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0").
-		Get(url)
-	if err != nil {
-		//logger.SugaredLogger.Errorf("err:%s", err.Error())
-	}
-	body := string(resp.Body())
-	//logger.SugaredLogger.Infof("resp:%s", body)
-	vm := otto.New()
-	vm.Run("function data(res){return res};")
-	val, err := vm.Run(body)
-	if err != nil {
-		//logger.SugaredLogger.Errorf("err:%s", err.Error())
-	}
-	value, err := val.Export()
-	if err != nil {
-		//logger.SugaredLogger.Errorf("err:%s", err.Error())
-	}
-	marshal, err := json.Marshal(value)
-	if err != nil {
-		//logger.SugaredLogger.Errorf("err:%s", err.Error())
-		return models.StockMoneyDataResp{}
-	}
-	err = json.Unmarshal(marshal, &resData)
-	if err != nil {
-		//logger.SugaredLogger.Errorf("err:%s", err.Error())
-		return models.StockMoneyDataResp{}
+		resp, err := req.
+			SetHeader("Host", "push2.eastmoney.com").
+			SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0").
+			Get(url)
+		if err != nil {
+			continue
+		}
+		body := string(resp.Body())
+		if strings.TrimSpace(body) == "" {
+			continue
+		}
+		vm := otto.New()
+		vm.Run("function data(res){return res};")
+		val, err := vm.Run(body)
+		if err != nil {
+			continue
+		}
+		value, err := val.Export()
+		if err != nil {
+			continue
+		}
+		marshal, err := json.Marshal(value)
+		if err != nil {
+			return models.StockMoneyDataResp{}
+		}
+		err = json.Unmarshal(marshal, &resData)
+		if err != nil {
+			return models.StockMoneyDataResp{}
+		}
+		if len(resData.Data.Diff) > 0 {
+			return resData
+		}
+		// 解析成功但无数据，清空后重试一次
+		resData = models.StockMoneyDataResp{}
 	}
 	return resData
 }
