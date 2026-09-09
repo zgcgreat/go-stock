@@ -115,15 +115,15 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 		}
 
 		stockAiAgent := receiver.newStockAiAgent(&ctx, aiConfigId, thinkingMode, question, agentMode, optsOverride...)
-	if stockAiAgent == nil {
-		logger.SugaredLogger.Errorf("stockAiAgent is nil")
-		ch <- &schema.Message{
-			Role:    schema.Assistant,
-			Content: "❌ AI 配置不存在或无效，请检查 AI 配置",
+		if stockAiAgent == nil {
+			logger.SugaredLogger.Errorf("stockAiAgent is nil")
+			ch <- &schema.Message{
+				Role:    schema.Assistant,
+				Content: "❌ AI 配置不存在或无效，请检查 AI 配置",
+			}
+			close(ch)
+			return
 		}
-		close(ch)
-		return
-	}
 
 		if sessionIDOverride != "" {
 			stockAiAgent.sessionID = sessionIDOverride
@@ -222,6 +222,8 @@ func (receiver StockAiAgent) ChatWithContext(ctx context.Context, question strin
 		switch stockAiAgent.instance.Mode {
 		case AgentModePlanExecute:
 			runPlanExecuteWithFallback(ctx, stockAiAgent, messages, ch, memoryService, historyMessages, sysPrompt, question, aiConfigId)
+		case AgentModeDirect:
+			runDirectWithOpenAI(ctx, ch, messages, memoryService, aiConfigId)
 		default:
 			runReact(ctx, stockAiAgent, messages, ch, memoryService, historyMessages, sysPrompt, question)
 		}
@@ -541,6 +543,15 @@ func tryPlanExecute(ctx context.Context, stockAiAgent *StockAiAgent, messages []
 		}
 	}
 
+	// 兜底：若规划执行全程只产出 thinking/工具日志、未生成可读正文（通常为 thinking 模型思考占满
+	// 输出额度，或未收敛到最终回答），给出一条可读提示，避免前端空白。
+	if fullResponse.Len() == 0 {
+		safeSend(ch, &schema.Message{
+			Role:    schema.Assistant,
+			Content: "⚠️ 模型完成了分析，但没有输出可读的文字结论。常见原因与建议：\n1. 当前 AI 模型开启了 thinking 模式，思考内容挤占输出额度导致正文为空 → 请在 AI 配置中关闭 thinking，或切换到支持工具调用的模型（如 deepseek-chat、gpt-4o）。\n2. 单次输出 token 上限过小 → 请适当增大后重试。",
+		})
+	}
+
 	return true // 成功完成
 }
 
@@ -748,6 +759,14 @@ func runPlanExecute(ctx context.Context, stockAiAgent *StockAiAgent, messages []
 			logger.SugaredLogger.Errorf("failed to save assistant message: %v", err)
 		}
 	}
+
+	// 兜底：若规划执行全程只产出 thinking/工具日志、未生成可读正文，给出一条可读提示，避免前端空白。
+	if fullResponse.Len() == 0 {
+		safeSend(ch, &schema.Message{
+			Role:    schema.Assistant,
+			Content: "⚠️ 模型完成了分析，但没有输出可读的文字结论。常见原因与建议：\n1. 当前 AI 模型开启了 thinking 模式，思考内容挤占输出额度导致正文为空 → 请在 AI 配置中关闭 thinking，或切换到支持工具调用的模型（如 deepseek-chat、gpt-4o）。\n2. 单次输出 token 上限过小 → 请适当增大后重试。",
+		})
+	}
 }
 
 func detectPhase(role schema.RoleType, toolName string) string {
@@ -901,8 +920,6 @@ func processAdkMessageStream(sr *schema.StreamReader[*schema.Message], role sche
 			continue
 		}
 		chunkCount++
-		logger.SugaredLogger.Infof("[StreamChunk] #%d role=%s contentLen=%d reasoningLen=%d",
-			chunkCount, role, len(msg.Content), len(msg.ReasoningContent))
 		handleAdkMessage(msg, role, toolName, ch, fullResponse)
 	}
 	logger.SugaredLogger.Infof("[StreamComplete] total chunks=%d", chunkCount)
@@ -1056,9 +1073,9 @@ func formatMarkdown(content string) string {
 					result = append(result, "")
 				}
 			}
-			result = append(result, m[1])                       // 水平线
-			result = append(result, "")                         // 空行
-			result = append(result, line[len(m[1]):])           // 剩余内容
+			result = append(result, m[1])             // 水平线
+			result = append(result, "")               // 空行
+			result = append(result, line[len(m[1]):]) // 剩余内容
 			continue
 		}
 
@@ -1312,5 +1329,35 @@ func fallbackWithOpenAI(ctx context.Context, ch chan *schema.Message, messages [
 			fullResponse.WriteString("\n\n")
 		}
 		fullResponse.WriteString(fallbackResp.String())
+	}
+}
+
+// runDirectWithOpenAI 直连模式主路径：跳过 eino 规划/React 框架，直接用 OpenAI 兼容
+// 接口做流式作答（复用已被验证最稳的 fallbackWithOpenAI）。对 thinking 模型/规划 JSON
+// 解析失败等高发场景，直接给出正文，避免前端空白。
+func runDirectWithOpenAI(ctx context.Context, ch chan *schema.Message, messages []*schema.Message, memoryService *ChatMemoryService, aiConfigId int) {
+	defer close(ch)
+
+	safeSend(ch, &schema.Message{
+		Role:             schema.Assistant,
+		Content:          "",
+		ReasoningContent: "[STEP]⚡ 直连模式对话已开启，正在基于已有上下文分析...\n",
+	})
+
+	var fullResponse strings.Builder
+	fallbackWithOpenAI(ctx, ch, messages, aiConfigId, &fullResponse)
+
+	if fullResponse.Len() == 0 {
+		safeSend(ch, &schema.Message{
+			Role:    schema.Assistant,
+			Content: "❌ 直连模式未返回有效的回答，请检查 AI 配置或网络后重试。",
+		})
+		return
+	}
+
+	if memoryService != nil {
+		if err := memoryService.AddAssistantMessage(fullResponse.String()); err != nil {
+			logger.SugaredLogger.Errorf("failed to save assistant message: %v", err)
+		}
 	}
 }

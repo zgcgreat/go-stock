@@ -846,6 +846,7 @@ const kbqaAgentModeOptions = [
   { label: '⚡ 快速', value: 'react' },
   { label: '🧠 规划', value: 'plan_execute' },
   { label: '🔬 DeepAgents', value: 'deepagents' },
+  { label: '🚀 直连', value: 'direct' },
 ]
 const kbqaHits = ref([])
 const kbqaSearching = ref(false)

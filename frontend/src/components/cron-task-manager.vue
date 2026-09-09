@@ -800,7 +800,8 @@ const agentModeOptions = [
   { label: '🤖 自动选择', value: '' },
   { label: '⚡ 快速模式', value: 'react' },
   { label: '🧠 规划模式', value: 'plan_execute' },
-  { label: '🔬 DeepAgents', value: 'deepagents' }
+  { label: '🔬 DeepAgents', value: 'deepagents' },
+  { label: '🚀 直连模式', value: 'direct' }
 ]
 
 const stockAnalysisParamsData = reactive({

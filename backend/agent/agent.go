@@ -40,6 +40,7 @@ const (
 	AgentModeReact       AgentMode = "react"
 	AgentModePlanExecute AgentMode = "plan_execute"
 	AgentModeDeepAgents  AgentMode = "deepagents"
+	AgentModeDirect      AgentMode = "direct"
 )
 
 // 兼容上游 fc78422 新文件中的常量名
@@ -47,6 +48,7 @@ const (
 	React       = AgentModeReact
 	PlanExecute = AgentModePlanExecute
 	DeepAgents  = AgentModeDeepAgents
+	Direct      = AgentModeDirect
 )
 
 type AgentInstance struct {
@@ -120,6 +122,8 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig, question stri
 		mode = AgentModePlanExecute
 	case AgentModeDeepAgents:
 		mode = AgentModeDeepAgents
+	case AgentModeDirect:
+		mode = AgentModeDirect
 	default:
 		mode = classifyComplexity(question)
 	}
@@ -131,6 +135,9 @@ func GetStockAiAgent(ctx *context.Context, aiConfig data.AIConfig, question stri
 		return createPlanExecuteAgent(*ctx, toolableChatModel, allTools, aiConfig)
 	case AgentModeDeepAgents:
 		return createDeepAgent(*ctx, toolableChatModel, allTools, aiConfig)
+	case AgentModeDirect:
+		// 直连模式：无需 eino 规划/React 框架，路由到 OpenAI 兼容直连流式作答，最稳
+		return &AgentInstance{Mode: AgentModeDirect}
 	default:
 		return createReactAgent(*ctx, toolableChatModel, allTools, aiConfig)
 	}

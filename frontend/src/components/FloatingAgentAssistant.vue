@@ -420,6 +420,7 @@ const agentModeOptions = [
   { label: '🤖 自动选择', value: 'auto' },
   { label: '⚡ 快速模式', value: 'react' },
   { label: '🧠 规划模式', value: 'plan_execute' },
+  { label: '🚀 直连模式', value: 'direct' },
 ]
 
 // 技能选择
