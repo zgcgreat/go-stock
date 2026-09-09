@@ -252,7 +252,7 @@ function relearn() {
   const oldProfile = profile.value
   RelearnUserProfile()
     .then((res) => {
-      profile.value = res || ''
+      profile.value = typeof res === 'string' ? res : ''
       lastDiff.value = buildProfileDiff(oldProfile, profile.value)
       if (lastDiff.value.length) {
         showDiff.value = true

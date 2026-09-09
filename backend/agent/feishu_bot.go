@@ -462,7 +462,7 @@ func (b *FeishuBot) askDirectWithTools(ctx context.Context, question, sessionID 
 		if item == nil {
 			continue
 		}
-		code, _ := item["code"].(float64)
+		code := itemCode(item)
 		if code == 0 {
 			continue
 		}
@@ -536,7 +536,7 @@ func (b *FeishuBot) askAIFallback(ctx context.Context, question string) string {
 			continue
 		}
 		// code==0 表示错误（AskAi 在 HTTP/stream 错误时发送），跳过
-		code, _ := item["code"].(float64)
+		code := itemCode(item)
 		if code == 0 {
 			continue
 		}

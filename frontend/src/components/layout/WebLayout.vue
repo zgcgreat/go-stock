@@ -90,6 +90,7 @@ import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
 import { useIsWebMode } from '../../composables/useResponsive'
 import Auth from '../../utils/auth'
+import { isTokenExpired } from '../../router/router.js'
 import apiService from '../../services/api.js'
 import { GetConfig } from '../../services/wails-bridge.js'
 import { useMessage, useDialog } from 'naive-ui'
@@ -173,6 +174,9 @@ const enableAgent = ref(false) // 默认隐藏，与后端默认值一致，配�
 const enableFund = ref(true)   // 默认显示，与后端默认值一致，配置加载后按实际值控制
 
 function loadMenuVisibility() {
+  // 未登录/令牌失效时跳过，避免启动阶段向受保护接口发请求产生 401 刷屏
+  const token = Auth.getToken()
+  if (!token || isTokenExpired(token)) return
   GetConfig().then(config => {
     if (config && typeof config.enableAgent === 'boolean') {
       enableAgent.value = config.enableAgent
@@ -187,8 +191,11 @@ loadMenuVisibility()
 // 监听 storage 事件（其他 Tab 登录/退出时触发）
 onMounted(() => {
   window.addEventListener('storage', refreshUserRole)
-  // 自定义事件：同 Tab 内 Login.vue 登录成功后触发
-  window.addEventListener('user-info-updated', refreshUserRole)
+  // 自定义事件：同 Tab 内 Login.vue 登录成功后触发；登出时 loadMenuVisibility 因无 token 自动跳过
+  window.addEventListener('user-info-updated', () => {
+    refreshUserRole()
+    loadMenuVisibility()
+  })
 })
 
 // 监听设置变更事件（settings.vue 保存后触发），实时更新菜单可见性

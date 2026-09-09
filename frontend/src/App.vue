@@ -46,11 +46,27 @@ import {AppsList20Regular, BoxSearch20Regular,SlideHide24Filled, CommentNote20Fi
 import {FireFilled, MoneyCollectOutlined, NotificationFilled, StockOutlined} from "@vicons/antd";
 import {useIsWebMode} from "./composables/useResponsive";
 import WebAppShell from "./components/layout/WebAppShell.vue";
+import {isTokenExpired} from "./router/router.js";
+import Auth from "./utils/auth.js";
 
 const router = useRouter()
 const isLoginPage = computed(() => router.currentRoute.value.name === 'login')
 
 const {isWebMode} = useIsWebMode()
+
+// Web 模式下是否有有效登录态；桌面模式无需登录视为已登录。
+// 用于避免未登录/令牌失效时在启动阶段向受保护接口发出请求，导致 401 刷屏。
+const isAuthenticated = ref(true)
+function refreshAuthState() {
+  if (isWebMode.value) {
+    const token = Auth.getToken()
+    isAuthenticated.value = !!token && !isTokenExpired(token)
+  } else {
+    isAuthenticated.value = true
+  }
+}
+refreshAuthState()
+window.addEventListener('user-info-updated', refreshAuthState)
 
 const loading = ref(true)
 const loadingMsg = ref("加载数据中...")
@@ -1027,6 +1043,7 @@ setTimeout(() => {
 }, 8000)
 
 onBeforeUnmount(() => {
+  window.removeEventListener('user-info-updated', refreshAuthState)
   if (marketStatusTimer) {
     clearInterval(marketStatusTimer)
     marketStatusTimer = null
@@ -1111,27 +1128,31 @@ onBeforeMount(() => {
   })
 
 
-  GetConfig().then((res) => {
-    enableFund.value = res.enableFund
-    enableAgent.value = res.enableAgent
+  // Web 模式未登录时不请求受保护接口（GetConfig），避免启动阶段 401 刷屏；
+  // 登录后通过 user-info-updated 事件由登录/登出逻辑重新触发页面加载
+  if (!isWebMode.value || isAuthenticated.value) {
+    GetConfig().then((res) => {
+      enableFund.value = res.enableFund
+      enableAgent.value = res.enableAgent
 
-    menuOptions.value.filter((item) => {
-      if (item.key === 'fund') {
-        item.show = res.enableFund
+      menuOptions.value.filter((item) => {
+        if (item.key === 'fund') {
+          item.show = res.enableFund
+        }
+        if (item.key === 'agent') {
+          item.show = res.enableAgent
+        }
+      })
+
+      if (res.darkTheme) {
+        enableDarkTheme.value = darkTheme
+      } else {
+        enableDarkTheme.value = null
       }
-      if (item.key === 'agent') {
-        item.show = res.enableAgent
-      }
+    }).catch(err => {
+      console.error("GetConfig error:", err)
     })
-
-    if (res.darkTheme) {
-      enableDarkTheme.value = darkTheme
-    } else {
-      enableDarkTheme.value = null
-    }
-  }).catch(err => {
-    console.error("GetConfig error:", err)
-  })
+  }
 })
 
 onMounted(() => {
@@ -1212,8 +1233,8 @@ onMounted(() => {
                 :y-offset="150"
                 :rotate="-15"
             >
-              <FloatingAiAssistant v-if="!isLoginPage" />
-              <FloatingAgentAssistant v-if="!isLoginPage" />
+              <FloatingAiAssistant v-if="!isLoginPage && isAuthenticated" />
+              <FloatingAgentAssistant v-if="!isLoginPage && isAuthenticated" />
 
               <!-- Web 模式：顶部 Tab 导航布局 -->
               <WebAppShell

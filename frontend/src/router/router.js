@@ -57,7 +57,7 @@ const router = createRouter({
  * @param {string} token
  * @returns {boolean} true=已过期或无法解析, false=未过期
  */
-function isTokenExpired(token) {
+export function isTokenExpired(token) {
     if (!token) return true
     try {
         const parts = token.split('.')

@@ -469,6 +469,9 @@ func MigrateAllTables() {
 		&models.PlazaPrompt{},
 		&models.PlazaQuestion{},
 		&models.CustomStrategy{},
+		&models.MCPServer{},
+		&models.MCPServerTool{},
+		&models.Skill{},
 		&handlers.UserSetting{},
 		&models.User{},
 	)

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"go-stock/backend/data"
 	"go-stock/backend/logger"
@@ -111,32 +110,6 @@ func parseAccessSecret(apiKey string) (ak, sk string) {
 
 func ptrFloat32(v float32) *float32 { return &v }
 func ptrBool(v bool) *bool          { return &v }
-
-func createHTTPClientWithProxy(proxyURL string, timeout time.Duration) *http.Client {
-	transport := &http.Transport{
-		TLSClientConfig:    &tls.Config{InsecureSkipVerify: false},
-		DisableCompression: true, // 禁用压缩以支持 SSE 流式传输
-		DisableKeepAlives:  false,
-		MaxIdleConns:       10,
-		IdleConnTimeout:    30 * time.Second,
-	}
-
-	if proxyURL != "" {
-		proxyParsed, err := url.Parse(proxyURL)
-		if err == nil {
-			transport.Proxy = http.ProxyURL(proxyParsed)
-			logger.SugaredLogger.Infof("createChatModel using proxy: %s", proxyURL)
-		} else {
-			logger.SugaredLogger.Warnf("createChatModel failed to parse proxy URL: %v", err)
-		}
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
-	}
-}
-
 
 // createChatModel 按 Eino 生态组件路由（参见 https://www.cloudwego.io/zh/docs/eino/ecosystem_integration/chat_model/ ）
 // 未命中专用实现时回退到 OpenAI 兼容 ChatModel（硅基流动、LM Studio、Azure OpenAI 等）。
@@ -283,7 +256,7 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			Temperature: temperature,
 			Timeout:     timeout,
 		}
-		if proxyClient := buildProxyHTTPClient(timeout); proxyClient != nil {
+		if proxyClient := buildProxyHTTPClient(timeout, aiConfig); proxyClient != nil {
 			deepseekCfg.HTTPClient = proxyClient
 		}
 		return deepseek.NewChatModel(ctx, deepseekCfg)
@@ -302,20 +275,20 @@ func createChatModel(ctx context.Context, aiConfig data.AIConfig) (model.ToolCal
 			Temperature: &temperature,
 			ExtraFields: extraFields,
 		}
-		if proxyClient := buildProxyHTTPClient(timeout); proxyClient != nil {
+		if proxyClient := buildProxyHTTPClient(timeout, aiConfig); proxyClient != nil {
 			cfg.HTTPClient = proxyClient
 		}
 		return einoopenai.NewChatModel(ctx, cfg)
 	}
 }
 
-// buildProxyHTTPClient 构建带代理的HTTP客户端，若未配置代理则返回nil
-func buildProxyHTTPClient(timeout time.Duration) *http.Client {
-	config := data.GetSettingConfig()
-	if config == nil || !config.HttpProxyEnabled || config.HttpProxy == "" {
+// buildProxyHTTPClient 根据 AI 配置自带的代理设置构建带代理的HTTP客户端。
+// 未启用或未配置该 AI 的代理时返回nil（走直连），不再误用全局爬虫代理。
+func buildProxyHTTPClient(timeout time.Duration, aiConfig data.AIConfig) *http.Client {
+	if !aiConfig.HttpProxyEnabled || aiConfig.HttpProxy == "" {
 		return nil
 	}
-	proxyURL, err := url.Parse(config.HttpProxy)
+	proxyURL, err := url.Parse(aiConfig.HttpProxy)
 	if err != nil {
 		logger.SugaredLogger.Warnf("解析HTTP代理失败: %v", err)
 		return nil

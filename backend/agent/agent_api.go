@@ -1134,6 +1134,22 @@ func safeSend(ch chan *schema.Message, msg *schema.Message) {
 	}
 }
 
+// itemCode 提取 AskAi 流式输出项中的 code 字段。
+// AskAi 写入的是 int 类型，若用 float64 断言会恒为 0，导致正常内容被误判为错误，
+// 这里兼容 int/int64/float64 多种类型。
+func itemCode(item map[string]any) int {
+	switch v := item["code"].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
+}
+
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -1261,7 +1277,7 @@ func fallbackWithOpenAI(ctx context.Context, ch chan *schema.Message, messages [
 		if item == nil {
 			continue
 		}
-		code, _ := item["code"].(float64)
+		code := itemCode(item)
 		if code == 0 {
 			content, _ := item["content"].(string)
 			if content != "" {
