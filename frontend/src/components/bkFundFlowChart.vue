@@ -2,6 +2,17 @@
 import {onBeforeUnmount, onMounted, ref, watch, computed} from "vue";
 import {GetBKFundFlowListByDate, GetBKFundFlowTopListByDate, GetAllBKCodes} from "../services/wails-bridge.js";
 import * as echarts from "echarts";
+import BKConstituentsModal from "./BKConstituentsModal.vue";
+
+// ===== 成分股弹窗 =====
+const constituents = ref({show: false, code: '', name: ''})
+function showBKConstituents(item: any) {
+  if (!item?.code) return
+  constituents.value = {show: true, code: item.code, name: item.name}
+}
+
+
+
 
 const props = defineProps({
   darkTheme: {
@@ -603,7 +614,8 @@ watch(() => props.chartHeight, () => {
             <n-tr v-for="(item, idx) in inflowList" :key="item.code">
               <n-td>{{ idx + 1 }}</n-td>
               <n-td>
-                <n-tag :bordered="false" type="error" size="small">{{ item.name }}</n-tag>
+                <n-tag :bordered="false" type="error" size="small" style="cursor: pointer"
+                          title="点击查看成分股" @click="showBKConstituents(item)">{{ item.name }}</n-tag>
               </n-td>
               <n-td>
                 <n-text type="error">+{{ (item.netInflow / 100000000).toFixed(2) }}</n-text>
@@ -630,7 +642,8 @@ watch(() => props.chartHeight, () => {
             <n-tr v-for="(item, idx) in outflowList" :key="item.code">
               <n-td>{{ idx + 1 }}</n-td>
               <n-td>
-                <n-tag :bordered="false" type="success" size="small">{{ item.name }}</n-tag>
+                <n-tag :bordered="false" type="success" size="small" style="cursor: pointer"
+                          title="点击查看成分股" @click="showBKConstituents(item)">{{ item.name }}</n-tag>
               </n-td>
               <n-td>
                 <n-text type="success">{{ (item.netInflow / 100000000).toFixed(2) }}</n-text>
@@ -643,6 +656,15 @@ watch(() => props.chartHeight, () => {
         </n-table>
       </div>
     </div>
+
+
+
+
+    <!-- 成分股弹窗 -->
+    <BKConstituentsModal v-model:show="constituents.show"
+                         :bk-code="constituents.code"
+                         :bk-name="constituents.name"
+                         :dark-theme="props.darkTheme"/>
   </div>
 </template>
 

@@ -202,6 +202,26 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/hot-topic", handlers.GetHotTopic)
 			protected.GET("/market/uplimit-hot", handlers.GetUplimitHot)
 			protected.GET("/market/change-rank", handlers.GetChangeRank)
+			protected.GET("/market/bk-constituents", handlers.GetBKConstituentStocks)
+			protected.GET("/market/lhb-daily-summary", handlers.GetLhbDailySummary)
+
+			// 政策新闻（部委政策模块）。列表/部门为全局共享只读数据；重点部门为全局配置，写需管理员。
+			protected.GET("/news/policy", handlers.GetPolicyNews)
+			protected.GET("/news/policy/stored", handlers.GetStoredPolicyNews)
+			protected.GET("/news/policy/all", handlers.GetAllDeptPolicyNews)
+			protected.GET("/news/policy/departments", handlers.GetGovDepartments)
+			protected.GET("/news/policy/key-departments", handlers.GetKeyDepartments)
+			policyAdmin := protected.Group("/news/policy")
+			policyAdmin.Use(middleware.AdminRequired())
+			policyAdmin.POST("/key-departments", handlers.SaveKeyDepartments)
+
+			// 游资席位名录（全局共享配置：读开放、写/重置/远程刷新需管理员，远程刷新带 SSRF 防护）
+			protected.GET("/settings/hot-money-seats", handlers.GetHotMoneySeats)
+			hotMoneyAdmin := protected.Group("/settings/hot-money-seats")
+			hotMoneyAdmin.Use(middleware.AdminRequired())
+			hotMoneyAdmin.POST("", handlers.SaveHotMoneySeats)
+			hotMoneyAdmin.POST("/reset", handlers.ResetHotMoneySeats)
+			hotMoneyAdmin.POST("/refresh", handlers.RefreshHotMoneySeats)
 
 			// 研报/公告
 			protected.GET("/research/stock-report", handlers.GetStockResearchReport)

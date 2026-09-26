@@ -2294,14 +2294,138 @@ func GetDailyDimensionStatsHandler(c *gin.Context) {
 
 // GetTypeStatsByDateHandler 指定日期按异动类型的统计（Web端对齐桌面端 GetTypeStatsByDate）
 func GetTypeStatsByDateHandler(c *gin.Context) {
- date := c.Query("date")
- if date == "" {
- date = time.Now().Format("2006-01-02")
- }
- result, err := data.NewStockChangeHistoryService().GetTypeStatsByDate(date)
- if err != nil {
- c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []data.TypeCountStats{}})
- return
- }
- c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+	date := c.Query("date")
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	result, err := data.NewStockChangeHistoryService().GetTypeStatsByDate(date)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []data.TypeCountStats{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// ============ B-merge 解锁：板块成分股 / 政策新闻 / 龙虎榜游资（对齐桌面端 App 方法） ============
+
+// GetBKConstituentStocks 板块/概念成分股点查（对齐桌面端 GetBKConstituentStocks）
+func GetBKConstituentStocks(c *gin.Context) {
+	bkCode := c.Query("bkCode")
+	if bkCode == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "bkCode is required"})
+		return
+	}
+	stocks := data.NewBKConstituentsApi().GetBKConstituentStocks(bkCode)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": stocks})
+}
+
+// GetPolicyNews 获取指定部门发布的最新政策新闻（实时抓取）
+func GetPolicyNews(c *gin.Context) {
+	department := c.Query("department")
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	news := data.NewPolicyNewsApi().GetPolicyNews(department, limit)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": news})
+}
+
+// GetStoredPolicyNews 从数据库读取已持久化的政策新闻（分页）
+func GetStoredPolicyNews(c *gin.Context) {
+	department := c.Query("department")
+	keyword := c.Query("keyword")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	news := data.NewPolicyNewsApi().GetStoredPolicyNews(department, keyword, page, pageSize)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": news})
+}
+
+// GetAllDeptPolicyNews 聚合全部部门最新政策新闻
+func GetAllDeptPolicyNews(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	news := data.NewPolicyNewsApi().GetAllDeptPolicyNews(limit)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": news})
+}
+
+// GetGovDepartments 获取部委部门列表
+func GetGovDepartments(c *gin.Context) {
+	depts := data.NewPolicyNewsApi().GetGovDepartments()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": depts})
+}
+
+// GetKeyDepartments 获取重点部门列表（全局共享配置，读开放）
+func GetKeyDepartments(c *gin.Context) {
+	depts := data.NewPolicyNewsApi().GetKeyDepartments()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": depts})
+}
+
+// SaveKeyDepartments 保存重点部门列表（全局共享配置，写需管理员）
+func SaveKeyDepartments(c *gin.Context) {
+	var req struct {
+		Departments []string `json:"departments"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	msg := data.NewPolicyNewsApi().SaveKeyDepartments(req.Departments)
+	if msg != "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": msg})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+// GetLhbDailySummary 指定日期龙虎榜汇总（对齐桌面端 GetLhbDailySummary）
+func GetLhbDailySummary(c *gin.Context) {
+	date := c.Query("date")
+	summary := data.NewLhbSeatApi().GetLhbDailySummary(date)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": summary})
+}
+
+// GetHotMoneySeats 读取游资席位名录（全局共享配置，读开放）
+func GetHotMoneySeats(c *gin.Context) {
+	f := data.GetHotMoneySeats()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": f})
+}
+
+// SaveHotMoneySeats 保存游资席位名录（全局共享配置，写需管理员）
+func SaveHotMoneySeats(c *gin.Context) {
+	var f data.HotMoneySeatFile
+	if err := c.ShouldBindJSON(&f); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	if err := data.SaveHotMoneySeats(&f); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+// ResetHotMoneySeats 重置游资席位名录为内置数据（需管理员）
+func ResetHotMoneySeats(c *gin.Context) {
+	if err := data.ResetHotMoneySeats(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+// RefreshHotMoneySeats 从远程 URL 刷新游资席位名录（需管理员；SSRF 防护）
+func RefreshHotMoneySeats(c *gin.Context) {
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	u, err := url.Parse(req.URL)
+	if err != nil || u.Host == "" || isSSRFBlockedHost(u.Hostname()) {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "URL 不允许或非法"})
+		return
+	}
+	if err := data.RefreshHotMoneySeats(req.URL); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
 }

@@ -85,6 +85,9 @@ import {
   HomeOutline,
   LibraryOutline,
   PersonOutline,
+  DocumentTextOutline,
+  TrendingUpOutline,
+  RibbonOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
@@ -223,6 +226,9 @@ const mainTabs = [
   { key: 'research', label: '研究', icon: FlaskOutline, route: { name: 'research' } },
   { key: 'knowledgeBase', label: '知识库', icon: LibraryOutline, route: { name: 'knowledgeBase' } },
   { key: 'userProfile', label: '画像', icon: PersonOutline, route: { name: 'userProfile' } },
+  { key: 'policyNews', label: '政策', icon: DocumentTextOutline, route: { name: 'policyNews' } },
+  { key: 'lhbHotMoney', label: '龙虎', icon: TrendingUpOutline, route: { name: 'lhbHotMoney' } },
+  { key: 'hotMoneySeats', label: '游资', icon: RibbonOutline, route: { name: 'hotMoneySeats' }, adminOnly: true },
   { key: 'settings', label: '设置', icon: SettingsOutline, route: { name: 'settings' } },
   { key: 'admin', label: '用户管理', icon: PeopleOutline, route: { name: 'userManagement' }, adminOnly: true },
 ]

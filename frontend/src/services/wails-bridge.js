@@ -3011,16 +3011,26 @@ export function GetAiRecommendStocksTodayStats(arg1, arg2) {
   return Promise.reject(new Error('Web 模式暂未支持：GetAiRecommendStocksTodayStats（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] GetAllDeptPolicyNews: 上游新增方法，Web 端点二期接入。
-export function GetAllDeptPolicyNews(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetAllDeptPolicyNews(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetAllDeptPolicyNews（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetAllDeptPolicyNews: Web 端点已接入（/api/v1）。
+export function GetAllDeptPolicyNews(limit) {
+  if (isWailsMode()) return window.go.main.App.GetAllDeptPolicyNews(limit);
+  return apiService.client.get('/news/policy/all', { params: { limit: limit }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(err => {
+      console.warn('GetAllDeptPolicyNews web fallback failed:', err.message);
+      return [];
+    });
 }
 
-// [B-merge 桩函数] GetBKConstituentStocks: 上游新增方法，Web 端点二期接入。
-export function GetBKConstituentStocks(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetBKConstituentStocks(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetBKConstituentStocks（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetBKConstituentStocks: Web 端点已接入（/api/v1）。
+export function GetBKConstituentStocks(bkCode) {
+  if (isWailsMode()) return window.go.main.App.GetBKConstituentStocks(bkCode);
+  return apiService.client.get('/market/bk-constituents', { params: { bkCode: bkCode }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(err => {
+      console.warn('GetBKConstituentStocks web fallback failed:', err.message);
+      return [];
+    });
 }
 
 // [B-merge 桩函数] GetDailyReviewByDate: 上游新增方法，Web 端点二期接入。
@@ -3035,28 +3045,48 @@ export function GetDailyReviewList(arg1, arg2) {
   return Promise.reject(new Error('Web 模式暂未支持：GetDailyReviewList（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] GetGovDepartments: 上游新增方法，Web 端点二期接入。
+// [B-merge 桥接] GetGovDepartments: Web 端点已接入（/api/v1）。
 export function GetGovDepartments() {
   if (isWailsMode()) return window.go.main.App.GetGovDepartments();
-  return Promise.reject(new Error('Web 模式暂未支持：GetGovDepartments（待二期接入 Web 端点）'));
+  return apiService.client.get('/news/policy/departments', { params: {}, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(err => {
+      console.warn('GetGovDepartments web fallback failed:', err.message);
+      return [];
+    });
 }
 
-// [B-merge 桩函数] GetHotMoneySeats: 上游新增方法，Web 端点二期接入。
+// [B-merge 桥接] GetHotMoneySeats: Web 端点已接入（/api/v1）。
 export function GetHotMoneySeats() {
   if (isWailsMode()) return window.go.main.App.GetHotMoneySeats();
-  return Promise.reject(new Error('Web 模式暂未支持：GetHotMoneySeats（待二期接入 Web 端点）'));
+  return apiService.client.get('/settings/hot-money-seats', { params: {}, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(err => {
+      console.warn('GetHotMoneySeats web fallback failed:', err.message);
+      return null;
+    });
 }
 
-// [B-merge 桩函数] GetKeyDepartments: 上游新增方法，Web 端点二期接入。
+// [B-merge 桥接] GetKeyDepartments: Web 端点已接入（/api/v1）。
 export function GetKeyDepartments() {
   if (isWailsMode()) return window.go.main.App.GetKeyDepartments();
-  return Promise.reject(new Error('Web 模式暂未支持：GetKeyDepartments（待二期接入 Web 端点）'));
+  return apiService.client.get('/news/policy/key-departments', { params: {}, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(err => {
+      console.warn('GetKeyDepartments web fallback failed:', err.message);
+      return [];
+    });
 }
 
-// [B-merge 桩函数] GetLhbDailySummary: 上游新增方法，Web 端点二期接入。
-export function GetLhbDailySummary(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetLhbDailySummary(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetLhbDailySummary（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetLhbDailySummary: Web 端点已接入（/api/v1）。
+export function GetLhbDailySummary(date) {
+  if (isWailsMode()) return window.go.main.App.GetLhbDailySummary(date);
+  return apiService.client.get('/market/lhb-daily-summary', { params: { date: date }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(err => {
+      console.warn('GetLhbDailySummary web fallback failed:', err.message);
+      return null;
+    });
 }
 
 // [B-merge 桩函数] GetMorningStrategyByDate: 上游新增方法，Web 端点二期接入。
@@ -3071,10 +3101,15 @@ export function GetMorningStrategyList(arg1, arg2) {
   return Promise.reject(new Error('Web 模式暂未支持：GetMorningStrategyList（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] GetPolicyNews: 上游新增方法，Web 端点二期接入。
-export function GetPolicyNews(arg1, arg2) {
-  if (isWailsMode()) return window.go.main.App.GetPolicyNews(arg1, arg2);
-  return Promise.reject(new Error('Web 模式暂未支持：GetPolicyNews（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetPolicyNews: Web 端点已接入（/api/v1）。
+export function GetPolicyNews(department, limit) {
+  if (isWailsMode()) return window.go.main.App.GetPolicyNews(department, limit);
+  return apiService.client.get('/news/policy', { params: { department: department, limit: limit }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(err => {
+      console.warn('GetPolicyNews web fallback failed:', err.message);
+      return [];
+    });
 }
 
 // [B-merge 桩函数] GetProfileLearnAiConfigId: 上游新增方法，Web 端点二期接入。
@@ -3125,10 +3160,15 @@ export function GetSignalStats(arg1) {
   return Promise.reject(new Error('Web 模式暂未支持：GetSignalStats（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] GetStoredPolicyNews: 上游新增方法，Web 端点二期接入。
-export function GetStoredPolicyNews(arg1, arg2, arg3, arg4) {
-  if (isWailsMode()) return window.go.main.App.GetStoredPolicyNews(arg1, arg2, arg3, arg4);
-  return Promise.reject(new Error('Web 模式暂未支持：GetStoredPolicyNews（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetStoredPolicyNews: Web 端点已接入（/api/v1）。
+export function GetStoredPolicyNews(department, keyword, page, pageSize) {
+  if (isWailsMode()) return window.go.main.App.GetStoredPolicyNews(department, keyword, page, pageSize);
+  return apiService.client.get('/news/policy/stored', { params: { department: department, keyword: keyword, page: page, pageSize: pageSize }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(err => {
+      console.warn('GetStoredPolicyNews web fallback failed:', err.message);
+      return [];
+    });
 }
 
 // [B-merge 桩函数] ListRecommendBacktest: 上游新增方法，Web 端点二期接入。
@@ -3161,16 +3201,28 @@ export function NotifySignal(arg1, arg2, arg3, arg4) {
   return Promise.reject(new Error('Web 模式暂未支持：NotifySignal（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] RefreshHotMoneySeats: 上游新增方法，Web 端点二期接入。
-export function RefreshHotMoneySeats(arg1) {
-  if (isWailsMode()) return window.go.main.App.RefreshHotMoneySeats(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：RefreshHotMoneySeats（待二期接入 Web 端点）'));
+// [B-merge 桥接] RefreshHotMoneySeats: Web 端点已接入（/api/v1）。
+export function RefreshHotMoneySeats(url) {
+  if (isWailsMode()) return window.go.main.App.RefreshHotMoneySeats(url);
+  return apiService.client.post('/settings/hot-money-seats/refresh', { url: url }, { headers: getAuthHeaders() })
+    .then(res => null)
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('RefreshHotMoneySeats web fallback failed:', msg);
+      throw msg;
+    });
 }
 
-// [B-merge 桩函数] ResetHotMoneySeats: 上游新增方法，Web 端点二期接入。
+// [B-merge 桥接] ResetHotMoneySeats: Web 端点已接入（/api/v1）。
 export function ResetHotMoneySeats() {
   if (isWailsMode()) return window.go.main.App.ResetHotMoneySeats();
-  return Promise.reject(new Error('Web 模式暂未支持：ResetHotMoneySeats（待二期接入 Web 端点）'));
+  return apiService.client.post('/settings/hot-money-seats/reset', {}, { headers: getAuthHeaders() })
+    .then(res => null)
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('ResetHotMoneySeats web fallback failed:', msg);
+      throw msg;
+    });
 }
 
 // [B-merge 桩函数] RunRecommendBacktest: 上游新增方法，Web 端点二期接入。
@@ -3179,16 +3231,28 @@ export function RunRecommendBacktest(arg1) {
   return Promise.reject(new Error('Web 模式暂未支持：RunRecommendBacktest（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] SaveHotMoneySeats: 上游新增方法，Web 端点二期接入。
-export function SaveHotMoneySeats(arg1) {
-  if (isWailsMode()) return window.go.main.App.SaveHotMoneySeats(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：SaveHotMoneySeats（待二期接入 Web 端点）'));
+// [B-merge 桥接] SaveHotMoneySeats: Web 端点已接入（/api/v1）。
+export function SaveHotMoneySeats(f) {
+  if (isWailsMode()) return window.go.main.App.SaveHotMoneySeats(f);
+  return apiService.client.post('/settings/hot-money-seats', f, { headers: getAuthHeaders() })
+    .then(res => null)
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('SaveHotMoneySeats web fallback failed:', msg);
+      throw msg;
+    });
 }
 
-// [B-merge 桩函数] SaveKeyDepartments: 上游新增方法，Web 端点二期接入。
-export function SaveKeyDepartments(arg1) {
-  if (isWailsMode()) return window.go.main.App.SaveKeyDepartments(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：SaveKeyDepartments（待二期接入 Web 端点）'));
+// [B-merge 桥接] SaveKeyDepartments: Web 端点已接入（/api/v1）。
+export function SaveKeyDepartments(departments) {
+  if (isWailsMode()) return window.go.main.App.SaveKeyDepartments(departments);
+  return apiService.client.post('/news/policy/key-departments', { departments: departments }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('SaveKeyDepartments web fallback failed:', msg);
+      throw new Error(msg);
+    });
 }
 
 // [B-merge 桩函数] SaveSignalRecords: 上游新增方法，Web 端点二期接入。

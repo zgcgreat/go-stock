@@ -20,6 +20,9 @@ import skillPlazaView from "../components/skillPlaza.vue"
 import futuresPositionView from "../components/FuturesPositionChart.vue"
 import knowledgeBaseManager from "../components/knowledge-base-manager.vue"
 import userProfileView from "../components/user-profile.vue"
+import policyNewsView from "../components/PolicyNewsList.vue"
+import lhbHotMoneyView from "../components/LhbHotMoneyDaily.vue"
+import hotMoneySeatsView from "../components/HotMoneySeatsManager.vue"
 import Auth from '../utils/auth.js'
 
 const routes = [
@@ -43,6 +46,9 @@ const routes = [
     { path: '/futures-position', component: futuresPositionView, name: 'futuresPosition' },
     { path: '/knowledge-base', component: knowledgeBaseManager, name: 'knowledgeBase' },
     { path: '/user-profile', component: userProfileView, name: 'userProfile' },
+    { path: '/policy-news', component: policyNewsView, name: 'policyNews' },
+    { path: '/lhb-hot-money', component: lhbHotMoneyView, name: 'lhbHotMoney' },
+    { path: '/hot-money-seats', component: hotMoneySeatsView, name: 'hotMoneySeats' },
 
 ]
 
