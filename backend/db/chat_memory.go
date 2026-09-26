@@ -62,5 +62,12 @@ func ClearChatMemory(sessionID string) error {
 func AutoMigrate() {
 	Dao.AutoMigrate(&ChatMemory{})
 	Dao.AutoMigrate(&models.StockChangeHistory{})
-	Dao.AutoMigrate(&models.User{})
+	Dao.AutoMigrate(&models.MarketStatistic{})
+	Dao.AutoMigrate(&models.StockTransactionCache{})
+	Dao.AutoMigrate(&models.StockTransactionCacheMeta{})
+	Dao.AutoMigrate(&models.AgentFeedback{})
+	Dao.AutoMigrate(&models.AiRecommendBacktest{})
+	Dao.AutoMigrate(&models.PromptBacktestTask{})
+	Dao.AutoMigrate(&models.PromptBacktestPick{})
+	Dao.AutoMigrate(&models.PolicyNews{})
 }

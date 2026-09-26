@@ -39,6 +39,7 @@ func iwencaiCommonHeaders(apiKey, skillID, skillVersion string) map[string]strin
 // iwencaiExtractErrorMessage extracts a human-readable message from a non-200
 // response body. The iwencai openapi returns errors in two shapes:
 //   - a JSON string literal (e.g. 401 quota exhaustion): `"您今天的次数已用完..."`
+//   - a JSON object with status_msg / msg field: `{"status_msg":"..."}`
 //
 // Plain text bodies are returned as-is (truncated by the caller).
 func iwencaiExtractErrorMessage(body []byte) string {
@@ -164,42 +165,7 @@ func (api *IwencaiAPI) QueryToMarkdown(query string, page, limit int) string {
 		return fmt.Sprintf("未查询到「%s」的相关数据。可到同花顺问财查询：https://www.iwencai.com/unifiedwap/chat", query)
 	}
 
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("### 同花顺问财查询结果（%s）\n\n", query))
-	sb.WriteString(fmt.Sprintf("共查到 %d 只标的，当前显示第 %d 页（每页 %d 条）\n\n", result.CodeCount, page, limit))
-
-	if len(result.Datas) > 0 {
-		first := result.Datas[0]
-		headers := make([]string, 0, len(first))
-		for k := range first {
-			headers = append(headers, k)
-		}
-
-		sb.WriteString("| ")
-		for _, h := range headers {
-			sb.WriteString(h + " | ")
-		}
-		sb.WriteString("\n| ")
-		for range headers {
-			sb.WriteString("--- | ")
-		}
-		sb.WriteString("\n")
-
-		for _, item := range result.Datas {
-			sb.WriteString("| ")
-			for _, h := range headers {
-				val := ""
-				if v, ok := item[h]; ok && v != nil {
-					val = fmt.Sprintf("%v", v)
-				}
-				sb.WriteString(val + " | ")
-			}
-			sb.WriteString("\n")
-		}
-	}
-
-	sb.WriteString("\n> 数据来源于同花顺问财")
-	return sb.String()
+	return renderIwencaiQueryMarkdown(query, result, page, limit)
 }
 
 type IwencaiSearchRequest struct {
@@ -376,30 +342,7 @@ func (api *IwencaiAPI) SearchAnnouncement(query string) (*IwencaiSearchResponse,
 }
 
 func searchResultToMarkdown(query string, result *IwencaiSearchResponse, label string) string {
-	if len(result.Data) == 0 {
-		return fmt.Sprintf("未搜索到「%s」的相关%s。", query, label)
-	}
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("### %s搜索结果（%s）\n\n", label, query))
-	sb.WriteString(fmt.Sprintf("共找到 %d 条结果\n\n", len(result.Data)))
-
-	for i, item := range result.Data {
-		sb.WriteString(fmt.Sprintf("%d. **%s**\n", i+1, item.Title))
-		if item.PublishDate != "" {
-			sb.WriteString(fmt.Sprintf("   - 发布时间: %s\n", item.PublishDate))
-		}
-		if item.Summary != "" {
-			sb.WriteString(fmt.Sprintf("   - 摘要: %s\n", item.Summary))
-		}
-		if item.URL != "" {
-			sb.WriteString(fmt.Sprintf("   - 链接: %s\n", item.URL))
-		}
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString("> 数据来源于同花顺问财")
-	return sb.String()
+	return renderIwencaiSearchMarkdown(query, label, result.Data)
 }
 
 func (api *IwencaiAPI) SearchReportToMarkdown(query string) string {

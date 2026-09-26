@@ -103,8 +103,9 @@ dist
 # TernJS port file
 .tern-port
 
+ai-doc
 .DS_Store
-
+.trae
 .qoder
 .idea/
 data/
@@ -120,3 +121,8 @@ frontend/package.json.md5
 /build-dev.bat
 /build-prod.bat
 deploy/
+/scripts/upload-release-to-minio.py
+/build-custom.bat
+
+
+*/__pycache__/*

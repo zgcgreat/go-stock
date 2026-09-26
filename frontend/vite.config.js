@@ -23,6 +23,8 @@ export default defineConfig({
     alias: {
       '../wailsjs/go/main/App': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
       '../../wailsjs/go/main/App': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
+      '../wailsjs/runtime/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
+      '../../wailsjs/runtime/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
       '../wailsjs/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
       '../../wailsjs/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
     }

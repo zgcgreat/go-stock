@@ -8,7 +8,6 @@ import (
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
-	"go-stock/internal/middleware"
 	"io/fs"
 	"net/http"
 	"os"
@@ -159,15 +158,10 @@ func (a *app) session(w http.ResponseWriter, r *http.Request) {
 	if !requireVip2(w) {
 		return
 	}
-	userID, ok := middleware.GetUserIDFromHTTPContext(r)
-	if !ok || userID == 0 {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "未登录"})
-		return
-	}
 	switch r.Method {
 	case http.MethodGet:
 		sessionId := r.URL.Query().Get("sessionId")
-		res, err := data.GetAiAssistantSession(sessionId, userID)
+		res, err := data.GetAiAssistantSession(sessionId, 0)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -179,7 +173,7 @@ func (a *app) session(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 			return
 		}
-		if err := data.SaveAiAssistantSession(req.SessionId, userID, req.Messages); err != nil {
+		if err := data.SaveAiAssistantSession(req.SessionId, 0, req.Messages); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
@@ -239,14 +233,15 @@ func (a *app) summaryChatStream(w http.ResponseWriter, r *http.Request) {
 	history := parseHistory(req.HistoryJSON)
 	tools := make([]data.Tool, 0)
 	if req.EnableTools {
-		tools = data.Tools(tools)
+		// 临时屏蔽响应较慢的工具（见 data.tempDisabledToolNames），避免拖长 AI 总结等待时间
+		tools = data.FilterTempDisabledTools(data.Tools(tools))
 	}
 	o := data.NewDeepSeekOpenAi(ctx, req.AIConfigID)
 	var ch <-chan map[string]any
 	if req.EnableTools {
-		ch = o.NewSummaryStockNewsStreamWithTools(req.Question, sysPromptID, tools, req.Thinking, history)
+		ch = o.NewSummaryStockNewsStreamWithTools(req.Question, sysPromptID, tools, req.Thinking, history, nil)
 	} else {
-		ch = o.NewSummaryStockNewsStream(req.Question, sysPromptID, req.Thinking, history)
+		ch = o.NewSummaryStockNewsStream(req.Question, sysPromptID, req.Thinking, history, nil)
 	}
 
 	for {
@@ -295,7 +290,7 @@ func (a *app) shareText(w http.ResponseWriter, r *http.Request) {
 	// 上传地址：广场服务地址为固定配置（定制版不可修改）
 	uploadBase := strings.TrimSpace(data.GetSettingConfig().PromptPlazaApiBase)
 	if uploadBase == "" {
-		uploadBase = "http://go-stock.sparkmemory.top:16688"
+		uploadBase = data.DefaultPromptPlazaApiBase
 	}
 	uploadURL := strings.TrimSuffix(uploadBase, "/") + "/upload"
 	resp, err := data.SharedHTTPClient.SetHeader("ua-x", "go-stock").R().SetFormData(map[string]string{

@@ -130,7 +130,7 @@ func handleGetStockGroups(o *OpenAi, funcArguments string, ctx *ToolContext) err
 	// 按分组ID聚合股票
 	stocksByGroup := map[int][]string{}
 	for _, gs := range allStocks {
-					stocksByGroup[int(gs.GroupID)] = append(stocksByGroup[int(gs.GroupID)], gs.StockCode)
+		stocksByGroup[int(gs.GroupID)] = append(stocksByGroup[int(gs.GroupID)], gs.StockCode)
 	}
 
 	if len(groups) == 0 {
@@ -537,7 +537,7 @@ func handleReorganizeStockGroups(o *OpenAi, funcArguments string, ctx *ToolConte
 	if clearExisting {
 		stocksByCode = map[string][]int{}
 		for _, gs := range groupApi.GetAllGroupStocks() {
-					stocksByCode[gs.StockCode] = append(stocksByCode[gs.StockCode], int(gs.GroupID))
+			stocksByCode[gs.StockCode] = append(stocksByCode[gs.StockCode], int(gs.GroupID))
 		}
 	}
 	ok, fail := 0, []string{}

@@ -224,8 +224,8 @@ func main() {
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,
 			About: &mac.AboutInfo{
-				Title:   "股海智擎",
-				Message: "股海智擎：AI驱动的智能投研决策中枢✨ ",
+				Title:   "go-stock",
+				Message: "go-stock：AI赋能股票分析✨ ",
 				Icon:    icon,
 			},
 		},
@@ -305,6 +305,11 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&models.BKFundFlow{})
 	db.Dao.AutoMigrate(&models.ConceptFundFlow{})
 	db.Dao.AutoMigrate(&models.DailyOperationPlan{})
+	db.Dao.AutoMigrate(&models.DailyReview{})
+	db.Dao.AutoMigrate(&models.MorningStrategy{})
+	db.Dao.AutoMigrate(&models.PromptBacktestTask{})
+	db.Dao.AutoMigrate(&models.PromptBacktestPick{})
+	db.Dao.AutoMigrate(&models.SignalRecord{})
 
 	//updateMultipleModel()
 

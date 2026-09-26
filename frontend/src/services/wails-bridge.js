@@ -2960,3 +2960,257 @@ export function GetFuturesPositionTrend(arg1, arg2, arg3) {
     .then(extractApiData)
     .catch(() => null);
 }
+
+// ==================== B-merge 上游新增方法桥接桩 ====================
+
+// [B-merge 桩函数] ClearSignalRecords: 上游新增方法，Web 端点二期接入。
+export function ClearSignalRecords() {
+  if (isWailsMode()) return window.go.main.App.ClearSignalRecords();
+  return Promise.reject(new Error('Web 模式暂未支持：ClearSignalRecords（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] CreatePromptBacktestTask: 上游新增方法，Web 端点二期接入。
+export function CreatePromptBacktestTask(arg1) {
+  if (isWailsMode()) return window.go.main.App.CreatePromptBacktestTask(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：CreatePromptBacktestTask（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] DeleteDailyReview: 上游新增方法，Web 端点二期接入。
+export function DeleteDailyReview(arg1) {
+  if (isWailsMode()) return window.go.main.App.DeleteDailyReview(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：DeleteDailyReview（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] DeleteMorningStrategy: 上游新增方法，Web 端点二期接入。
+export function DeleteMorningStrategy(arg1) {
+  if (isWailsMode()) return window.go.main.App.DeleteMorningStrategy(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：DeleteMorningStrategy（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] DeletePromptBacktestTask: 上游新增方法，Web 端点二期接入。
+export function DeletePromptBacktestTask(arg1) {
+  if (isWailsMode()) return window.go.main.App.DeletePromptBacktestTask(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：DeletePromptBacktestTask（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GenerateDailyReviewNow: 上游新增方法，Web 端点二期接入。
+export function GenerateDailyReviewNow(arg1, arg2, arg3, arg4) {
+  if (isWailsMode()) return window.go.main.App.GenerateDailyReviewNow(arg1, arg2, arg3, arg4);
+  return Promise.reject(new Error('Web 模式暂未支持：GenerateDailyReviewNow（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GenerateMorningStrategyNow: 上游新增方法，Web 端点二期接入。
+export function GenerateMorningStrategyNow(arg1, arg2, arg3, arg4) {
+  if (isWailsMode()) return window.go.main.App.GenerateMorningStrategyNow(arg1, arg2, arg3, arg4);
+  return Promise.reject(new Error('Web 模式暂未支持：GenerateMorningStrategyNow（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetAiRecommendStocksTodayStats: 上游新增方法，Web 端点二期接入。
+export function GetAiRecommendStocksTodayStats(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetAiRecommendStocksTodayStats(arg1, arg2);
+  return Promise.reject(new Error('Web 模式暂未支持：GetAiRecommendStocksTodayStats（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetAllDeptPolicyNews: 上游新增方法，Web 端点二期接入。
+export function GetAllDeptPolicyNews(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetAllDeptPolicyNews(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetAllDeptPolicyNews（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetBKConstituentStocks: 上游新增方法，Web 端点二期接入。
+export function GetBKConstituentStocks(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetBKConstituentStocks(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetBKConstituentStocks（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetDailyReviewByDate: 上游新增方法，Web 端点二期接入。
+export function GetDailyReviewByDate(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetDailyReviewByDate(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetDailyReviewByDate（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetDailyReviewList: 上游新增方法，Web 端点二期接入。
+export function GetDailyReviewList(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetDailyReviewList(arg1, arg2);
+  return Promise.reject(new Error('Web 模式暂未支持：GetDailyReviewList（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetGovDepartments: 上游新增方法，Web 端点二期接入。
+export function GetGovDepartments() {
+  if (isWailsMode()) return window.go.main.App.GetGovDepartments();
+  return Promise.reject(new Error('Web 模式暂未支持：GetGovDepartments（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetHotMoneySeats: 上游新增方法，Web 端点二期接入。
+export function GetHotMoneySeats() {
+  if (isWailsMode()) return window.go.main.App.GetHotMoneySeats();
+  return Promise.reject(new Error('Web 模式暂未支持：GetHotMoneySeats（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetKeyDepartments: 上游新增方法，Web 端点二期接入。
+export function GetKeyDepartments() {
+  if (isWailsMode()) return window.go.main.App.GetKeyDepartments();
+  return Promise.reject(new Error('Web 模式暂未支持：GetKeyDepartments（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetLhbDailySummary: 上游新增方法，Web 端点二期接入。
+export function GetLhbDailySummary(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetLhbDailySummary(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetLhbDailySummary（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetMorningStrategyByDate: 上游新增方法，Web 端点二期接入。
+export function GetMorningStrategyByDate(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetMorningStrategyByDate(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetMorningStrategyByDate（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetMorningStrategyList: 上游新增方法，Web 端点二期接入。
+export function GetMorningStrategyList(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetMorningStrategyList(arg1, arg2);
+  return Promise.reject(new Error('Web 模式暂未支持：GetMorningStrategyList（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetPolicyNews: 上游新增方法，Web 端点二期接入。
+export function GetPolicyNews(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetPolicyNews(arg1, arg2);
+  return Promise.reject(new Error('Web 模式暂未支持：GetPolicyNews（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetProfileLearnAiConfigId: 上游新增方法，Web 端点二期接入。
+export function GetProfileLearnAiConfigId() {
+  if (isWailsMode()) return window.go.main.App.GetProfileLearnAiConfigId();
+  return Promise.reject(new Error('Web 模式暂未支持：GetProfileLearnAiConfigId（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetPromptBacktestPicks: 上游新增方法，Web 端点二期接入。
+export function GetPromptBacktestPicks(arg1, arg2, arg3, arg4) {
+  if (isWailsMode()) return window.go.main.App.GetPromptBacktestPicks(arg1, arg2, arg3, arg4);
+  return Promise.reject(new Error('Web 模式暂未支持：GetPromptBacktestPicks（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetPromptBacktestTaskDetail: 上游新增方法，Web 端点二期接入。
+export function GetPromptBacktestTaskDetail(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetPromptBacktestTaskDetail(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetPromptBacktestTaskDetail（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetPromptBacktestTaskList: 上游新增方法，Web 端点二期接入。
+export function GetPromptBacktestTaskList() {
+  if (isWailsMode()) return window.go.main.App.GetPromptBacktestTaskList();
+  return Promise.reject(new Error('Web 模式暂未支持：GetPromptBacktestTaskList（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetPromptTemplateBacktestDetail: 上游新增方法，Web 端点二期接入。
+export function GetPromptTemplateBacktestDetail(arg1, arg2) {
+  if (isWailsMode()) return window.go.main.App.GetPromptTemplateBacktestDetail(arg1, arg2);
+  return Promise.reject(new Error('Web 模式暂未支持：GetPromptTemplateBacktestDetail（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetRecommendBacktestStats: 上游新增方法，Web 端点二期接入。
+export function GetRecommendBacktestStats(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetRecommendBacktestStats(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetRecommendBacktestStats（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetSignalRecordPage: 上游新增方法，Web 端点二期接入。
+export function GetSignalRecordPage(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetSignalRecordPage(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetSignalRecordPage（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetSignalStats: 上游新增方法，Web 端点二期接入。
+export function GetSignalStats(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetSignalStats(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：GetSignalStats（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] GetStoredPolicyNews: 上游新增方法，Web 端点二期接入。
+export function GetStoredPolicyNews(arg1, arg2, arg3, arg4) {
+  if (isWailsMode()) return window.go.main.App.GetStoredPolicyNews(arg1, arg2, arg3, arg4);
+  return Promise.reject(new Error('Web 模式暂未支持：GetStoredPolicyNews（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] ListRecommendBacktest: 上游新增方法，Web 端点二期接入。
+export function ListRecommendBacktest(arg1, arg2, arg3) {
+  if (isWailsMode()) return window.go.main.App.ListRecommendBacktest(arg1, arg2, arg3);
+  return Promise.reject(new Error('Web 模式暂未支持：ListRecommendBacktest（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] ListRecommendBacktestByPrompt: 上游新增方法，Web 端点二期接入。
+export function ListRecommendBacktestByPrompt(arg1, arg2, arg3, arg4, arg5) {
+  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestByPrompt(arg1, arg2, arg3, arg4, arg5);
+  return Promise.reject(new Error('Web 模式暂未支持：ListRecommendBacktestByPrompt（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] ListRecommendBacktestBySkill: 上游新增方法，Web 端点二期接入。
+export function ListRecommendBacktestBySkill(arg1, arg2, arg3, arg4) {
+  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestBySkill(arg1, arg2, arg3, arg4);
+  return Promise.reject(new Error('Web 模式暂未支持：ListRecommendBacktestBySkill（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] ListRecommendBacktestByTemplate: 上游新增方法，Web 端点二期接入。
+export function ListRecommendBacktestByTemplate(arg1, arg2, arg3, arg4) {
+  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestByTemplate(arg1, arg2, arg3, arg4);
+  return Promise.reject(new Error('Web 模式暂未支持：ListRecommendBacktestByTemplate（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] NotifySignal: 上游新增方法，Web 端点二期接入。
+export function NotifySignal(arg1, arg2, arg3, arg4) {
+  if (isWailsMode()) return window.go.main.App.NotifySignal(arg1, arg2, arg3, arg4);
+  return Promise.reject(new Error('Web 模式暂未支持：NotifySignal（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] RefreshHotMoneySeats: 上游新增方法，Web 端点二期接入。
+export function RefreshHotMoneySeats(arg1) {
+  if (isWailsMode()) return window.go.main.App.RefreshHotMoneySeats(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：RefreshHotMoneySeats（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] ResetHotMoneySeats: 上游新增方法，Web 端点二期接入。
+export function ResetHotMoneySeats() {
+  if (isWailsMode()) return window.go.main.App.ResetHotMoneySeats();
+  return Promise.reject(new Error('Web 模式暂未支持：ResetHotMoneySeats（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] RunRecommendBacktest: 上游新增方法，Web 端点二期接入。
+export function RunRecommendBacktest(arg1) {
+  if (isWailsMode()) return window.go.main.App.RunRecommendBacktest(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：RunRecommendBacktest（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] SaveHotMoneySeats: 上游新增方法，Web 端点二期接入。
+export function SaveHotMoneySeats(arg1) {
+  if (isWailsMode()) return window.go.main.App.SaveHotMoneySeats(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：SaveHotMoneySeats（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] SaveKeyDepartments: 上游新增方法，Web 端点二期接入。
+export function SaveKeyDepartments(arg1) {
+  if (isWailsMode()) return window.go.main.App.SaveKeyDepartments(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：SaveKeyDepartments（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] SaveSignalRecords: 上游新增方法，Web 端点二期接入。
+export function SaveSignalRecords(arg1) {
+  if (isWailsMode()) return window.go.main.App.SaveSignalRecords(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：SaveSignalRecords（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] SetProfileLearnAiConfigId: 上游新增方法，Web 端点二期接入。
+export function SetProfileLearnAiConfigId(arg1) {
+  if (isWailsMode()) return window.go.main.App.SetProfileLearnAiConfigId(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：SetProfileLearnAiConfigId（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] StartMCPOAuth: 上游新增方法，Web 端点二期接入。
+export function StartMCPOAuth(arg1) {
+  if (isWailsMode()) return window.go.main.App.StartMCPOAuth(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：StartMCPOAuth（待二期接入 Web 端点）'));
+}
+
+// [B-merge 桩函数] SubmitAgentFeedback: 上游新增方法，Web 端点二期接入。
+export function SubmitAgentFeedback(arg1) {
+  if (isWailsMode()) return window.go.main.App.SubmitAgentFeedback(arg1);
+  return Promise.reject(new Error('Web 模式暂未支持：SubmitAgentFeedback（待二期接入 Web 端点）'));
+}

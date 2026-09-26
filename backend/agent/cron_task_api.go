@@ -133,6 +133,13 @@ func (a *CronTaskApi) ExistsByTaskType(taskType string) bool {
 	return count > 0
 }
 
+// ExistsByName 按任务名判断是否存在（用于回测/复盘等定时任务去重创建）。
+func (a *CronTaskApi) ExistsByName(name string) bool {
+	var count int64
+	db.Dao.Model(&models.CronTask{}).Where("name = ?", name).Count(&count)
+	return count > 0
+}
+
 func (a *CronTaskApi) EnableTask(id uint, enable bool, userID uint) error {
 	q := db.Dao.Model(&models.CronTask{}).Where("id = ?", id)
 	// 用户隔离：禁止启用/禁用他人创建的任务
