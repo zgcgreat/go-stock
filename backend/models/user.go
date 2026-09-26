@@ -10,7 +10,7 @@ type User struct {
 	ID          uint   `json:"id" gorm:"primaryKey"`
 	Username    string `json:"username" gorm:"uniqueIndex;size:20"`
 	Email       string `json:"email" gorm:"uniqueIndex;size:50"`
-	Password    string `json:"password" gorm:"not null"`
+	Password    string `json:"-" gorm:"not null"` // 密码哈希绝不下发给客户端（GORM 用 gorm 标签，不受影响）
 	DisplayName string `json:"display_name" gorm:"size:50"`
 	Role        string `json:"role" gorm:"size:20;default:'user'"` // user, vip, admin, super_admin
 	IsActive    bool   `json:"is_active" gorm:"default:true"`

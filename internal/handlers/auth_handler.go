@@ -230,17 +230,19 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// 检查用户名是否已存在
+	// 检查用户名是否已存在（返回模糊错误，避免用户枚举）
 	var existingUser models.User
 	if err := db.Dao.Where("username = ?", req.Username).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "USERNAME_EXISTS", "message": "用户名已存在"})
+		middleware.RecordLoginFailure(c.ClientIP()) // 计入限流，防批量探测账号
+		c.JSON(http.StatusConflict, gin.H{"error": "REGISTER_FAILED", "message": "用户名或邮箱已被注册"})
 		return
 	}
 
 	// 检查邮箱是否已存在
 	if req.Email != "" {
 		if err := db.Dao.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "EMAIL_EXISTS", "message": "邮箱已被注册"})
+			middleware.RecordLoginFailure(c.ClientIP())
+			c.JSON(http.StatusConflict, gin.H{"error": "REGISTER_FAILED", "message": "用户名或邮箱已被注册"})
 			return
 		}
 	}
@@ -266,15 +268,14 @@ func Register(c *gin.Context) {
 	if err := db.Dao.Create(&user).Error; err != nil {
 		logger.SugaredLogger.Errorf("创建用户失败: %v", err)
 		errMsg := err.Error()
-		if strings.Contains(errMsg, "UNIQUE constraint failed: users.email") {
-			c.JSON(http.StatusConflict, gin.H{"error": "EMAIL_EXISTS", "message": "邮箱已被注册"})
-		} else if strings.Contains(errMsg, "UNIQUE constraint failed: users.username") {
-			c.JSON(http.StatusConflict, gin.H{"error": "USERNAME_EXISTS", "message": "用户名已存在"})
+		if strings.Contains(errMsg, "UNIQUE constraint failed: users.email") || strings.Contains(errMsg, "UNIQUE constraint failed: users.username") {
+			c.JSON(http.StatusConflict, gin.H{"error": "REGISTER_FAILED", "message": "用户名或邮箱已被注册"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "CREATE_USER_ERROR", "message": "创建用户失败"})
 		}
 		return
 	}
+	middleware.ResetLoginAttempts(c.ClientIP())
 
 	// 注册成功后生成 token
 	token, err := middleware.GenerateToken(&user)
@@ -300,6 +301,7 @@ func Login(c *gin.Context) {
 	// 查询用户
 	var user models.User
 	if err := db.Dao.Where("username = ?", req.Username).First(&user).Error; err != nil {
+		middleware.RecordLoginFailure(c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_CREDENTIALS", "message": "用户名或密码错误"})
 		return
 	}
@@ -312,9 +314,11 @@ func Login(c *gin.Context) {
 
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		middleware.RecordLoginFailure(c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_CREDENTIALS", "message": "用户名或密码错误"})
 		return
 	}
+	middleware.ResetLoginAttempts(c.ClientIP())
 
 	// 生成JWT token
 	token, err := middleware.GenerateToken(&user)
@@ -350,9 +354,22 @@ func Login(c *gin.Context) {
 }
 
 // Logout 用户登出 (Gin handler)
+// JWT 无状态，这里将当前 token 的 jti 加入黑名单，使其立即失效（服务端吊销）。
 func Logout(c *gin.Context) {
-	// JWT是无状态的，客户端只需删除token即可
-	// 这里可以添加token黑名单逻辑（可选）
+	authHeader := c.GetHeader("Authorization")
+	tokenString := ""
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+	} else if authHeader != "" {
+		tokenString = authHeader
+	}
+	if tokenString != "" {
+		if claims, err := middleware.ParseToken(tokenString); err == nil {
+			if exp := claims.ExpiresAt; exp != nil {
+				middleware.RevokeToken(claims.ID, exp.Time)
+			}
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "登出成功"})
 }
 

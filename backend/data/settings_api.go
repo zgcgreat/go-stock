@@ -3,6 +3,7 @@ package data
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"time"
@@ -281,12 +282,12 @@ func UpdateAiConfigsOnly(aiConfigs []*AIConfig) string {
 
 // UpdateAiConfigsByUserID 按用户更新 AI 模型服务配置（Web 端用户隔离），
 // 不影响其他设置项，也不触碰其他用户的 AI 配置。
-func UpdateAiConfigsByUserID(userID uint, aiConfigs []*AIConfig) string {
+func UpdateAiConfigsByUserID(userID uint, aiConfigs []*AIConfig) error {
 	if err := updateAiConfigsByUserID(userID, aiConfigs); err != nil {
 		logger.SugaredLogger.Errorf("更新AI配置失败 userID=%d: %v", userID, err)
-		return "保存失败: " + err.Error()
+		return fmt.Errorf("保存失败: %w", err)
 	}
-	return "保存成功！"
+	return nil
 }
 
 func GetSettingConfig() *SettingConfig {
@@ -405,9 +406,9 @@ func GetSettingConfigByUserID(userID uint) *SettingConfig {
 }
 
 // UpdateConfigByUserID 根据用户ID更新配置（Web端用户隔离）
-func UpdateConfigByUserID(userID uint, s *SettingConfig) string {
+func UpdateConfigByUserID(userID uint, s *SettingConfig) error {
 	if s.Settings == nil {
-		return "配置数据为空"
+		return errors.New("配置数据为空")
 	}
 	s.Settings.UserID = userID
 
@@ -416,7 +417,7 @@ func UpdateConfigByUserID(userID uint, s *SettingConfig) string {
 	result := db.Dao.Model(&Settings{}).Where("user_id = ?", userID).First(&existing)
 	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		logger.SugaredLogger.Errorf("查询用户配置失败 userID=%d: %v", userID, result.Error)
-		return "查询现有配置失败: " + result.Error.Error()
+		return fmt.Errorf("查询现有配置失败: %w", result.Error)
 	}
 
 	if result.RowsAffected > 0 {
@@ -469,7 +470,7 @@ func UpdateConfigByUserID(userID uint, s *SettingConfig) string {
 		err := updateAiConfigsByUserID(userID, s.AiConfigs)
 		if err != nil {
 			logger.SugaredLogger.Errorf("更新AI模型服务配置失败 userID=%d: %v", userID, err)
-			return "更新AI模型服务配置失败: " + err.Error()
+			return fmt.Errorf("更新AI模型服务配置失败: %w", err)
 		}
 	} else {
 		// 创建新配置
@@ -477,17 +478,17 @@ func UpdateConfigByUserID(userID uint, s *SettingConfig) string {
 		createResult := db.Dao.Create(s.Settings)
 		if createResult.Error != nil {
 			logger.SugaredLogger.Errorf("创建用户配置失败 userID=%d: %v", userID, createResult.Error)
-			return "创建配置失败: " + createResult.Error.Error()
+			return fmt.Errorf("创建配置失败: %w", createResult.Error)
 		}
 
 		// 创建AI配置
 		err := updateAiConfigsByUserID(userID, s.AiConfigs)
 		if err != nil {
 			logger.SugaredLogger.Errorf("创建AI模型服务配置失败 userID=%d: %v", userID, err)
-			return "创建AI模型服务配置失败: " + err.Error()
+			return fmt.Errorf("创建AI模型服务配置失败: %w", err)
 		}
 	}
-	return "保存成功！"
+	return nil
 }
 
 // updateAiConfigsByUserID 根据用户ID更新AI配置

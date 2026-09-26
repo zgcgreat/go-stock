@@ -8,6 +8,7 @@ import (
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
+	"go-stock/backend/security"
 	"strings"
 	"time"
 
@@ -506,12 +507,19 @@ func (a *CronTaskApi) executePromptPlazaSync(ctx context.Context, task *models.C
 		}
 	}
 
-	// 默认账号
-	if params.Username == "" {
-		params.Username = "Joy"
+	// 密码为加密存储，执行时解密
+	if params.Password != "" {
+		decrypted, err := security.DecryptString(params.Password)
+		if err != nil {
+			logger.SugaredLogger.Errorf("提示词广场同步凭据解密失败：%v", err)
+			return fmt.Errorf("凭据解密失败: %w", err)
+		}
+		params.Password = decrypted
 	}
-	if params.Password == "" {
-		params.Password = "zgc@202123"
+
+	// 不再内置默认账号密码：未配置凭据则直接报错，避免硬编码凭据泄露
+	if params.Username == "" || params.Password == "" {
+		return fmt.Errorf("提示词广场同步任务缺少 username 或 password 配置")
 	}
 
 	sync := data.NewPlazaSyncService(params.ApiBase)

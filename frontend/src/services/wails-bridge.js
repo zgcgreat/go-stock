@@ -100,6 +100,48 @@ function createSSEConnection(key) {
   return conn;
 }
 
+// 清理 SSE 连接记录（错误/中断分支统一调用，避免连接泄漏）
+function cleanupSSE(key) {
+  sseConnections.delete(key);
+  sseKeys.delete(key);
+}
+
+// SSE 场景的 401 处理：与 api.js 响应拦截器保持一致（清 token → 通知状态变化 → 跳登录）
+let sseRedirecting = false;
+function handleSSEUnauthorized() {
+  try {
+    if (sseRedirecting) return;
+    sseRedirecting = true;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user_info');
+    window.dispatchEvent(new Event('user-info-updated'));
+    window.location.hash = '#/login';
+    setTimeout(() => { sseRedirecting = false; }, 1000);
+  } catch (e) {
+    sseRedirecting = false;
+  }
+}
+
+/**
+ * SSE 非 2xx 响应统一处理：解析错误体、401 时跳登录、并清理连接记录
+ * @returns {Promise<string>} 错误信息
+ */
+function handleSSEHttpError(response, key) {
+  cleanupSSE(key);
+  if (response.status === 401) {
+    handleSSEUnauthorized();
+    return Promise.resolve('登录已过期，请重新登录');
+  }
+  return response.text().then(body => {
+    try {
+      const parsed = JSON.parse(body);
+      return parsed.message || parsed.error || `HTTP ${response.status}`;
+    } catch (e) {
+      return `HTTP ${response.status}`;
+    }
+  }).catch(() => `HTTP ${response.status}`);
+}
+
 /**
  * SSE 工具函数：建立 SSE 连接，通过 EventsEmit 将数据分发到前端事件系统
  * @param {string} url         - SSE 接口路径（相对于 baseURL）
@@ -129,16 +171,9 @@ function connectSSE(url, body, eventName, doneMsg = 'DONE') {
     signal: controller.signal,
   }).then(response => {
     if (!response.ok) {
-      // ===== 修复：提取错误体信息 =====
-      response.text().then(body => {
-        let errorDetail = `HTTP ${response.status}`;
-        try {
-          const parsed = JSON.parse(body);
-          errorDetail = parsed.message || parsed.error || errorDetail;
-        } catch(e) { /* ignore */ }
+      // ===== 修复：401 清 token 跳登录 + 清理连接记录 + 提取错误体 =====
+      handleSSEHttpError(response, connKey).then(errorDetail => {
         EventsEmit(eventName, { error: errorDetail, status: response.status });
-      }).catch(() => {
-        EventsEmit(eventName, { error: `HTTP ${response.status}` });
       });
       return;
     }
@@ -202,6 +237,7 @@ function connectSSE(url, body, eventName, doneMsg = 'DONE') {
   }).catch(err => {
     if (err.name === 'AbortError') return; // 主动取消不报错
     console.error('SSE connect error:', err);
+    cleanupSSE(connKey);
     // ===== 修复：区分异常中断 =====
     EventsEmit(eventName, { content: doneMsg, truncated: true, error: err.message });
   });
@@ -707,16 +743,9 @@ export function NewChatStream(stock, stockCode, question, aiConfigId, sysPromptI
     signal: controller.signal,
   }).then(response => {
     if (!response.ok) {
-      // ===== 修复：提取错误体信息 =====
-      response.text().then(body => {
-        let errorDetail = `HTTP ${response.status}`;
-        try {
-          const parsed = JSON.parse(body);
-          errorDetail = parsed.message || parsed.error || errorDetail;
-        } catch(e) { /* ignore */ }
+      // ===== 修复：401 清 token 跳登录 + 清理连接记录 + 提取错误体 =====
+      handleSSEHttpError(response, connKey).then(errorDetail => {
         EventsEmit('newChatStream', { error: errorDetail, status: response.status });
-      }).catch(() => {
-        EventsEmit('newChatStream', { error: `HTTP ${response.status}` });
       });
       return;
     }
@@ -773,14 +802,14 @@ export function NewChatStream(stock, stockCode, question, aiConfigId, sysPromptI
         try { reader.releaseLock(); } catch(e) { /* ignore */ }
         // ===== 修复：区分异常中断 =====
         EventsEmit('newChatStream', { content: 'DONE', error: err.message });
-        sseConnections.delete(connKey);
-        sseKeys.delete(connKey);
+        cleanupSSE(connKey);
       });
     }
     read();
   }).catch(err => {
     if (err.name === 'AbortError') return;
     console.error('NewChatStream SSE connect error:', err);
+    cleanupSSE(connKey);
     EventsEmit('newChatStream', { content: 'DONE', error: err.message });
   });
 
@@ -1308,17 +1337,8 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
     signal: controller.signal,
   }).then(response => {
     if (!response.ok) {
-      let errorMsg = `请求失败 (${response.status})`;
-      response.text().then(text => {
-        try {
-          const errData = JSON.parse(text);
-          if (errData.error?.message) errorMsg = errData.error.message;
-          else if (errData.message) errorMsg = errData.message;
-          else if (errData.error) errorMsg = typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error);
-        } catch { /* ignore */ }
-        EventsEmit('agent-message', { role: 'assistant', content: '', error: errorMsg });
-        EventsEmit('agent-message', { content: 'agent-DONE' });
-      }).catch(() => {
+      // ===== 修复：401 清 token 跳登录 + 清理连接记录 + 提取错误体 =====
+      handleSSEHttpError(response, connKey).then(errorMsg => {
         EventsEmit('agent-message', { role: 'assistant', content: '', error: errorMsg });
         EventsEmit('agent-message', { content: 'agent-DONE' });
       });
@@ -1387,6 +1407,7 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
   }).catch(err => {
     if (err.name === 'AbortError') return;
     console.error('ChatWithAgent SSE connect error:', err);
+    cleanupSSE(connKey);
     EventsEmit('agent-message', { role: 'assistant', content: '', error: `连接失败: ${err.message || '网络错误'}` });
     EventsEmit('agent-message', { content: 'agent-DONE' });
   });
@@ -2284,15 +2305,9 @@ export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
     signal: controller.signal,
   }).then(response => {
     if (!response.ok) {
-      response.text().then(body => {
-        let errorDetail = `HTTP ${response.status}`;
-        try {
-          const parsed = JSON.parse(body);
-          errorDetail = parsed.message || parsed.error || errorDetail;
-        } catch(e) { /* ignore */ }
+      // ===== 修复：401 清 token 跳登录 + 清理连接记录 + 提取错误体 =====
+      handleSSEHttpError(response, connKey).then(errorDetail => {
         EventsEmit(eventName, { error: errorDetail, status: response.status });
-      }).catch(() => {
-        EventsEmit(eventName, { error: `HTTP ${response.status}` });
       });
       return;
     }
@@ -2351,6 +2366,7 @@ export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   }).catch(err => {
     if (err.name === 'AbortError') return;
     console.error('SummaryStockNews SSE connect error:', err);
+    cleanupSSE(connKey);
     EventsEmit(eventName, { content: 'DONE', error: err.message });
   });
 
@@ -2901,15 +2917,18 @@ export function RzrqRank(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function PromptPlazaRequest(method, apiBase, path, query, body, token) {
   if (isWailsMode()) return window.go.main.App.PromptPlazaRequest(method, apiBase, path, query, body, token);
-  // Web 模式：直接调用远程 API
-  const url = apiBase.replace(/\/+$/, '') + path;
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = 'Bearer ' + token;
-  const config = { headers, params: query || {} };
-  if (method === 'POST') {
-    return apiService.client.post(url, body, config).then(res => res.data).catch(() => ({ code: -1, message: '请求失败' }));
-  }
-  return apiService.client.get(url, config).then(res => res.data).catch(() => ({ code: -1, message: '请求失败' }));
+  // Web 模式：走后端同源代理 /api/v1/plaza/proxy，避免浏览器直连外部 HTTP
+  // （HTTPS 页面下会被混合内容拦截，且外部服务通常未配置 CORS）
+  return apiService.client.post('/plaza/proxy', {
+    method: method || 'GET',
+    apiBase: apiBase || '',
+    path: path || '',
+    query: query || {},
+    body: body || '',
+    token: token || ''
+  }, { headers: getAuthHeaders() })
+    .then(res => res.data)
+    .catch(() => ({ code: -1, message: '请求失败' }));
 }
 
 export function ListFilesystemSkills() {

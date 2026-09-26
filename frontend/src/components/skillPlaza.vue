@@ -17,7 +17,21 @@ const dialog = useDialog()
 
 const darkTheme = ref(false)
 const editorTheme = ref('light')
-const apiBase = ref('http://go-stock.sparkmemory.top:1918/api')
+// 默认外部广场地址；HTTPS 页面下自动使用 https，避免浏览器混合内容拦截
+const apiBase = ref(
+  (typeof window !== 'undefined' && window.location.protocol === 'https:')
+    ? 'https://go-stock.sparkmemory.top:1918/api'
+    : 'http://go-stock.sparkmemory.top:1918/api'
+)
+// Web 模式下本地 API（广场外部服务不可用时的降级来源）
+const localApiBase = ref('/api/v1/skills')
+const isWebMode = computed(() => {
+  try {
+    return !(window.go && window.go.main && window.go.main.App);
+  } catch (e) {
+    return true;
+  }
+})
 // 与提示词广场共用同一账号体系（同一 token）
 const token = ref(localStorage.getItem('promptPlazaToken') || '')
 const currentUser = ref(null)
@@ -151,6 +165,25 @@ async function loadSkills() {
     pagination.itemCount = data.total || 0
     pagination.pageCount = Math.ceil((data.total || 0) / (data.pageSize || pagination.pageSize)) || 1
   } catch (e) {
+    // Web 模式降级：外部广场不可用时回退到本地技能列表，避免功能完全失效
+    if (isWebMode.value) {
+      try {
+        const res = await fetch(localApiBase.value + '/all', {
+          headers: { Authorization: 'Bearer ' + (localStorage.getItem('token') || '') }
+        })
+        const json = await res.json()
+        if (json && json.code === 0) {
+          const list = Array.isArray(json.data) ? json.data : []
+          skills.value = list
+          pagination.itemCount = list.length
+          pagination.pageCount = 1
+          message.warning('外部技能广场不可用，已切换到本地技能')
+          return
+        }
+      } catch (fallbackErr) {
+        console.warn('本地技能降级失败', fallbackErr)
+      }
+    }
     message.error('加载技能列表失败: ' + e.message)
   } finally {
     loading.value = false

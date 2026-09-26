@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"go-stock/backend/db"
+	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"go-stock/internal/middleware"
 )
@@ -101,43 +103,43 @@ func (m *AdminUserManager) ResetUserPassword(userID uint, newPassword string) er
 }
 
 // AdminEnsureInitialAdmin 确保存在初始管理员账户
+// 安全策略：仅当配置了环境变量 GO_STOCK_ADMIN_PASSWORD 时才自动创建初始管理员；
+// 绝不写死默认密码，也不向 stdout 泄露凭据。未配置时跳过自动创建，避免空库被 admin/admin123 接管。
 func AdminEnsureInitialAdmin() {
 	manager := &AdminUserManager{}
 
 	// 检查是否有用户存在
 	var userCount int64
 	db.Dao.Model(&models.User{}).Count(&userCount)
-	println("现有用户总数:", userCount)
 
 	// 如果没有用户，则创建一个默认管理员
 	if userCount == 0 {
-		adminPassword := "admin123" // 初始默认密码，在生产环境中应该更改
-		err := manager.CreateInitialAdmin("admin", "admin@example.com", adminPassword, "系统管理员")
+		username := os.Getenv("GO_STOCK_ADMIN_USERNAME")
+		if username == "" {
+			username = "admin"
+		}
+		password := os.Getenv("GO_STOCK_ADMIN_PASSWORD")
+		if password == "" {
+			logger.SugaredLogger.Warnf("未配置 GO_STOCK_ADMIN_PASSWORD，跳过初始管理员自动创建。请设置环境变量后重启，或通过其他方式创建管理员账户。")
+			return
+		}
+		err := manager.CreateInitialAdmin(username, username+"@example.com", password, "系统管理员")
 		if err != nil {
-			// 记录错误日志，但不中断程序执行
-			println("创建初始管理员账户失败:", err.Error())
+			logger.SugaredLogger.Errorf("创建初始管理员账户失败: %v", err)
 		} else {
 			// 设置 Role 为 admin
 			var adminUser models.User
-			if err := db.Dao.Where("username = ?", "admin").First(&adminUser).Error; err == nil {
+			if err := db.Dao.Where("username = ?", username).First(&adminUser).Error; err == nil {
 				db.Dao.Model(&adminUser).Update("role", "admin")
 			}
-			println("初始管理员账户创建成功！用户名: admin, 密码: admin123")
+			logger.SugaredLogger.Infof("初始管理员账户已创建：用户名 %s（请尽快登录修改密码）", username)
 		}
 	} else {
-		// 即使有用户存在，也可以检查是否存在管理员用户
+		// 仅统计管理员数量，避免把用户名/ID 打印到 stdout（防信息泄露）
 		var adminUserCount int64
 		db.Dao.Model(&models.User{}).Where("role IN ?", []string{"admin", "super_admin"}).Count(&adminUserCount)
-		println("现有管理员数量:", adminUserCount)
-
 		if adminUserCount == 0 {
-			println("警告：没有发现管理员用户，可能需要手动创建或修复管理员角色")
-		} else {
-			var adminUsers []models.User
-			db.Dao.Model(&models.User{}).Where("role IN ?", []string{"admin", "super_admin"}).Find(&adminUsers)
-			for _, user := range adminUsers {
-				println("发现管理员用户:", user.Username, "ID:", user.ID, "Role:", user.Role)
-			}
+			logger.SugaredLogger.Warnf("系统中存在用户但无管理员，请手动创建或修复管理员角色")
 		}
 	}
 }
@@ -163,21 +165,16 @@ func AdminUserList(c *gin.Context) {
 
 	role := c.Query("role")
 
-	// 添加调试日志
-	println("AdminUserList called with page:", page, "pageSize:", pageSize, "keyword:", searchKeyword, "role:", role)
-
 	manager := &AdminUserManager{}
 	users, total, err := manager.GetUserList(page, pageSize, searchKeyword, role)
 	if err != nil {
-		println("Error getting user list:", err.Error())
+		logger.SugaredLogger.Errorf("获取用户列表失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "获取用户列表失败",
 			"message": "查询用户列表出现错误",
 		})
 		return
 	}
-
-	println("Successfully retrieved users:", len(users), "total:", total)
 
 	totalPages := total / int64(pageSize)
 	if total%int64(pageSize) > 0 {
@@ -421,7 +418,7 @@ func UpdateUserInfoHandler(c *gin.Context) {
 		Username    string `json:"username"`
 		Email       string `json:"email"`
 		DisplayName string `json:"display_name"`
-		IsActive    bool   `json:"is_active"`
+		IsActive    *bool  `json:"is_active"` // 指针：仅在显式传参时更新，避免只改资料就误禁用用户
 		Role        string `json:"role"`
 	}
 
@@ -479,7 +476,9 @@ func UpdateUserInfoHandler(c *gin.Context) {
 	if req.DisplayName != "" {
 		updates["display_name"] = req.DisplayName
 	}
-	updates["is_active"] = req.IsActive
+	if req.IsActive != nil {
+		updates["is_active"] = *req.IsActive
+	}
 	if req.Role != "" {
 		updates["role"] = req.Role
 	}

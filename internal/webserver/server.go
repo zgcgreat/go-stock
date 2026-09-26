@@ -46,11 +46,30 @@ func NewWebServer(port string) *WebServer {
 
 func (ws *WebServer) initRouter() {
 	ws.router = gin.New()
+
+	// 可信代理：默认不信任 X-Forwarded-For（ClientIP 取真实远端地址，避免伪造绕过限流）。
+	// 部署在 Nginx / 反代之后时，用 GO_STOCK_TRUSTED_PROXIES 指定代理网段，例如 "10.0.0.0/8,172.16.0.0/12"。
+	if raw := os.Getenv("GO_STOCK_TRUSTED_PROXIES"); raw != "" {
+		parts := strings.Split(raw, ",")
+		trusted := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if p = strings.TrimSpace(p); p != "" {
+				trusted = append(trusted, p)
+			}
+		}
+		if err := ws.router.SetTrustedProxies(trusted); err != nil {
+			log.Printf("Warning: invalid GO_STOCK_TRUSTED_PROXIES: %v", err)
+		}
+	} else {
+		_ = ws.router.SetTrustedProxies(nil)
+	}
+
 	ws.router.Use(gin.Logger())
 	ws.router.Use(gin.Recovery())
 
 	ws.router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		// 生产环境通过 GO_STOCK_CORS_ORIGINS 配置可信前端源（逗号分隔），禁止使用通配符 + 凭据组合
+		AllowOrigins:     parseCORSOrigins(os.Getenv("GO_STOCK_CORS_ORIGINS")),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "User-Agent"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -74,8 +93,8 @@ func (ws *WebServer) initRouter() {
 
 		auth := v1.Group("/auth")
 		{
-			auth.POST("/register", handlers.Register)
-			auth.POST("/login", handlers.Login)
+			auth.POST("/register", middleware.LoginRateLimit(), handlers.Register)
+			auth.POST("/login", middleware.LoginRateLimit(), handlers.Login)
 			auth.POST("/logout", middleware.AuthRequired(), handlers.Logout)
 		}
 
@@ -127,6 +146,8 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/plaza/sync", handlers.SyncPlazaData)
 			protected.GET("/plaza/sync/status", handlers.GetPlazaSyncStatus)
 			protected.POST("/plaza/sync/cron-task", handlers.CreatePlazaSyncCronTask)
+			// 服务端代理外部广场 API（解决 Web 模式混合内容与 CORS 问题）
+			protected.POST("/plaza/proxy", handlers.PlazaProxy)
 
 			protected.GET("/trades", handlers.GetTradeRecords)
 			protected.POST("/trades", handlers.CreateTradeRecord)
@@ -201,15 +222,19 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/stocks/industries", handlers.GetAllIndustries)
 			protected.GET("/stocks/concepts", handlers.GetAllConcepts)
 
-			// 概念标签（独立于分组）
+			// 概念标签（独立于分组）。全局共享数据：读操作对用户开放，写操作需管理员，防止任意用户篡改他人概念。
 			protected.GET("/concepts", handlers.GetConceptList)
-			protected.POST("/concepts", handlers.AddConcept)
-			protected.PUT("/concepts/:id", handlers.UpdateConcept)
-			protected.DELETE("/concepts/:id", handlers.RemoveConcept)
-			protected.POST("/concepts/stocks", handlers.AddStockConcept)
-			protected.DELETE("/concepts/stocks", handlers.RemoveStockConcept)
 			protected.GET("/concepts/stocks/all", handlers.GetAllStockConcepts)
 			protected.GET("/concepts/stocks/by-code", handlers.GetStockConceptsByStockCode)
+			conceptAdmin := protected.Group("/concepts")
+			conceptAdmin.Use(middleware.AdminRequired())
+			{
+				conceptAdmin.POST("", handlers.AddConcept)
+				conceptAdmin.PUT("/:id", handlers.UpdateConcept)
+				conceptAdmin.DELETE("/:id", handlers.RemoveConcept)
+				conceptAdmin.POST("/stocks", handlers.AddStockConcept)
+				conceptAdmin.DELETE("/stocks", handlers.RemoveStockConcept)
+			}
 
 			// 每日操作计划
 			protected.GET("/daily-operation-plans", handlers.GetDailyOperationPlanList)
@@ -223,28 +248,36 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/tdx/minute", handlers.GetTdxMinuteTimeData)
 			protected.GET("/tdx/transactions", handlers.GetAllTdxTransactionData)
 
-			// 技能管理
+			// 技能管理（全局共享配置，写操作需管理员）
 			protected.GET("/skills", handlers.GetSkillList)
-			protected.POST("/skills", handlers.CreateSkill)
 			protected.GET("/skills/all", handlers.GetAllSkills)
 			protected.GET("/skills/export", handlers.ExportAllSkills)
-			protected.POST("/skills/import", handlers.ImportSkills)
 			protected.GET("/skills/:id", handlers.GetSkillByID)
-			protected.PUT("/skills/:id", handlers.UpdateSkill)
-			protected.DELETE("/skills/:id", handlers.DeleteSkill)
 			protected.GET("/skills/:id/export", handlers.ExportSkillByID)
-			protected.POST("/skills/:id/enable", handlers.EnableSkill)
+			skillAdmin := protected.Group("/skills")
+			skillAdmin.Use(middleware.AdminRequired())
+			{
+				skillAdmin.POST("", handlers.CreateSkill)
+				skillAdmin.POST("/import", handlers.ImportSkills)
+				skillAdmin.PUT("/:id", handlers.UpdateSkill)
+				skillAdmin.DELETE("/:id", handlers.DeleteSkill)
+				skillAdmin.POST("/:id/enable", handlers.EnableSkill)
+			}
 
-			// MCP 服务器管理
+			// MCP 服务器管理（全局共享配置，写操作需管理员）
 			protected.GET("/mcp/servers", handlers.GetMCPServerList)
-			protected.POST("/mcp/servers", handlers.CreateMCPServer)
 			protected.GET("/mcp/servers/:id", handlers.GetMCPServerByID)
-			protected.PUT("/mcp/servers/:id", handlers.UpdateMCPServer)
-			protected.DELETE("/mcp/servers/:id", handlers.DeleteMCPServer)
-			protected.POST("/mcp/servers/:id/enable", handlers.EnableMCPServer)
-			protected.POST("/mcp/servers/:id/test", handlers.TestMCPServer)
 			protected.GET("/mcp/servers/:id/tools", handlers.GetMCPToolsByServerID)
 			protected.GET("/mcp/tools", handlers.GetAllMCPTools)
+			mcpAdmin := protected.Group("/mcp")
+			mcpAdmin.Use(middleware.AdminRequired())
+			{
+				mcpAdmin.POST("/servers", handlers.CreateMCPServer)
+				mcpAdmin.PUT("/servers/:id", handlers.UpdateMCPServer)
+				mcpAdmin.DELETE("/servers/:id", handlers.DeleteMCPServer)
+				mcpAdmin.POST("/servers/:id/enable", handlers.EnableMCPServer)
+				mcpAdmin.POST("/servers/:id/test", handlers.TestMCPServer)
+			}
 
 			// 定时任务
 			protected.GET("/cron-task/types", handlers.GetCronTaskTypes)
@@ -376,9 +409,6 @@ func (ws *WebServer) initRouter() {
 				admin.PUT("/users/password", handlers.ResetUserPasswordHandler)
 				admin.PUT("/users/:id/role", handlers.UpdateUserRoleHandler)
 				admin.PUT("/users/:id/vip", handlers.UpdateUserVipInfoHandler)
-
-				// 临时工具：修复 admin 用户角色（生产环境应删除）
-				admin.POST("/tools/fix-admin-role", handlers.FixAdminRole)
 			}
 		}
 	}
@@ -478,4 +508,21 @@ func MigrateAllTables() {
 
 	// Web 端 SQLite 兼容迁移：用户隔离列与历史 settings 缺列补丁。
 	migrations.ApplyWebCompatibilityMigrations()
+}
+
+// parseCORSOrigins 将逗号分隔的源字符串解析为去空白后的列表。
+// 未配置时返回空列表（仅允许同源访问，跨域前端需显式配置 GO_STOCK_CORS_ORIGINS）。
+func parseCORSOrigins(raw string) []string {
+	if raw == "" {
+		return []string{}
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

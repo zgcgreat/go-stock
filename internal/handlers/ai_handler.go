@@ -284,11 +284,10 @@ func UpdateAiConfigs(c *gin.Context) {
 		return
 	}
 
-	result := data.UpdateAiConfigsByUserID(userID, aiConfigs)
-	if result != "保存成功！" {
+	if err := data.UpdateAiConfigsByUserID(userID, aiConfigs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    1,
-			"message": result,
+			"message": err.Error(),
 		})
 		return
 	}

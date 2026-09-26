@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -15,9 +14,6 @@ import (
 // GetGroupList 获取分组列表
 func GetGroupList(c *gin.Context) {
 	userID, _ := middleware.GetUserIDFromContext(c)
-
-	// DEBUG: 打印当前用户ID
-	fmt.Printf("[DEBUG] GetGroupList userID=%d\n", userID)
 
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page <= 0 {
@@ -240,7 +236,8 @@ func UpdateGroupSort(c *gin.Context) {
 func GetGroupStockList(c *gin.Context) {
 	userID, _ := middleware.GetUserIDFromContext(c)
 
-	groupIDStr := c.Param("groupId")
+	// 路由为 /groups/:id/stocks，参数名是 id（原先误用 groupId 导致恒为空 → 400）
+	groupIDStr := c.Param("id")
 	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{

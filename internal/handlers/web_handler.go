@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+ "net"
  "net/http"
  "net/url"
  "os"
@@ -35,7 +36,7 @@ func GetTelegraphList(c *gin.Context) {
 	source := c.DefaultQuery("source", "")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	news := data.NewMarketNewsApi().GetTelegraphList(source)
-	if limit > 0 && len(*news) > limit {
+	if news != nil && limit > 0 && len(*news) > limit {
 		*news = (*news)[:limit]
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": news})
@@ -54,7 +55,7 @@ func RefreshTelegraphList(c *gin.Context) {
 		data.NewMarketNewsApi().TradingViewNews()
 	}
 	news := data.NewMarketNewsApi().GetTelegraphList(source)
-	if limit > 0 && len(*news) > limit {
+	if news != nil && limit > 0 && len(*news) > limit {
 		*news = (*news)[:limit]
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": news})
@@ -719,6 +720,50 @@ func CheckFrequentTrading(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
 }
 
+// isSSRFBlockedHost 判断域名/IP 是否指向内网或保留地址（解析真实 IP 后校验，防 DNS 重绑定）。
+func isSSRFBlockedHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return true
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		// 解析失败按可疑处理，拒绝请求
+		return true
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPrivateIP 判断 IP 是否属于内网/保留/环回等不可公网访问的地址段。
+func isPrivateIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		private := []net.IPNet{
+			{IP: net.IPv4(10, 0, 0, 0), Mask: net.CIDRMask(8, 32)},
+			{IP: net.IPv4(172, 16, 0, 0), Mask: net.CIDRMask(12, 32)},
+			{IP: net.IPv4(192, 168, 0, 0), Mask: net.CIDRMask(16, 32)},
+			{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)},  // CGNAT
+			{IP: net.IPv4(198, 18, 0, 0), Mask: net.CIDRMask(15, 32)},  // 基准网络
+			{IP: net.IPv4(169, 254, 0, 0), Mask: net.CIDRMask(16, 32)}, // 链路本地
+		}
+		for _, n := range private {
+			if n.Contains(ip4) {
+				return true
+			}
+		}
+		return false
+	}
+	// IPv6 唯一本地/站点本地
+	return ip.IsPrivate()
+}
+
 // FetchAiModels 获取AI模型列表
 func FetchAiModels(c *gin.Context) {
 	baseUrl := strings.TrimSpace(c.Query("baseUrl"))
@@ -735,11 +780,8 @@ func FetchAiModels(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "baseUrl 必须是 http 或 https 协议"})
 		return
 	}
-	// 阻止访问内网地址
-	hostname := parsedURL.Hostname()
-	if hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1" ||
-		strings.HasPrefix(hostname, "10.") || strings.HasPrefix(hostname, "172.") ||
-		strings.HasPrefix(hostname, "192.168.") || hostname == "169.254.169.254" {
+	// 阻止访问内网地址（解析真实 IP 后校验，覆盖全部保留段，防 DNS 重绑定）
+	if isSSRFBlockedHost(parsedURL.Hostname()) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "不允许访问内网地址"})
 		return
 	}
@@ -752,6 +794,7 @@ func FetchAiModels(c *gin.Context) {
 	}
 
 	client := resty.New()
+	client.SetRedirectPolicy(resty.NoRedirectPolicy()) // 禁止跟随 302，防止绕过 SSRF 校验
 	client.SetBaseURL(baseUrl)
 	client.SetHeader("Authorization", "Bearer "+apiKey)
 	client.SetHeader("Content-Type", "application/json")
@@ -796,11 +839,8 @@ func FetchAiModelInfo(c *gin.Context) {
 		// SSRF 防护: 验证 URL 格式和协议
 		parsedURL, err := url.Parse(baseUrl)
 		if err == nil && (parsedURL.Scheme == "http" || parsedURL.Scheme == "https") {
-			hostname := parsedURL.Hostname()
-			// 阻止访问内网地址
-			if hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1" &&
-				!strings.HasPrefix(hostname, "10.") && !strings.HasPrefix(hostname, "172.") &&
-				!strings.HasPrefix(hostname, "192.168.") && hostname != "169.254.169.254" {
+			// 阻止访问内网地址（解析真实 IP 后校验）
+			if !isSSRFBlockedHost(parsedURL.Hostname()) {
 
 				type modelDetail struct {
 					ID             string `json:"id"`
@@ -812,6 +852,7 @@ func FetchAiModelInfo(c *gin.Context) {
 				var detail modelDetail
 
 				client := resty.New()
+				client.SetRedirectPolicy(resty.NoRedirectPolicy()) // 禁止跟随 302，防止绕过 SSRF 校验
 				client.SetBaseURL(baseUrl)
 				client.SetHeader("Authorization", "Bearer "+apiKey)
 				client.SetHeader("Content-Type", "application/json")
@@ -1200,9 +1241,9 @@ func GetHotWords(c *gin.Context) {
 	// 先检查 DB 中是否已有 24h 内新闻
 	var newsCount int64
 	db.Dao.Model(&models.Telegraph{}).Where("created_at>?", time.Now().Add(-24*time.Hour)).Count(&newsCount)
-	if newsCount == 0 {
-		// DB 为空时，主动触发爬取（与 RefreshTelegraphList 完全一致）
-		logger.SugaredLogger.Info("[GetHotWords] DB无24h新闻，开始爬取...")
+	if newsCount == 0 && c.Query("refresh") == "1" {
+		// 仅在显式 ?refresh=1 时主动爬取，避免 GET 请求产生对外请求/写副作用
+		logger.SugaredLogger.Info("[GetHotWords] DB无24h新闻且要求刷新，开始爬取...")
 		newsApi := data.NewMarketNewsApi()
 		newsApi.TelegraphList(30)
 		newsApi.GetSinaNews(30)
@@ -1271,9 +1312,11 @@ func GetAllStockChangesWithPagingHandler(c *gin.Context) {
 		return
 	}
 
-	// 保存到历史
-	historyService := data.NewStockChangeHistoryService()
-	_, _ = historyService.SaveStockChangesWithDedup(result.Data)
+	// 保存到历史（仅当显式 ?save=1 时执行，避免 GET 请求产生写副作用）
+	if c.Query("save") == "1" {
+		historyService := data.NewStockChangeHistoryService()
+		_, _ = historyService.SaveStockChangesWithDedup(result.Data)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":       0,
@@ -1646,7 +1689,9 @@ func EnableSkill(c *gin.Context) {
 func ImportSkills(c *gin.Context) {
 	var skills []models.Skill
 
-	// 优先尝试读取上传文件
+	// 优先尝试读取上传文件（限制请求体大小，防止大文件内存耗尽 DoS）
+	const maxImportBytes = 10 << 20 // 10MB
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxImportBytes)
 	file, _, err := c.Request.FormFile("file")
 	if err == nil {
 		defer file.Close()

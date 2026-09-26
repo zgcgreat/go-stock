@@ -301,11 +301,10 @@ func UpdateAppConfig(c *gin.Context) {
 		return
 	}
 
-	result := data.UpdateConfigByUserID(userID, &config)
-	if result != "保存成功！" {
+	if err := data.UpdateConfigByUserID(userID, &config); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    1,
-			"message": result,
+			"message": err.Error(),
 		})
 		return
 	}
