@@ -120,6 +120,7 @@ func (ws *WebServer) initRouter() {
 
 			protected.POST("/ai/analyze", handlers.AITradeAnalyze)
 			protected.POST("/ai/agent-chat", handlers.AgentChat)
+			protected.POST("/ai/upload-image", handlers.UploadImageHandler)
 			protected.GET("/ai/configs", handlers.GetAIConfigs)
 			protected.PUT("/ai/configs", handlers.UpdateAiConfigs)
 			protected.GET("/ai/responses", handlers.GetAIResponses)

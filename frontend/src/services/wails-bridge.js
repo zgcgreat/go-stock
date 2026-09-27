@@ -1319,12 +1319,21 @@ function toIntOrZero(v) {
   return Number.isNaN(n) ? 0 : n
 }
 
-export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
-  if (isWailsMode()) return window.go.main.App.ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
+  if (isWailsMode()) return window.go.main.App.ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 
   // ===== 使用 SSE 管理器替代全局 window._abortAgentStream =====
   const connKey = 'ChatWithAgent';
   const conn = createSSEConnection(connKey);
+
+  // 视觉理解：arg10 = 图片列表 JSON 字符串（http(s) 外链或 base64 data URL），解析为数组随请求体下发
+  let images = [];
+  if (arg10) {
+    try {
+      const parsed = typeof arg10 === 'string' ? JSON.parse(arg10) : arg10;
+      if (Array.isArray(parsed)) images = parsed.filter(u => typeof u === 'string' && u);
+    } catch (e) { /* 忽略非法 imagesJSON，按无图处理 */ }
+  }
 
   const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
   const token = localStorage.getItem('token');
@@ -1352,6 +1361,7 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
       agentMode: arg7 || '',
       skillIds: arg8 || [],
       sessionId: arg9 || '',
+      images,
     }),
     signal: controller.signal,
   }).then(response => {
@@ -2160,6 +2170,15 @@ export function GetTradingRecordStatistics() {
   return apiService.client.get('/trades/statistics', { headers: getAuthHeaders() })
     .then(res => res.data?.data || {})
     .catch(() => ({}));
+}
+
+// UploadImageToImageBed 把 base64 图片（data URL 或纯 base64）托管到免费图床（img.scdn.io）换外链。
+// Wails 模式：桌面绑定直调。Web 模式：POST /ai/upload-image。
+export function UploadImageToImageBed(base64Data, filename) {
+  if (isWailsMode()) return window.go.main.App.UploadImageToImageBed(base64Data, filename);
+  return apiService.client.post('/ai/upload-image', { base64Data, fileName: filename || 'image.png' }, { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then(d => d?.url || d);
 }
 
 // ImportTradingRecordsFromExcel 导入交易记录。

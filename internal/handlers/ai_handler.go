@@ -309,6 +309,7 @@ func AgentChat(c *gin.Context) {
 		Thinking    bool   `json:"thinking"`
 		AgentMode   string `json:"agentMode"`
 		SkillIds    []uint `json:"skillIds"`
+		Images      []string `json:"images"` // 视觉理解：http(s) 外链或 base64 data URL，仅视觉模型生效
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -356,8 +357,15 @@ func AgentChat(c *gin.Context) {
 	if memoryCount <= 0 {
 		memoryCount = 10
 	}
-	// 传递 userID 作为 optsOverride[2]，使 Agent 内部查询用户自己的配置
-	userIDStr := strconv.FormatUint(uint64(userID), 10)
+
+	// 视觉理解：图片列表序列化为 imagesJSON（ChatWithContext optsOverride[4]），
+	// 元素为 http(s) 外链或 base64 data URL，仅 SupportVision 模型生效。
+	imagesJSON := ""
+	if len(req.Images) > 0 {
+		if b, err := json.Marshal(req.Images); err == nil {
+			imagesJSON = string(b)
+		}
+	}
 
 	// 构建用户选择的技能提示词追加（optsOverride[0] = sysPromptOverride）
 	var skillPromptOverride string
@@ -379,7 +387,7 @@ func AgentChat(c *gin.Context) {
 		skillPromptOverride = sb.String()
 	}
 
-	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, req.AgentMode, skillPromptOverride, "", userIDStr)
+	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, req.AgentMode, skillPromptOverride, req.SessionID, "", "", imagesJSON, "")
 
 	for msg := range msgCh {
 		if msg == nil {
@@ -424,6 +432,35 @@ func AgentChat(c *gin.Context) {
 	// 发送完成信号（与桌面端格式保持一致：event: done + data: [DONE]）
 	_, _ = c.Writer.Write([]byte("event: done\ndata: [DONE]\n\n"))
 	flusher.Flush()
+}
+
+// UploadImageHandler 视觉理解图片上云：把 base64 图片（data URL 或纯 base64）托管到
+// 免费图床（img.scdn.io）换取外链。桌面端走 Wails 绑定 UploadImageToImageBed，
+// Web 端经此端点（AI 对话添加本地图时先换外链，失败由前端回退 base64 直传）。
+func UploadImageHandler(c *gin.Context) {
+	var req struct {
+		Base64Data string `json:"base64Data" binding:"required"`
+		FileName   string `json:"fileName"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    -1,
+			"message": "参数错误: " + err.Error(),
+		})
+		return
+	}
+	url, err := data.UploadImageToImageBed(req.Base64Data, req.FileName)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{
+			"code":    -1,
+			"message": "图床上传失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"data": gin.H{"url": url},
+	})
 }
 
 // GetAIRecommendStocksList 获取AI推荐股票列表（用户隔离）
