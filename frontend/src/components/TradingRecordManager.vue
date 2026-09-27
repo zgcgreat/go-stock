@@ -277,22 +277,19 @@ function openKlineChart(row) {
 
 
 function formatRowTradingTime(row) {
-  console.log('formatRowTradingTime:', row)
   const t = row.TradingTime
   if (t == null || t === '') return '-'
   let date
   if (typeof t === 'string' && t.length >= 19 && t.includes('T')) {
-    date = new Date(t.substring(0, 19).replace('T', ' ') + ' UTC')
-  } else if (typeof t === 'string') {
-    date = new Date(t)
+    // RFC3339：带时区偏移（如 +08:00/Z）时直接解析、尊重原偏移；
+    // 无偏移尾巴（历史数据）按北京时间处理，避免误当 UTC 再二次补偿造成显示偏移
+    const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(t)
+    date = new Date(hasOffset ? t : t.substring(0, 19).replace('T', ' ') + '+08:00')
   } else {
     date = new Date(t)
   }
-  const utc8Offset = 8 * 60 * 60 * 1000
-  const localOffset = date.getTimezoneOffset() * 60 * 1000
-  const utc8Time = new Date(date.getTime() + utc8Offset - localOffset)
   const pad = (n) => String(n).padStart(2, '0')
-  return `${utc8Time.getFullYear()}-${pad(utc8Time.getMonth() + 1)}-${pad(utc8Time.getDate())} ${pad(utc8Time.getHours())}:${pad(utc8Time.getMinutes())}:${pad(utc8Time.getSeconds())}`
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 /** 统一列表行字段（Wails/JSON 可能为 PascalCase），供表格渲染与刷新使用 */
