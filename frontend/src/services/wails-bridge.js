@@ -1300,6 +1300,15 @@ export function CalculateNextRunTimes(arg1, arg2) {
  * Web 模式下：使用 SSE 连接 /api/v1/ai/agent-chat
  * 事件通过 EventsEmit('agent-message') 分发，格式与桌面模式一致
  */
+// [Web 移植] 桌面 Wails 绑定会把 JS 值自动转成 Go 期望的类型，而 Web JSON 反序列化是严格的：
+// agent-chat.vue 的 selectValue 默认是字符串 "default"（无 AI 配置时不会被覆盖成数字 ID），
+// 直接发字符串会让后端 `aiConfigId int` 解析失败。这里统一强制转成 int。
+function toIntOrZero(v) {
+  if (typeof v === 'number') return Math.trunc(v)
+  const n = parseInt(v, 10)
+  return Number.isNaN(n) ? 0 : n
+}
+
 export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
   if (isWailsMode()) return window.go.main.App.ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 
@@ -1325,7 +1334,7 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
     },
     body: JSON.stringify({
       question: arg1,
-      aiConfigId: arg2 || 0,
+      aiConfigId: toIntOrZero(arg2),
       sysPromptId: arg3 || null,
       memoryMode: arg4,
       memoryCount: arg5 || 10,
@@ -3020,7 +3029,7 @@ export function DeletePromptBacktestTask(taskId) {
 // [B-merge 桥接] GenerateDailyReviewNow: Web 端点已接入（/api/v1）。
 export function GenerateDailyReviewNow(date, aiConfigId, sysPromptId, agentMode) {
   if (isWailsMode()) return window.go.main.App.GenerateDailyReviewNow(date, aiConfigId, sysPromptId, agentMode);
-  return apiService.client.post('/agent/daily-review/generate', { date: date, aiConfigId: aiConfigId, sysPromptId: sysPromptId, agentMode: agentMode }, { headers: getAuthHeaders() })
+  return apiService.client.post('/agent/daily-review/generate', { date: date, aiConfigId: toIntOrZero(aiConfigId), sysPromptId: sysPromptId, agentMode: agentMode }, { headers: getAuthHeaders() })
     .then(res => res.data?.message || '')
     .catch(err => {
       const msg = err.response?.data?.message || err.message;
@@ -3032,7 +3041,7 @@ export function GenerateDailyReviewNow(date, aiConfigId, sysPromptId, agentMode)
 // [B-merge 桥接] GenerateMorningStrategyNow: Web 端点已接入（/api/v1）。
 export function GenerateMorningStrategyNow(date, aiConfigId, sysPromptId, agentMode) {
   if (isWailsMode()) return window.go.main.App.GenerateMorningStrategyNow(date, aiConfigId, sysPromptId, agentMode);
-  return apiService.client.post('/agent/morning-strategy/generate', { date: date, aiConfigId: aiConfigId, sysPromptId: sysPromptId, agentMode: agentMode }, { headers: getAuthHeaders() })
+  return apiService.client.post('/agent/morning-strategy/generate', { date: date, aiConfigId: toIntOrZero(aiConfigId), sysPromptId: sysPromptId, agentMode: agentMode }, { headers: getAuthHeaders() })
     .then(res => res.data?.message || '')
     .catch(err => {
       const msg = err.response?.data?.message || err.message;
@@ -3376,7 +3385,7 @@ export function SaveSignalRecords(arg1) {
 // [B-merge 桥接] SetProfileLearnAiConfigId: Web 端点已接入（/api/v1）。
 export function SetProfileLearnAiConfigId(aiConfigId) {
   if (isWailsMode()) return window.go.main.App.SetProfileLearnAiConfigId(aiConfigId);
-  return apiService.client.post('/user-profile/learn-ai-config', { aiConfigId: aiConfigId }, { headers: getAuthHeaders() })
+  return apiService.client.post('/user-profile/learn-ai-config', { aiConfigId: toIntOrZero(aiConfigId) }, { headers: getAuthHeaders() })
     .then(() => null)
     .catch(err => {
       const msg = err.response?.data?.message || err.message;
