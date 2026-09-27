@@ -421,6 +421,21 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/user-profile/learn-ai-config", handlers.SetProfileLearnAiConfigIdHandler)
 			protected.GET("/agent/backtest/template-detail", handlers.GetPromptTemplateBacktestDetailHandler)
 
+			// 提示词回测 + 推荐回测（读开放；创建/执行/删除消耗算力/不可逆 → 需管理员）
+			protected.GET("/agent/prompt-backtest/tasks", handlers.GetPromptBacktestTaskListHandler)
+			protected.GET("/agent/prompt-backtest/tasks/:id", handlers.GetPromptBacktestTaskDetailHandler)
+			protected.GET("/agent/prompt-backtest/picks", handlers.GetPromptBacktestPicksHandler)
+			protected.GET("/agent/backtest", handlers.ListRecommendBacktestHandler)
+			protected.GET("/agent/backtest/by-prompt", handlers.ListRecommendBacktestByPromptHandler)
+			protected.GET("/agent/backtest/by-template", handlers.ListRecommendBacktestByTemplateHandler)
+			protected.GET("/agent/backtest/by-skill", handlers.ListRecommendBacktestBySkillHandler)
+			protected.GET("/agent/backtest/stats", handlers.GetRecommendBacktestStatsHandler)
+			backtestAdmin := protected.Group("/agent")
+			backtestAdmin.Use(middleware.AdminRequired())
+			backtestAdmin.POST("/prompt-backtest/tasks", handlers.CreatePromptBacktestTaskHandler)
+			backtestAdmin.POST("/prompt-backtest/tasks/:id/delete", handlers.DeletePromptBacktestTaskHandler)
+			backtestAdmin.POST("/backtest/run", handlers.RunRecommendBacktestHandler)
+
  // 异动监控
  protected.GET("/stock-changes", handlers.GetStockChanges)
  protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)

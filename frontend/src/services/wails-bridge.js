@@ -2969,10 +2969,16 @@ export function ClearSignalRecords() {
   return Promise.reject(new Error('Web 模式暂未支持：ClearSignalRecords（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] CreatePromptBacktestTask: 上游新增方法，Web 端点二期接入。
-export function CreatePromptBacktestTask(arg1) {
-  if (isWailsMode()) return window.go.main.App.CreatePromptBacktestTask(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：CreatePromptBacktestTask（待二期接入 Web 端点）'));
+// [B-merge 桥接] CreatePromptBacktestTask: Web 端点已接入（/api/v1）。
+export function CreatePromptBacktestTask(params) {
+  if (isWailsMode()) return window.go.main.App.CreatePromptBacktestTask(params);
+  return apiService.client.post('/agent/prompt-backtest/tasks', params, { headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('CreatePromptBacktestTask web fallback failed:', msg);
+      throw msg;
+    });
 }
 
 // [B-merge 桥接] DeleteDailyReview: Web 端点已接入（/api/v1）。
@@ -2999,10 +3005,16 @@ export function DeleteMorningStrategy(id) {
     });
 }
 
-// [B-merge 桩函数] DeletePromptBacktestTask: 上游新增方法，Web 端点二期接入。
-export function DeletePromptBacktestTask(arg1) {
-  if (isWailsMode()) return window.go.main.App.DeletePromptBacktestTask(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：DeletePromptBacktestTask（待二期接入 Web 端点）'));
+// [B-merge 桥接] DeletePromptBacktestTask: Web 端点已接入（/api/v1）。
+export function DeletePromptBacktestTask(taskId) {
+  if (isWailsMode()) return window.go.main.App.DeletePromptBacktestTask(taskId);
+  return apiService.client.post('/agent/prompt-backtest/tasks/' + taskId + '/delete', {}, { headers: getAuthHeaders() })
+    .then(res => null)
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('DeletePromptBacktestTask web fallback failed:', msg);
+      throw msg;
+    });
 }
 
 // [B-merge 桥接] GenerateDailyReviewNow: Web 端点已接入（/api/v1）。
@@ -3167,22 +3179,37 @@ export function GetProfileLearnAiConfigId() {
     });
 }
 
-// [B-merge 桩函数] GetPromptBacktestPicks: 上游新增方法，Web 端点二期接入。
-export function GetPromptBacktestPicks(arg1, arg2, arg3, arg4) {
-  if (isWailsMode()) return window.go.main.App.GetPromptBacktestPicks(arg1, arg2, arg3, arg4);
-  return Promise.reject(new Error('Web 模式暂未支持：GetPromptBacktestPicks（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetPromptBacktestPicks: Web 端点已接入（/api/v1）。
+export function GetPromptBacktestPicks(taskId, templateId, page, pageSize) {
+  if (isWailsMode()) return window.go.main.App.GetPromptBacktestPicks(taskId, templateId, page, pageSize);
+  return apiService.client.get('/agent/prompt-backtest/picks', { params: { taskId: taskId, templateId: templateId, page: page, pageSize: pageSize }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('GetPromptBacktestPicks web fallback failed:', err.message);
+      return null;
+    });
 }
 
-// [B-merge 桩函数] GetPromptBacktestTaskDetail: 上游新增方法，Web 端点二期接入。
-export function GetPromptBacktestTaskDetail(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetPromptBacktestTaskDetail(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetPromptBacktestTaskDetail（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetPromptBacktestTaskDetail: Web 端点已接入（/api/v1）。
+export function GetPromptBacktestTaskDetail(taskId) {
+  if (isWailsMode()) return window.go.main.App.GetPromptBacktestTaskDetail(taskId);
+  return apiService.client.get('/agent/prompt-backtest/tasks/' + taskId, { params: {}, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('GetPromptBacktestTaskDetail web fallback failed:', err.message);
+      return null;
+    });
 }
 
-// [B-merge 桩函数] GetPromptBacktestTaskList: 上游新增方法，Web 端点二期接入。
+// [B-merge 桥接] GetPromptBacktestTaskList: Web 端点已接入（/api/v1）。
 export function GetPromptBacktestTaskList() {
   if (isWailsMode()) return window.go.main.App.GetPromptBacktestTaskList();
-  return Promise.reject(new Error('Web 模式暂未支持：GetPromptBacktestTaskList（待二期接入 Web 端点）'));
+  return apiService.client.get('/agent/prompt-backtest/tasks', { params: {}, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? [])
+    .catch(err => {
+      console.warn('GetPromptBacktestTaskList web fallback failed:', err.message);
+      return [];
+    });
 }
 
 // [B-merge 桥接] GetPromptTemplateBacktestDetail: Web 端点已接入（/api/v1）。
@@ -3196,10 +3223,15 @@ export function GetPromptTemplateBacktestDetail(templateId, periodDays) {
     });
 }
 
-// [B-merge 桩函数] GetRecommendBacktestStats: 上游新增方法，Web 端点二期接入。
-export function GetRecommendBacktestStats(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetRecommendBacktestStats(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetRecommendBacktestStats（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetRecommendBacktestStats: Web 端点已接入（/api/v1）。
+export function GetRecommendBacktestStats(periodDays) {
+  if (isWailsMode()) return window.go.main.App.GetRecommendBacktestStats(periodDays);
+  return apiService.client.get('/agent/backtest/stats', { params: { periodDays: periodDays }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('GetRecommendBacktestStats web fallback failed:', err.message);
+      return null;
+    });
 }
 
 // [B-merge 桩函数] GetSignalRecordPage: 上游新增方法，Web 端点二期接入。
@@ -3225,28 +3257,48 @@ export function GetStoredPolicyNews(department, keyword, page, pageSize) {
     });
 }
 
-// [B-merge 桩函数] ListRecommendBacktest: 上游新增方法，Web 端点二期接入。
-export function ListRecommendBacktest(arg1, arg2, arg3) {
-  if (isWailsMode()) return window.go.main.App.ListRecommendBacktest(arg1, arg2, arg3);
-  return Promise.reject(new Error('Web 模式暂未支持：ListRecommendBacktest（待二期接入 Web 端点）'));
+// [B-merge 桥接] ListRecommendBacktest: Web 端点已接入（/api/v1）。
+export function ListRecommendBacktest(page, pageSize, periodDays) {
+  if (isWailsMode()) return window.go.main.App.ListRecommendBacktest(page, pageSize, periodDays);
+  return apiService.client.get('/agent/backtest', { params: { page: page, pageSize: pageSize, periodDays: periodDays }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('ListRecommendBacktest web fallback failed:', err.message);
+      return null;
+    });
 }
 
-// [B-merge 桩函数] ListRecommendBacktestByPrompt: 上游新增方法，Web 端点二期接入。
-export function ListRecommendBacktestByPrompt(arg1, arg2, arg3, arg4, arg5) {
-  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestByPrompt(arg1, arg2, arg3, arg4, arg5);
-  return Promise.reject(new Error('Web 模式暂未支持：ListRecommendBacktestByPrompt（待二期接入 Web 端点）'));
+// [B-merge 桥接] ListRecommendBacktestByPrompt: Web 端点已接入（/api/v1）。
+export function ListRecommendBacktestByPrompt(page, pageSize, prompt, promptType, periodDays) {
+  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestByPrompt(page, pageSize, prompt, promptType, periodDays);
+  return apiService.client.get('/agent/backtest/by-prompt', { params: { page: page, pageSize: pageSize, prompt: prompt, promptType: promptType, periodDays: periodDays }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('ListRecommendBacktestByPrompt web fallback failed:', err.message);
+      return null;
+    });
 }
 
-// [B-merge 桩函数] ListRecommendBacktestBySkill: 上游新增方法，Web 端点二期接入。
-export function ListRecommendBacktestBySkill(arg1, arg2, arg3, arg4) {
-  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestBySkill(arg1, arg2, arg3, arg4);
-  return Promise.reject(new Error('Web 模式暂未支持：ListRecommendBacktestBySkill（待二期接入 Web 端点）'));
+// [B-merge 桥接] ListRecommendBacktestBySkill: Web 端点已接入（/api/v1）。
+export function ListRecommendBacktestBySkill(page, pageSize, skillId, periodDays) {
+  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestBySkill(page, pageSize, skillId, periodDays);
+  return apiService.client.get('/agent/backtest/by-skill', { params: { page: page, pageSize: pageSize, skillId: skillId, periodDays: periodDays }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('ListRecommendBacktestBySkill web fallback failed:', err.message);
+      return null;
+    });
 }
 
-// [B-merge 桩函数] ListRecommendBacktestByTemplate: 上游新增方法，Web 端点二期接入。
-export function ListRecommendBacktestByTemplate(arg1, arg2, arg3, arg4) {
-  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestByTemplate(arg1, arg2, arg3, arg4);
-  return Promise.reject(new Error('Web 模式暂未支持：ListRecommendBacktestByTemplate（待二期接入 Web 端点）'));
+// [B-merge 桥接] ListRecommendBacktestByTemplate: Web 端点已接入（/api/v1）。
+export function ListRecommendBacktestByTemplate(page, pageSize, templateId, periodDays) {
+  if (isWailsMode()) return window.go.main.App.ListRecommendBacktestByTemplate(page, pageSize, templateId, periodDays);
+  return apiService.client.get('/agent/backtest/by-template', { params: { page: page, pageSize: pageSize, templateId: templateId, periodDays: periodDays }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('ListRecommendBacktestByTemplate web fallback failed:', err.message);
+      return null;
+    });
 }
 
 // [B-merge 桩函数] NotifySignal: 上游新增方法，Web 端点二期接入。
@@ -3279,10 +3331,16 @@ export function ResetHotMoneySeats() {
     });
 }
 
-// [B-merge 桩函数] RunRecommendBacktest: 上游新增方法，Web 端点二期接入。
-export function RunRecommendBacktest(arg1) {
-  if (isWailsMode()) return window.go.main.App.RunRecommendBacktest(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：RunRecommendBacktest（待二期接入 Web 端点）'));
+// [B-merge 桥接] RunRecommendBacktest: Web 端点已接入（/api/v1）。
+export function RunRecommendBacktest(periodDays) {
+  if (isWailsMode()) return window.go.main.App.RunRecommendBacktest(periodDays);
+  return apiService.client.post('/agent/backtest/run', { periodDays: periodDays }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('RunRecommendBacktest web fallback failed:', msg);
+      return msg;
+    });
 }
 
 // [B-merge 桥接] SaveHotMoneySeats: Web 端点已接入（/api/v1）。

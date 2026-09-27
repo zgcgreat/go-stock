@@ -25,6 +25,8 @@ import lhbHotMoneyView from "../components/LhbHotMoneyDaily.vue"
 import hotMoneySeatsView from "../components/HotMoneySeatsManager.vue"
 import dailyReviewView from "../components/DailyReview.vue"
 import morningStrategyView from "../components/MorningStrategy.vue"
+import promptBacktestView from "../components/PromptBacktest.vue"
+import recommendBacktestStatsView from "../components/RecommendBacktestStats.vue"
 import Auth from '../utils/auth.js'
 
 const routes = [
@@ -53,6 +55,8 @@ const routes = [
     { path: '/hot-money-seats', component: hotMoneySeatsView, name: 'hotMoneySeats' },
     { path: '/daily-review', component: dailyReviewView, name: 'dailyReview' },
     { path: '/morning-strategy', component: morningStrategyView, name: 'morningStrategy' },
+    { path: '/prompt-backtest', component: promptBacktestView, name: 'promptBacktest' },
+    { path: '/backtest-stats', component: recommendBacktestStatsView, name: 'backtestStats' },
 
 ]
 

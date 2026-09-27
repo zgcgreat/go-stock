@@ -90,6 +90,8 @@ import {
   RibbonOutline,
   BookOutline,
   SunnyOutline,
+  TimerOutline,
+  AnalyticsOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
@@ -233,6 +235,8 @@ const mainTabs = [
   { key: 'hotMoneySeats', label: '游资', icon: RibbonOutline, route: { name: 'hotMoneySeats' }, adminOnly: true },
   { key: 'dailyReview', label: '复盘', icon: BookOutline, route: { name: 'dailyReview' } },
   { key: 'morningStrategy', label: '晨报', icon: SunnyOutline, route: { name: 'morningStrategy' } },
+  { key: 'promptBacktest', label: '回测', icon: TimerOutline, route: { name: 'promptBacktest' } },
+  { key: 'backtestStats', label: '回测统计', icon: AnalyticsOutline, route: { name: 'backtestStats' } },
   { key: 'settings', label: '设置', icon: SettingsOutline, route: { name: 'settings' } },
   { key: 'admin', label: '用户管理', icon: PeopleOutline, route: { name: 'userManagement' }, adminOnly: true },
 ]

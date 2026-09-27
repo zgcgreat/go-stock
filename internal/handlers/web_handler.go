@@ -2606,3 +2606,155 @@ func StartMCPOAuthHandler(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"authUrl": authURL}})
 }
+
+// ============ B-merge 解锁：提示词回测 + 推荐回测（读开放；创建/执行/删除需管理员） ============
+
+// CreatePromptBacktestTaskHandler 创建提示词回测任务（需管理员；任务创建后引擎异步执行）
+func CreatePromptBacktestTaskHandler(c *gin.Context) {
+	var params agent.PromptBacktestCreateParams
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	task, err := agent.NewPromptBacktestApi().CreatePromptBacktestTask(context.Background(), params)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": task})
+}
+
+// DeletePromptBacktestTaskHandler 删除提示词回测任务（需管理员）
+func DeletePromptBacktestTaskHandler(c *gin.Context) {
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误"})
+		return
+	}
+	if err := agent.NewPromptBacktestApi().DeletePromptBacktestTask(uint(id64)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+// GetPromptBacktestTaskListHandler 提示词回测任务列表
+func GetPromptBacktestTaskListHandler(c *gin.Context) {
+	tasks, err := agent.NewPromptBacktestApi().GetPromptBacktestTaskList()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": tasks})
+}
+
+// GetPromptBacktestTaskDetailHandler 提示词回测任务详情（含模板聚合统计）
+func GetPromptBacktestTaskDetailHandler(c *gin.Context) {
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误"})
+		return
+	}
+	detail, err := agent.NewPromptBacktestApi().GetPromptBacktestTaskDetail(uint(id64))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": detail})
+}
+
+// GetPromptBacktestPicksHandler 提示词回测选股明细（分页）
+func GetPromptBacktestPicksHandler(c *gin.Context) {
+	taskId, _ := strconv.ParseUint(c.Query("taskId"), 10, 64)
+	templateId, _ := strconv.Atoi(c.DefaultQuery("templateId", "0"))
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	picks, err := agent.NewPromptBacktestApi().GetPromptBacktestPicks(uint(taskId), templateId, page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": picks})
+}
+
+// RunRecommendBacktestHandler 执行 AI 推荐效果回测（需管理员；异步执行——回放耗时可能超过 HTTP 超时，
+// 完成后自动入库，前端刷新即可见；引擎内置并发锁防重复）
+func RunRecommendBacktestHandler(c *gin.Context) {
+	var req struct {
+		PeriodDays int `json:"periodDays"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	go func() {
+		if _, err := agent.NewRecommendBacktestApi().RunBacktest(req.PeriodDays); err != nil {
+			logger.SugaredLogger.Errorf("Web 执行推荐回测失败：%v", err)
+		}
+	}()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "回测已在后台启动，完成后自动入库，稍后刷新即可查看"})
+}
+
+// ListRecommendBacktestHandler 分页查询回测结果
+func ListRecommendBacktestHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	periodDays, _ := strconv.Atoi(c.DefaultQuery("periodDays", "0"))
+	result, err := agent.NewRecommendBacktestApi().ListBacktest(page, pageSize, periodDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// ListRecommendBacktestByPromptHandler 按提示词文本过滤分页查询回测结果
+func ListRecommendBacktestByPromptHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	periodDays, _ := strconv.Atoi(c.DefaultQuery("periodDays", "0"))
+	result, err := agent.NewRecommendBacktestApi().ListBacktestByPrompt(page, pageSize, c.Query("prompt"), c.Query("promptType"), periodDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// ListRecommendBacktestByTemplateHandler 按模板 ID 过滤分页查询回测结果
+func ListRecommendBacktestByTemplateHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	templateId, _ := strconv.Atoi(c.DefaultQuery("templateId", "0"))
+	periodDays, _ := strconv.Atoi(c.DefaultQuery("periodDays", "0"))
+	result, err := agent.NewRecommendBacktestApi().ListBacktestByTemplate(page, pageSize, templateId, periodDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// ListRecommendBacktestBySkillHandler 按技能 ID 过滤分页查询回测结果
+func ListRecommendBacktestBySkillHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	periodDays, _ := strconv.Atoi(c.DefaultQuery("periodDays", "0"))
+	result, err := agent.NewRecommendBacktestApi().ListBacktestBySkill(page, pageSize, c.Query("skillId"), periodDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetRecommendBacktestStatsHandler 回测聚合统计
+func GetRecommendBacktestStatsHandler(c *gin.Context) {
+	periodDays, _ := strconv.Atoi(c.DefaultQuery("periodDays", "0"))
+	stats, err := agent.NewRecommendBacktestApi().BacktestStats(periodDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": stats})
+}
