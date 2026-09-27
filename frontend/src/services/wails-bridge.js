@@ -3050,10 +3050,11 @@ export function GenerateMorningStrategyNow(date, aiConfigId, sysPromptId, agentM
     });
 }
 
-// [B-merge 桩函数] GetAiRecommendStocksTodayStats: 上游新增方法，Web 端点二期接入。
+// [B-merge 桥接] GetAiRecommendStocksTodayStats: Web 端点已接入（/api/v1/ai/recommend-stocks/today-stats，按登录用户隔离）。
 export function GetAiRecommendStocksTodayStats(arg1, arg2) {
   if (isWailsMode()) return window.go.main.App.GetAiRecommendStocksTodayStats(arg1, arg2);
-  return Promise.reject(new Error('Web 模式暂未支持：GetAiRecommendStocksTodayStats（待二期接入 Web 端点）'));
+  return apiService.client.get('/ai/recommend-stocks/today-stats', { params: { date: arg1 || '', days: arg2 || 1 }, headers: getAuthHeaders() })
+    .then(extractApiData);
 }
 
 // [B-merge 桥接] GetAllDeptPolicyNews: Web 端点已接入（/api/v1）。

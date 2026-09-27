@@ -127,6 +127,7 @@ func (ws *WebServer) initRouter() {
 
 			// AI推荐股票
 			protected.GET("/ai/recommend-stocks", handlers.GetAIRecommendStocksList)
+			protected.GET("/ai/recommend-stocks/today-stats", handlers.GetAIRecommendStocksTodayStatsHandler)
 			protected.DELETE("/ai/recommend-stocks/:id", handlers.DeleteAIRecommendStock)
 			protected.PUT("/ai/recommend-stocks/alert", handlers.UpdateAIRecommendStockAlert)
 

@@ -2565,6 +2565,22 @@ func SetProfileLearnAiConfigIdHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
 }
 
+// GetAIRecommendStocksTodayStatsHandler 推荐股池统计（对齐桌面 GetAiRecommendStocksTodayStats：
+// 截止 date 近 days 天的推荐股池按股票聚合；Web 端按登录用户隔离）
+func GetAIRecommendStocksTodayStatsHandler(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "1"))
+	if days <= 0 {
+		days = 1
+	}
+	result, err := data.NewAiRecommendStocksService().GetAiRecommendStocksTodayStats(c.Query("date"), days, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
 // SubmitAgentFeedbackHandler 提交 AI 回答反馈（登录用户皆可，反馈是功能本身）
 func SubmitAgentFeedbackHandler(c *gin.Context) {
 	var fb models.AgentFeedback

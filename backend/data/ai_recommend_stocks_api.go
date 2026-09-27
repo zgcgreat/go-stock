@@ -146,7 +146,8 @@ func (s *AiRecommendStocksService) GetAiRecommendStocksList(query *models.AiReco
 
 // GetAiRecommendStocksTodayStats 统计截止指定日期（默认今天）近 days 天的推荐股池：按股票聚合推荐次数、评级、开仓价、目标价、止损价，并补充实时行情
 // days <= 1 表示只统计该日期当天，排序按推荐次数倒序
-func (s *AiRecommendStocksService) GetAiRecommendStocksTodayStats(date string, days int) (*models.AiRecommendStocksTodayStatsData, error) {
+// 用户隔离：userID > 0 时按用户过滤（Web 端），0 不过滤（桌面端），与本文件其余方法惯例一致
+func (s *AiRecommendStocksService) GetAiRecommendStocksTodayStats(date string, days int, userID uint) (*models.AiRecommendStocksTodayStatsData, error) {
 	var list []models.AiRecommendStocks
 
 	day := time.Now()
@@ -160,8 +161,11 @@ func (s *AiRecommendStocksService) GetAiRecommendStocksTodayStats(date string, d
 	}
 	startDay := day.AddDate(0, 0, -(days - 1))
 
-	err := db.Dao.Model(&models.AiRecommendStocks{}).
-		Where("data_time BETWEEN ? AND ?", datetime.BeginOfDay(startDay), datetime.EndOfDay(day)).
+	q := db.Dao.Model(&models.AiRecommendStocks{})
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	err := q.Where("data_time BETWEEN ? AND ?", datetime.BeginOfDay(startDay), datetime.EndOfDay(day)).
 		Order("created_at ASC").
 		Find(&list).Error
 	if err != nil {
