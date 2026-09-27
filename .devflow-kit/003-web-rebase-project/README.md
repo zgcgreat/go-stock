@@ -89,13 +89,18 @@ fetch），使后续同步退化为「普通 cherry-pick / merge」，消除结�
 > **非桩项推进（2026-09-27，`0f5ddea`）**：自选量比列 ✅（上游 verbatim，数据经桥接 `...stockInfo` 透传自动到达）；
 > 龙虎榜 K 线弹窗 ✅（`0fb87dc` 在 B-merge 冲突中丢失的部分，逐段摘樱桃：名称列 hover popover 改点击按钮 +
 > toKlineCode 代码转换 + n-modal 内嵌 KLineChart；浏览器验证蜡烛图/MA 图例/成交量柱渲染正常）。
+> **非桩项收尾（2026-09-27，`ea3b218` + `bb5c73e`）**：交易记录导入/真 Excel 导出 ✅——上游 070aff4/9609b00/ce58d15
+> 的后端解析与 excelize 生成逻辑已随 B-merge 进入，本轮补齐 Web 通道：三端点（multipart 导入/模板下载/表格导出）
+> + 桥接双模（Wails 原生对话框 vs Web 上传/blob 下载）+ 三组件入口（研究→交易日志导入指引弹窗、指标/形态选股导出按钮）。
+> `ImportTradingRecords` 加 userID 参数完成用户隔离（去重查询与落库均按用户过滤，桌面传 0 行为不变）。
+> 顺带修复第 6 个缺陷：导入记录时间显示 +1 天（`bb5c73e`，见 §8.4）。**非桩项清单至此全部完成。**
 > **剩 5 个信号桩维持暂缓**：SignalMonitorPanel 上游也无人挂载，且信号引擎依赖 Wails 运行时事件（Go cron 60s 节拍），
 > Web 接入属功能开发（需 Web 节拍 + 面板挂载点 + 持久化端点整体设计），非桥接对齐。
 > **冒烟已通过（2026-09-27，见 §8.1）**：API 19/19 端点 + 浏览器级 7 页点验；抓到并修复 3 个真缺陷（`bf78100`、`5a5d945`）。
 
 1. `51eae6d` + `0fb87dc`：板块/概念点查成分股 ✅（成分股部分）、自选量比列 ✅ + 龙虎榜 K 线弹窗 ✅（`0f5ddea`）
 2. `12e1140`：K线成交量分布/神奇九转/BBI/背离/涨跌停线（与上游绘图版自然对齐）✅ 随 B-merge 进入
-3. `f0c0d2d`+L 批：龙虎榜席位 ✅、游资名录 ✅、复盘 ✅、晨报 ✅、交易记录导入/真Excel导出（待）
+3. `f0c0d2d`+L 批：龙虎榜席位 ✅、游资名录 ✅、复盘 ✅、晨报 ✅、交易记录导入/真Excel导出 ✅（`ea3b218`）
 4. `956fd75`+V：视觉理解（需给 agent-chat.vue 自建图片输入 UI，上游只有桌面版）
 5. R 回测（8 提交）+ S 信号监控（3 提交）+ A 注册验证码（1）
 6. 23 个独立后端纯逻辑提交（agent 自我进化/反馈学习/模型元数据/VIP 门槛等）
@@ -188,7 +193,41 @@ git merge --continue   # 或 git commit 收尾 merge
 
 **结论**：§8 步骤 4 冒烟清单全部打勾（融资融券除外，无独立入口）。三轮冒烟共发现 5 个缺陷，全部修复提交
 （`bf78100`、`5a5d945`、`75ceee2`、`05ca3cc`）。剩余遗留：K线首挂默认指数偶发不加载（上游）。
-非桩项：自选量比列 ✅ + 龙虎榜 K 线弹窗 ✅（`0f5ddea`）；剩余真 Excel 导出（交易记录导入/导出）待做。
+非桩项：自选量比列 ✅ + 龙虎榜 K 线弹窗 ✅（`0f5ddea`）+ 交易记录导入/真 Excel 导出 ✅（`ea3b218`，见 §8.4）。
+
+### 8.4 交易记录导入/真 Excel 导出（2026-09-27 第四轮，非桩项收尾）
+
+**范围**：上游 `070aff4`（模板+导入指引）、`9609b00`（真 Excel 导出）、`ce58d15`（东方财富适配）的后端核心已随 B-merge
+进入（`export_table_api.go`、`parseTradingImportFile`、excelize v2.11.0 均在），本轮补齐 Web 通道（`ea3b218`）：
+
+- 后端三端点：`POST /trades/import`（multipart 上传落临时文件，复用桌面全套解析/去重；解析器按 PK 魔数嗅探不依赖扩展名）、
+  `GET /trades/template`（xlsx 模板附件流，RFC 5987 文件名）、`POST /export/table-xlsx`（通用表格导出，支持二级表头）
+- 用户隔离加固：`ImportTradingRecords(filePath, userID)`——去重查询按 user_id 过滤、落库写入 user_id；桌面调用传 0 行为不变
+- 桥接双模：导入（Wails 原生文件框 vs Web 隐藏 file input + FormData）、导出（Wails 保存框 vs Web blob 下载）；
+  导出 `isWailsMode`；新增 `contentDispositionFilename`（filename* 优先）
+- 组件入口：研究→交易日志「导入记录」按钮 + 导入指引弹窗（券商导出指引/模板下载/选择文件）；指标选股、形态选股「导出」按钮
+  （形态选股按当前筛选拉全量 5569 条后导出）
+
+**验证（curl + 浏览器级）**：
+
+| 项 | 结果 |
+|---|---|
+| 模板下载 | ✅ 200，PK 魔数，`filename*=UTF-8''交易记录导入模板.xlsx` |
+| 表格导出 | ✅ 200，PK 魔数，中文文件名正确（首次乱码为 Git Bash 控制台转码假象，UTF-8 文件载荷复测排除） |
+| 导入（curl） | ✅ 2/2 成功；重复导入幂等（0 导入 2 跳过）；落库 user_id=1、代码归一化 sh600519/sz300750 |
+| 导入（浏览器） | ✅ 指引弹窗→选择文件导入→隐藏 file input→multipart→落库 sh600036，列表自动刷新 |
+| 模板下载（浏览器） | ✅ toast「模板已保存：交易记录导入模板.xlsx」 |
+| 形态选股导出（浏览器） | ✅ 全量拉取→POST /export/table-xlsx→toast「已导出：形态选股_20260927.xlsx」 |
+| 指标选股导出按钮 | ✅ 渲染正确，无数据时禁用（未跑 AI 选股，端点已经形态选股链路验证） |
+
+**第 6 个缺陷（`bb5c73e`）**：导入记录时间显示 +1 天——`formatRowTradingTime` 把带 +08:00 的 RFC3339 截断后误加
+`' UTC'` 再二次 +8h 补偿，UTC+8 浏览器下双重转换 +16h。修复：带偏移直接解析（尊重原偏移），无偏移（历史数据）按 +08:00 兜底。
+
+**测试环境注意（存量，非本轮引入）**：`go test ./backend/data/` 在本机因 db 包初始化 `log.Fatalf`（sqlite 打不开默认路径，
+error 14）整包失败，stash 对照确认与本次改动无关；相关逻辑验证由 smoke 实测兜底。
+
+**冒烟环境**：`/e/smoke-web/`（go-stock-web.exe 重建、server3.log、token3.txt、test-import.txt、dl-template.xlsx、
+dl-table2.xlsx、export-payload.json）；admin 密码已重置为 smoke123（原密码遗忘，bcrypt 直改库）。
 
 
 ## 9. 风险登记
