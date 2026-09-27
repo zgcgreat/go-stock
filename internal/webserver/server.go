@@ -223,6 +223,18 @@ func (ws *WebServer) initRouter() {
 			hotMoneyAdmin.POST("/reset", handlers.ResetHotMoneySeats)
 			hotMoneyAdmin.POST("/refresh", handlers.RefreshHotMoneySeats)
 
+			// 复盘/晨报（全局共享 AI 生成内容：读开放；生成消耗 AI 额度、删除不可逆 → 需管理员）
+			protected.GET("/agent/daily-review", handlers.GetDailyReviewByDateHandler)
+			protected.GET("/agent/daily-reviews", handlers.GetDailyReviewListHandler)
+			protected.GET("/agent/morning-strategy", handlers.GetMorningStrategyByDateHandler)
+			protected.GET("/agent/morning-strategies", handlers.GetMorningStrategyListHandler)
+			reviewAdmin := protected.Group("/agent")
+			reviewAdmin.Use(middleware.AdminRequired())
+			reviewAdmin.POST("/daily-review/generate", handlers.GenerateDailyReviewHandler)
+			reviewAdmin.POST("/daily-review/delete", handlers.DeleteDailyReviewHandler)
+			reviewAdmin.POST("/morning-strategy/generate", handlers.GenerateMorningStrategyHandler)
+			reviewAdmin.POST("/morning-strategy/delete", handlers.DeleteMorningStrategyHandler)
+
 			// 研报/公告
 			protected.GET("/research/stock-report", handlers.GetStockResearchReport)
 			protected.GET("/research/stock-notice", handlers.GetStockNotice)

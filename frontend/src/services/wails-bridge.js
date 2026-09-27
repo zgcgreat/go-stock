@@ -2975,16 +2975,28 @@ export function CreatePromptBacktestTask(arg1) {
   return Promise.reject(new Error('Web 模式暂未支持：CreatePromptBacktestTask（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] DeleteDailyReview: 上游新增方法，Web 端点二期接入。
-export function DeleteDailyReview(arg1) {
-  if (isWailsMode()) return window.go.main.App.DeleteDailyReview(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：DeleteDailyReview（待二期接入 Web 端点）'));
+// [B-merge 桥接] DeleteDailyReview: Web 端点已接入（/api/v1）。
+export function DeleteDailyReview(id) {
+  if (isWailsMode()) return window.go.main.App.DeleteDailyReview(id);
+  return apiService.client.post('/agent/daily-review/delete', { id: id }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('DeleteDailyReview web fallback failed:', msg);
+      return '删除失败：' + msg;
+    });
 }
 
-// [B-merge 桩函数] DeleteMorningStrategy: 上游新增方法，Web 端点二期接入。
-export function DeleteMorningStrategy(arg1) {
-  if (isWailsMode()) return window.go.main.App.DeleteMorningStrategy(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：DeleteMorningStrategy（待二期接入 Web 端点）'));
+// [B-merge 桥接] DeleteMorningStrategy: Web 端点已接入（/api/v1）。
+export function DeleteMorningStrategy(id) {
+  if (isWailsMode()) return window.go.main.App.DeleteMorningStrategy(id);
+  return apiService.client.post('/agent/morning-strategy/delete', { id: id }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('DeleteMorningStrategy web fallback failed:', msg);
+      return '删除失败：' + msg;
+    });
 }
 
 // [B-merge 桩函数] DeletePromptBacktestTask: 上游新增方法，Web 端点二期接入。
@@ -2993,16 +3005,28 @@ export function DeletePromptBacktestTask(arg1) {
   return Promise.reject(new Error('Web 模式暂未支持：DeletePromptBacktestTask（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] GenerateDailyReviewNow: 上游新增方法，Web 端点二期接入。
-export function GenerateDailyReviewNow(arg1, arg2, arg3, arg4) {
-  if (isWailsMode()) return window.go.main.App.GenerateDailyReviewNow(arg1, arg2, arg3, arg4);
-  return Promise.reject(new Error('Web 模式暂未支持：GenerateDailyReviewNow（待二期接入 Web 端点）'));
+// [B-merge 桥接] GenerateDailyReviewNow: Web 端点已接入（/api/v1）。
+export function GenerateDailyReviewNow(date, aiConfigId, sysPromptId, agentMode) {
+  if (isWailsMode()) return window.go.main.App.GenerateDailyReviewNow(date, aiConfigId, sysPromptId, agentMode);
+  return apiService.client.post('/agent/daily-review/generate', { date: date, aiConfigId: aiConfigId, sysPromptId: sysPromptId, agentMode: agentMode }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('GenerateDailyReviewNow web fallback failed:', msg);
+      return '生成失败：' + msg;
+    });
 }
 
-// [B-merge 桩函数] GenerateMorningStrategyNow: 上游新增方法，Web 端点二期接入。
-export function GenerateMorningStrategyNow(arg1, arg2, arg3, arg4) {
-  if (isWailsMode()) return window.go.main.App.GenerateMorningStrategyNow(arg1, arg2, arg3, arg4);
-  return Promise.reject(new Error('Web 模式暂未支持：GenerateMorningStrategyNow（待二期接入 Web 端点）'));
+// [B-merge 桥接] GenerateMorningStrategyNow: Web 端点已接入（/api/v1）。
+export function GenerateMorningStrategyNow(date, aiConfigId, sysPromptId, agentMode) {
+  if (isWailsMode()) return window.go.main.App.GenerateMorningStrategyNow(date, aiConfigId, sysPromptId, agentMode);
+  return apiService.client.post('/agent/morning-strategy/generate', { date: date, aiConfigId: aiConfigId, sysPromptId: sysPromptId, agentMode: agentMode }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('GenerateMorningStrategyNow web fallback failed:', msg);
+      return '生成失败：' + msg;
+    });
 }
 
 // [B-merge 桩函数] GetAiRecommendStocksTodayStats: 上游新增方法，Web 端点二期接入。
@@ -3033,16 +3057,26 @@ export function GetBKConstituentStocks(bkCode) {
     });
 }
 
-// [B-merge 桩函数] GetDailyReviewByDate: 上游新增方法，Web 端点二期接入。
-export function GetDailyReviewByDate(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetDailyReviewByDate(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetDailyReviewByDate（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetDailyReviewByDate: Web 端点已接入（/api/v1）。
+export function GetDailyReviewByDate(date) {
+  if (isWailsMode()) return window.go.main.App.GetDailyReviewByDate(date);
+  return apiService.client.get('/agent/daily-review', { params: { date: date }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('GetDailyReviewByDate web fallback failed:', err.message);
+      return null;
+    });
 }
 
-// [B-merge 桩函数] GetDailyReviewList: 上游新增方法，Web 端点二期接入。
-export function GetDailyReviewList(arg1, arg2) {
-  if (isWailsMode()) return window.go.main.App.GetDailyReviewList(arg1, arg2);
-  return Promise.reject(new Error('Web 模式暂未支持：GetDailyReviewList（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetDailyReviewList: Web 端点已接入（/api/v1）。
+export function GetDailyReviewList(page, pageSize) {
+  if (isWailsMode()) return window.go.main.App.GetDailyReviewList(page, pageSize);
+  return apiService.client.get('/agent/daily-reviews', { params: { page: page, pageSize: pageSize }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('GetDailyReviewList web fallback failed:', err.message);
+      return null;
+    });
 }
 
 // [B-merge 桥接] GetGovDepartments: Web 端点已接入（/api/v1）。
@@ -3089,16 +3123,26 @@ export function GetLhbDailySummary(date) {
     });
 }
 
-// [B-merge 桩函数] GetMorningStrategyByDate: 上游新增方法，Web 端点二期接入。
-export function GetMorningStrategyByDate(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetMorningStrategyByDate(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetMorningStrategyByDate（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetMorningStrategyByDate: Web 端点已接入（/api/v1）。
+export function GetMorningStrategyByDate(date) {
+  if (isWailsMode()) return window.go.main.App.GetMorningStrategyByDate(date);
+  return apiService.client.get('/agent/morning-strategy', { params: { date: date }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('GetMorningStrategyByDate web fallback failed:', err.message);
+      return null;
+    });
 }
 
-// [B-merge 桩函数] GetMorningStrategyList: 上游新增方法，Web 端点二期接入。
-export function GetMorningStrategyList(arg1, arg2) {
-  if (isWailsMode()) return window.go.main.App.GetMorningStrategyList(arg1, arg2);
-  return Promise.reject(new Error('Web 模式暂未支持：GetMorningStrategyList（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetMorningStrategyList: Web 端点已接入（/api/v1）。
+export function GetMorningStrategyList(page, pageSize) {
+  if (isWailsMode()) return window.go.main.App.GetMorningStrategyList(page, pageSize);
+  return apiService.client.get('/agent/morning-strategies', { params: { page: page, pageSize: pageSize }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('GetMorningStrategyList web fallback failed:', err.message);
+      return null;
+    });
 }
 
 // [B-merge 桥接] GetPolicyNews: Web 端点已接入（/api/v1）。

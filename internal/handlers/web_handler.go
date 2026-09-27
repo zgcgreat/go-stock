@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -2428,4 +2429,112 @@ func RefreshHotMoneySeats(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+// ============ B-merge 解锁：复盘/晨报（全局共享 AI 生成内容，读开放；生成/删除需管理员） ============
+
+// GetDailyReviewByDateHandler 按日期查询复盘报告（对齐桌面端 GetDailyReviewByDate）
+func GetDailyReviewByDateHandler(c *gin.Context) {
+	date := c.Query("date")
+	report := agent.NewDailyReviewApi().GetDailyReviewByDate(date)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": report})
+}
+
+// GetDailyReviewListHandler 分页查询历史复盘报告（对齐桌面端 GetDailyReviewList）
+func GetDailyReviewListHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	result := agent.NewDailyReviewApi().GetDailyReviewList(page, pageSize)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// DeleteDailyReviewHandler 删除复盘报告（需管理员；响应语义对齐桌面端：返回结果字符串）
+func DeleteDailyReviewHandler(c *gin.Context) {
+	var req struct {
+		ID uint `json:"id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.ID == 0 {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除失败：参数错误"})
+		return
+	}
+	msg := "删除成功"
+	if err := agent.NewDailyReviewApi().DeleteDailyReview(req.ID); err != nil {
+		msg = fmt.Sprintf("删除失败：%v", err)
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": msg})
+}
+
+// GenerateDailyReviewHandler 手动生成复盘报告（需管理员，后台异步执行；前端轮询按日查询）
+func GenerateDailyReviewHandler(c *gin.Context) {
+	var req struct {
+		Date        string `json:"date"`
+		AiConfigId  int    `json:"aiConfigId"`
+		SysPromptId int    `json:"sysPromptId"`
+		AgentMode   string `json:"agentMode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误"})
+		return
+	}
+	go func() {
+		_, err := agent.NewDailyReviewApi().GenerateDailyReview(context.Background(), req.Date,
+			agent.FirstAiConfigId(req.AiConfigId), req.SysPromptId, false, req.AgentMode, "manual")
+		if err != nil {
+			logger.SugaredLogger.Errorf("Web 手动生成复盘报告失败：%v", err)
+		}
+	}()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "复盘报告生成中，完成后将自动展示"})
+}
+
+// GetMorningStrategyByDateHandler 按日期查询盘前策略（对齐桌面端 GetMorningStrategyByDate）
+func GetMorningStrategyByDateHandler(c *gin.Context) {
+	date := c.Query("date")
+	result := agent.NewMorningStrategyApi().GetMorningStrategyByDate(date)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// GetMorningStrategyListHandler 分页查询历史盘前策略（对齐桌面端 GetMorningStrategyList）
+func GetMorningStrategyListHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+	result := agent.NewMorningStrategyApi().GetMorningStrategyList(page, pageSize)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": result})
+}
+
+// DeleteMorningStrategyHandler 删除盘前策略（需管理员；响应语义对齐桌面端）
+func DeleteMorningStrategyHandler(c *gin.Context) {
+	var req struct {
+		ID uint `json:"id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.ID == 0 {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "删除失败：参数错误"})
+		return
+	}
+	msg := "删除成功"
+	if err := agent.NewMorningStrategyApi().DeleteMorningStrategy(req.ID); err != nil {
+		msg = fmt.Sprintf("删除失败：%v", err)
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": msg})
+}
+
+// GenerateMorningStrategyHandler 手动生成盘前策略（需管理员，后台异步执行）
+func GenerateMorningStrategyHandler(c *gin.Context) {
+	var req struct {
+		Date        string `json:"date"`
+		AiConfigId  int    `json:"aiConfigId"`
+		SysPromptId int    `json:"sysPromptId"`
+		AgentMode   string `json:"agentMode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误"})
+		return
+	}
+	go func() {
+		_, err := agent.NewMorningStrategyApi().GenerateMorningStrategy(context.Background(), req.Date,
+			agent.FirstAiConfigId(req.AiConfigId), req.SysPromptId, false, req.AgentMode, "manual")
+		if err != nil {
+			logger.SugaredLogger.Errorf("Web 手动生成盘前策略失败：%v", err)
+		}
+	}()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "盘前策略生成中，完成后将自动展示"})
 }

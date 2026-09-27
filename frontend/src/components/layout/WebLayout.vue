@@ -88,6 +88,8 @@ import {
   DocumentTextOutline,
   TrendingUpOutline,
   RibbonOutline,
+  BookOutline,
+  SunnyOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
@@ -229,6 +231,8 @@ const mainTabs = [
   { key: 'policyNews', label: '政策', icon: DocumentTextOutline, route: { name: 'policyNews' } },
   { key: 'lhbHotMoney', label: '龙虎', icon: TrendingUpOutline, route: { name: 'lhbHotMoney' } },
   { key: 'hotMoneySeats', label: '游资', icon: RibbonOutline, route: { name: 'hotMoneySeats' }, adminOnly: true },
+  { key: 'dailyReview', label: '复盘', icon: BookOutline, route: { name: 'dailyReview' } },
+  { key: 'morningStrategy', label: '晨报', icon: SunnyOutline, route: { name: 'morningStrategy' } },
   { key: 'settings', label: '设置', icon: SettingsOutline, route: { name: 'settings' } },
   { key: 'admin', label: '用户管理', icon: PeopleOutline, route: { name: 'userManagement' }, adminOnly: true },
 ]

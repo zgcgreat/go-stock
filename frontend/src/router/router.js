@@ -23,6 +23,8 @@ import userProfileView from "../components/user-profile.vue"
 import policyNewsView from "../components/PolicyNewsList.vue"
 import lhbHotMoneyView from "../components/LhbHotMoneyDaily.vue"
 import hotMoneySeatsView from "../components/HotMoneySeatsManager.vue"
+import dailyReviewView from "../components/DailyReview.vue"
+import morningStrategyView from "../components/MorningStrategy.vue"
 import Auth from '../utils/auth.js'
 
 const routes = [
@@ -49,6 +51,8 @@ const routes = [
     { path: '/policy-news', component: policyNewsView, name: 'policyNews' },
     { path: '/lhb-hot-money', component: lhbHotMoneyView, name: 'lhbHotMoney' },
     { path: '/hot-money-seats', component: hotMoneySeatsView, name: 'hotMoneySeats' },
+    { path: '/daily-review', component: dailyReviewView, name: 'dailyReview' },
+    { path: '/morning-strategy', component: morningStrategyView, name: 'morningStrategy' },
 
 ]
 
