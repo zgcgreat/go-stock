@@ -67,15 +67,19 @@ func (ws *WebServer) initRouter() {
 	ws.router.Use(gin.Logger())
 	ws.router.Use(gin.Recovery())
 
-	ws.router.Use(cors.New(cors.Config{
-		// 生产环境通过 GO_STOCK_CORS_ORIGINS 配置可信前端源（逗号分隔），禁止使用通配符 + 凭据组合
-		AllowOrigins:     parseCORSOrigins(os.Getenv("GO_STOCK_CORS_ORIGINS")),
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "User-Agent"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
+	// 生产环境通过 GO_STOCK_CORS_ORIGINS 配置可信前端源（逗号分隔），禁止使用通配符 + 凭据组合。
+	// 白名单为空时跳过 CORS 中间件：默认同源部署（前端由本服务托管）无需 CORS，
+	// 且 gin-contrib/cors 在 AllowAllOrigins=false 且 AllowOrigins 为空时会 panic 拒绝启动。
+	if corsOrigins := parseCORSOrigins(os.Getenv("GO_STOCK_CORS_ORIGINS")); len(corsOrigins) > 0 {
+		ws.router.Use(cors.New(cors.Config{
+			AllowOrigins:     corsOrigins,
+			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "User-Agent"},
+			ExposeHeaders:    []string{"Content-Length"},
+			AllowCredentials: true,
+			MaxAge:           12 * time.Hour,
+		}))
+	}
 
 	ws.router.Use(middleware.DatabaseMiddleware(db.Dao))
 
