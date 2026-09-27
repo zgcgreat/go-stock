@@ -20,9 +20,9 @@
           </n-tab>
         </n-tabs>
 
-        <!-- 移动端：更多菜单按钮 -->
+        <!-- 窄屏（移动端/窄桌面）：更多菜单按钮 -->
         <n-button
-          v-if="isMobile && overflowTabs.length > 0"
+          v-if="showOverflowBtn && overflowTabs.length > 0"
           quaternary
           size="small"
           @click="showMoreDrawer = true"
@@ -52,8 +52,8 @@
       <slot />
     </main>
 
-    <!-- 移动端更多菜单 Drawer -->
-    <n-drawer v-model:show="showMoreDrawer" :width="260" placement="right" v-if="isMobile">
+    <!-- 溢出功能菜单 Drawer（移动端/窄桌面） -->
+    <n-drawer v-model:show="showMoreDrawer" :width="260" placement="right" v-if="showOverflowBtn">
       <n-drawer-content title="更多功能" closable>
         <n-menu
           :value="activeKey"
@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { h } from 'vue'
 import { NIcon } from 'naive-ui'
@@ -198,11 +198,18 @@ loadMenuVisibility()
 // 监听 storage 事件（其他 Tab 登录/退出时触发）
 onMounted(() => {
   window.addEventListener('storage', refreshUserRole)
+  // 窄桌面溢出检测（窗口宽度变化时重算）
+  updateNarrowDesktop()
+  window.addEventListener('resize', updateNarrowDesktop)
   // 自定义事件：同 Tab 内 Login.vue 登录成功后触发；登出时 loadMenuVisibility 因无 token 自动跳过
   window.addEventListener('user-info-updated', () => {
     refreshUserRole()
     loadMenuVisibility()
   })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateNarrowDesktop)
 })
 
 // 监听设置变更事件（settings.vue 保存后触发），实时更新菜单可见性
@@ -243,6 +250,15 @@ const mainTabs = [
 
 // 移动端只显示4个核心Tab
 const mobileVisibleCount = 4
+// 窄桌面（Tab 栏放不下全部一级 Tab）保留前 N 个核心 Tab，其余收进"更多"抽屉
+const desktopNarrowCount = 10
+const narrowDesktop = ref(false)
+
+function updateNarrowDesktop() {
+  narrowDesktop.value = !isMobile.value && window.innerWidth < 1250
+}
+
+const showOverflowBtn = computed(() => isMobile.value || narrowDesktop.value)
 
 const visibleMainTabs = computed(() => {
   const tabs = mainTabs.filter(tab => {
@@ -254,18 +270,24 @@ const visibleMainTabs = computed(() => {
   if (isMobile.value) {
     return tabs.slice(0, mobileVisibleCount)
   }
+  if (narrowDesktop.value) {
+    return tabs.slice(0, desktopNarrowCount)
+  }
   return tabs
 })
 
 const overflowTabs = computed(() => {
+  const tabs = mainTabs.filter(tab => {
+    if (tab.adminOnly && !isAdmin.value) return false
+    if (tab.agentOnly && !enableAgent.value) return false
+    if (tab.fundOnly && !enableFund.value) return false
+    return true
+  })
   if (isMobile.value) {
-    const tabs = mainTabs.filter(tab => {
-      if (tab.adminOnly && !isAdmin.value) return false
-      if (tab.agentOnly && !enableAgent.value) return false
-      if (tab.fundOnly && !enableFund.value) return false
-      return true
-    })
     return tabs.slice(mobileVisibleCount)
+  }
+  if (narrowDesktop.value) {
+    return tabs.slice(desktopNarrowCount)
   }
   return []
 })
@@ -313,7 +335,7 @@ const handleOverflowSelect = (key) => {
   }
 }
 
-watch(isMobile, () => {
+watch([isMobile, narrowDesktop], () => {
   showMoreDrawer.value = false
 })
 
@@ -335,6 +357,13 @@ function handleUserMenuSelect(key) {
 </script>
 
 <style scoped>
+/* 中窄视口：压缩一级 Tab（隐藏图标），避免 Tab 栏横向溢出导致右侧入口不可达 */
+@media (max-width: 1560px) {
+  .main-tabs :deep(.n-tabs-tab .n-icon) {
+    display: none;
+  }
+}
+
 .web-layout {
   width: 100%;
   height: 100dvh;
