@@ -2543,11 +2543,14 @@ func GenerateMorningStrategyHandler(c *gin.Context) {
 
 // GetProfileLearnAiConfigIdHandler 画像学习模型 ID（对齐桌面端 GetProfileLearnAiConfigId，全局设置语义）
 func GetProfileLearnAiConfigIdHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": agent.NewUserProfileApi().GetProfileLearnAiConfigId()})
+	userID, _ := middleware.GetUserIDFromContext(c)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": agent.NewUserProfileApi().GetProfileLearnAiConfigIdByUserID(userID)})
 }
 
-// SetProfileLearnAiConfigIdHandler 设置画像学习模型（0=恢复自动模式；全局设置，与既有 profile 设置端点同权限级）
+// SetProfileLearnAiConfigIdHandler 设置画像学习模型（0=恢复自动模式；按登录用户隔离，
+// 用户设置行不存在时自动创建，全新库不再 500）
 func SetProfileLearnAiConfigIdHandler(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
 	var req struct {
 		AiConfigId int `json:"aiConfigId"`
 	}
@@ -2555,7 +2558,7 @@ func SetProfileLearnAiConfigIdHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
-	if err := agent.NewUserProfileApi().SetProfileLearnAiConfigId(req.AiConfigId); err != nil {
+	if err := agent.NewUserProfileApi().SetProfileLearnAiConfigIdByUserID(userID, req.AiConfigId); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
