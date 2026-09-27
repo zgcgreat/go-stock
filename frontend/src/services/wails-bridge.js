@@ -3156,10 +3156,15 @@ export function GetPolicyNews(department, limit) {
     });
 }
 
-// [B-merge 桩函数] GetProfileLearnAiConfigId: 上游新增方法，Web 端点二期接入。
+// [B-merge 桥接] GetProfileLearnAiConfigId: Web 端点已接入（/api/v1）。
 export function GetProfileLearnAiConfigId() {
   if (isWailsMode()) return window.go.main.App.GetProfileLearnAiConfigId();
-  return Promise.reject(new Error('Web 模式暂未支持：GetProfileLearnAiConfigId（待二期接入 Web 端点）'));
+  return apiService.client.get('/user-profile/learn-ai-config', { headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? 0)
+    .catch(err => {
+      console.warn('GetProfileLearnAiConfigId web fallback failed:', err.message);
+      return 0;
+    });
 }
 
 // [B-merge 桩函数] GetPromptBacktestPicks: 上游新增方法，Web 端点二期接入。
@@ -3180,10 +3185,15 @@ export function GetPromptBacktestTaskList() {
   return Promise.reject(new Error('Web 模式暂未支持：GetPromptBacktestTaskList（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] GetPromptTemplateBacktestDetail: 上游新增方法，Web 端点二期接入。
-export function GetPromptTemplateBacktestDetail(arg1, arg2) {
-  if (isWailsMode()) return window.go.main.App.GetPromptTemplateBacktestDetail(arg1, arg2);
-  return Promise.reject(new Error('Web 模式暂未支持：GetPromptTemplateBacktestDetail（待二期接入 Web 端点）'));
+// [B-merge 桥接] GetPromptTemplateBacktestDetail: Web 端点已接入（/api/v1）。
+export function GetPromptTemplateBacktestDetail(templateId, periodDays) {
+  if (isWailsMode()) return window.go.main.App.GetPromptTemplateBacktestDetail(templateId, periodDays);
+  return apiService.client.get('/agent/backtest/template-detail', { params: { templateId: templateId, periodDays: periodDays }, headers: getAuthHeaders() })
+    .then(res => res.data?.data ?? null)
+    .catch(err => {
+      console.warn('GetPromptTemplateBacktestDetail web fallback failed:', err.message);
+      return null;
+    });
 }
 
 // [B-merge 桩函数] GetRecommendBacktestStats: 上游新增方法，Web 端点二期接入。
@@ -3305,20 +3315,42 @@ export function SaveSignalRecords(arg1) {
   return Promise.reject(new Error('Web 模式暂未支持：SaveSignalRecords（待二期接入 Web 端点）'));
 }
 
-// [B-merge 桩函数] SetProfileLearnAiConfigId: 上游新增方法，Web 端点二期接入。
-export function SetProfileLearnAiConfigId(arg1) {
-  if (isWailsMode()) return window.go.main.App.SetProfileLearnAiConfigId(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：SetProfileLearnAiConfigId（待二期接入 Web 端点）'));
+// [B-merge 桥接] SetProfileLearnAiConfigId: Web 端点已接入（/api/v1）。
+export function SetProfileLearnAiConfigId(aiConfigId) {
+  if (isWailsMode()) return window.go.main.App.SetProfileLearnAiConfigId(aiConfigId);
+  return apiService.client.post('/user-profile/learn-ai-config', { aiConfigId: aiConfigId }, { headers: getAuthHeaders() })
+    .then(() => null)
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('SetProfileLearnAiConfigId web fallback failed:', msg);
+      throw msg;
+    });
 }
 
-// [B-merge 桩函数] StartMCPOAuth: 上游新增方法，Web 端点二期接入。
-export function StartMCPOAuth(arg1) {
-  if (isWailsMode()) return window.go.main.App.StartMCPOAuth(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：StartMCPOAuth（待二期接入 Web 端点）'));
+// [B-merge 桥接] StartMCPOAuth: Web 端点已接入（/api/v1）。
+export function StartMCPOAuth(id) {
+  if (isWailsMode()) return window.go.main.App.StartMCPOAuth(id);
+  return apiService.client.post('/mcp/servers/' + id + '/oauth', {}, { headers: getAuthHeaders() })
+    .then(res => {
+      const authUrl = res.data?.data?.authUrl;
+      if (authUrl) window.open(authUrl, '_blank');
+      return '已打开浏览器，请完成授权后回到 go-stock 点击「测试」验证连接';
+    })
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('StartMCPOAuth web fallback failed:', msg);
+      return msg;
+    });
 }
 
-// [B-merge 桩函数] SubmitAgentFeedback: 上游新增方法，Web 端点二期接入。
-export function SubmitAgentFeedback(arg1) {
-  if (isWailsMode()) return window.go.main.App.SubmitAgentFeedback(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：SubmitAgentFeedback（待二期接入 Web 端点）'));
+// [B-merge 桥接] SubmitAgentFeedback: Web 端点已接入（/api/v1）。
+export function SubmitAgentFeedback(fb) {
+  if (isWailsMode()) return window.go.main.App.SubmitAgentFeedback(fb);
+  return apiService.client.post('/user-profile/feedback', fb, { headers: getAuthHeaders() })
+    .then(() => null)
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message;
+      console.warn('SubmitAgentFeedback web fallback failed:', msg);
+      throw msg;
+    });
 }

@@ -2538,3 +2538,71 @@ func GenerateMorningStrategyHandler(c *gin.Context) {
 	}()
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "盘前策略生成中，完成后将自动展示"})
 }
+
+// ============ B-merge 解锁：画像学习模型 / agent 反馈 / 提示词回测详情 / MCP OAuth ============
+
+// GetProfileLearnAiConfigIdHandler 画像学习模型 ID（对齐桌面端 GetProfileLearnAiConfigId，全局设置语义）
+func GetProfileLearnAiConfigIdHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": agent.NewUserProfileApi().GetProfileLearnAiConfigId()})
+}
+
+// SetProfileLearnAiConfigIdHandler 设置画像学习模型（0=恢复自动模式；全局设置，与既有 profile 设置端点同权限级）
+func SetProfileLearnAiConfigIdHandler(c *gin.Context) {
+	var req struct {
+		AiConfigId int `json:"aiConfigId"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	if err := agent.NewUserProfileApi().SetProfileLearnAiConfigId(req.AiConfigId); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+// SubmitAgentFeedbackHandler 提交 AI 回答反馈（登录用户皆可，反馈是功能本身）
+func SubmitAgentFeedbackHandler(c *gin.Context) {
+	var fb models.AgentFeedback
+	if err := c.ShouldBindJSON(&fb); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	if err := agent.NewAgentFeedbackApi().SubmitFeedback(&fb); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success"})
+}
+
+// GetPromptTemplateBacktestDetailHandler 提示词模板回测详情（对齐桌面端 GetPromptTemplateBacktestDetail）
+func GetPromptTemplateBacktestDetailHandler(c *gin.Context) {
+	templateId, _ := strconv.Atoi(c.Query("templateId"))
+	periodDays, _ := strconv.Atoi(c.DefaultQuery("periodDays", "0"))
+	stat, err := agent.NewRecommendBacktestApi().TemplateBacktestDetail(templateId, periodDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": stat})
+}
+
+// StartMCPOAuthHandler 发起 MCP OAuth 授权（需管理员；Web 端不拉起服务端浏览器，
+// 返回 authUrl 由前端 window.open 完成跳转）
+func StartMCPOAuthHandler(c *gin.Context) {
+	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id64 == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "参数错误"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	authURL, err := data.NewMCPServerApi().StartOAuth(ctx, uint(id64))
+	if err != nil {
+		logger.SugaredLogger.Errorf("Web 启动MCP OAuth授权失败: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 1, "message": "授权启动失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"authUrl": authURL}})
+}

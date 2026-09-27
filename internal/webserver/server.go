@@ -309,6 +309,7 @@ func (ws *WebServer) initRouter() {
 				mcpAdmin.DELETE("/servers/:id", handlers.DeleteMCPServer)
 				mcpAdmin.POST("/servers/:id/enable", handlers.EnableMCPServer)
 				mcpAdmin.POST("/servers/:id/test", handlers.TestMCPServer)
+				mcpAdmin.POST("/servers/:id/oauth", handlers.StartMCPOAuthHandler)
 			}
 
 			// 定时任务
@@ -413,8 +414,12 @@ func (ws *WebServer) initRouter() {
  protected.GET("/user-profile/updated-at", handlers.GetUserProfileUpdatedAt)
  protected.POST("/user-profile/relearn", handlers.RelearnUserProfile)
  protected.POST("/user-profile/clear", handlers.ClearUserProfile)
- protected.GET("/user-profile/feedback-stats", handlers.GetAgentFeedbackStats)
- protected.GET("/user-profile/feedback-list", handlers.ListAgentFeedbackPaged)
+			protected.GET("/user-profile/feedback-stats", handlers.GetAgentFeedbackStats)
+			protected.GET("/user-profile/feedback-list", handlers.ListAgentFeedbackPaged)
+			protected.POST("/user-profile/feedback", handlers.SubmitAgentFeedbackHandler)
+			protected.GET("/user-profile/learn-ai-config", handlers.GetProfileLearnAiConfigIdHandler)
+			protected.POST("/user-profile/learn-ai-config", handlers.SetProfileLearnAiConfigIdHandler)
+			protected.GET("/agent/backtest/template-detail", handlers.GetPromptTemplateBacktestDetailHandler)
 
  // 异动监控
  protected.GET("/stock-changes", handlers.GetStockChanges)
