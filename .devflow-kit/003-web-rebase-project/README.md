@@ -94,6 +94,12 @@ fetch），使后续同步退化为「普通 cherry-pick / merge」，消除结�
 > + 桥接双模（Wails 原生对话框 vs Web 上传/blob 下载）+ 三组件入口（研究→交易日志导入指引弹窗、指标/形态选股导出按钮）。
 > `ImportTradingRecords` 加 userID 参数完成用户隔离（去重查询与落库均按用户过滤，桌面传 0 行为不变）。
 > 顺带修复第 6 个缺陷：导入记录时间显示 +1 天（`bb5c73e`，见 §8.4）。**非桩项清单至此全部完成。**
+> **视觉理解补齐（2026-09-27，`9ea949e`）**：上游 `956fd75`+V 批的后端视觉管线已随 B-merge 进入
+> （buildVisionImageParts 按 provider 分支：OpenAI 系 URL 直传 / Claude data URL 拆 raw base64 / Gemini、Ollama 下载转 base64），
+> 本轮补齐 Web 通道：`POST /ai/upload-image` 图床上传端点、SSE 请求体透传 images、agent-chat 图片 UI 全套
+> （粘贴/URL/本地上传、上传中拦截、视觉模型 gating、气泡缩略图，TDesign 适配）。顺带修复存量缺陷：Web 处理器
+> optsOverride 位序错位（userIDStr 落在 [2] 被 agent 拼进 sysPrompt；sessionId 未传致全局 "default" 会话跨用户
+> 串话风险）→ 位序对齐签名、sessionId 启用会话记忆（见 §8.5）。
 > **剩 5 个信号桩维持暂缓**：SignalMonitorPanel 上游也无人挂载，且信号引擎依赖 Wails 运行时事件（Go cron 60s 节拍），
 > Web 接入属功能开发（需 Web 节拍 + 面板挂载点 + 持久化端点整体设计），非桥接对齐。
 > **冒烟已通过（2026-09-27，见 §8.1）**：API 19/19 端点 + 浏览器级 7 页点验；抓到并修复 3 个真缺陷（`bf78100`、`5a5d945`）。
@@ -101,7 +107,7 @@ fetch），使后续同步退化为「普通 cherry-pick / merge」，消除结�
 1. `51eae6d` + `0fb87dc`：板块/概念点查成分股 ✅（成分股部分）、自选量比列 ✅ + 龙虎榜 K 线弹窗 ✅（`0f5ddea`）
 2. `12e1140`：K线成交量分布/神奇九转/BBI/背离/涨跌停线（与上游绘图版自然对齐）✅ 随 B-merge 进入
 3. `f0c0d2d`+L 批：龙虎榜席位 ✅、游资名录 ✅、复盘 ✅、晨报 ✅、交易记录导入/真Excel导出 ✅（`ea3b218`）
-4. `956fd75`+V：视觉理解（需给 agent-chat.vue 自建图片输入 UI，上游只有桌面版）
+4. `956fd75`+V：视觉理解（需给 agent-chat.vue 自建图片输入 UI，上游只有桌面版）✅（`9ea949e`，见 §8.5）
 5. R 回测（8 提交）+ S 信号监控（3 提交）+ A 注册验证码（1）
 6. 23 个独立后端纯逻辑提交（agent 自我进化/反馈学习/模型元数据/VIP 门槛等）
 7. `7f7b446`/`dae729d`/`9609b00`/`4917b98`/`4632e5c`/`284c492`/`167170b`/`46513bf`/`070aff4`/`ce58d15`
@@ -193,7 +199,8 @@ git merge --continue   # 或 git commit 收尾 merge
 
 **结论**：§8 步骤 4 冒烟清单全部打勾（融资融券除外，无独立入口）。三轮冒烟共发现 5 个缺陷，全部修复提交
 （`bf78100`、`5a5d945`、`75ceee2`、`05ca3cc`）。剩余遗留：K线首挂默认指数偶发不加载（上游）。
-非桩项：自选量比列 ✅ + 龙虎榜 K 线弹窗 ✅（`0f5ddea`）+ 交易记录导入/真 Excel 导出 ✅（`ea3b218`，见 §8.4）。
+非桩项：自选量比列 ✅ + 龙虎榜 K 线弹窗 ✅（`0f5ddea`）+ 交易记录导入/真 Excel 导出 ✅（`ea3b218`，见 §8.4）
++ AI 视觉理解 ✅（`9ea949e`，见 §8.5）。
 
 ### 8.4 交易记录导入/真 Excel 导出（2026-09-27 第四轮，非桩项收尾）
 
@@ -228,6 +235,41 @@ error 14）整包失败，stash 对照确认与本次改动无关；相关逻辑
 
 **冒烟环境**：`/e/smoke-web/`（go-stock-web.exe 重建、server3.log、token3.txt、test-import.txt、dl-template.xlsx、
 dl-table2.xlsx、export-payload.json）；admin 密码已重置为 smoke123（原密码遗忘，bcrypt 直改库）。
+
+### 8.5 AI 视觉理解 Web 通道（2026-09-27 第五轮，非桩项收尾）
+
+**范围**：上游 `956fd75`（桌面版 agent-chat 图片输入 + 图床上传）+ V 批（后端视觉管线）的后端已随 B-merge 进入：
+imagesJSON → parseImagesJSON → buildVisionImageParts 按 provider 分支（OpenAI 系 URL 直传 / Claude data URL 拆
+raw base64+MIMEType / Gemini、Ollama 下载转 base64）→ UserInputMultiContent（Content 必须清空，SDK 互斥）。
+本轮补齐 Web 通道（`9ea949e`）：
+
+- 后端 `ai_handler.go`：请求体绑定 `images []string` → JSON 序列化为 imagesJSON 透传 agent；新增
+  `POST /ai/upload-image`（AdminRequired 保护内，base64 → data.UploadImageToImageBed → 外链 URL）
+- 桥接 `wails-bridge.js`：`ChatWithAgent` Web 模式解析第 10 参 imagesJSON 入 SSE body；`UploadImageToImageBed`
+  双模（Wails 调桌面绑定 vs Web POST /ai/upload-image）
+- 前端 agent-chat.vue（TDesign 适配）：粘贴/URL/本地上传三种图片入口、pending 预览条（hasUploadingImage 上传中
+  拦截发送）、视觉模型 gating（config.supportVision，下拉名尾 [视觉] 标注）、纯图默认文本「请分析这些图片」、
+  用户气泡 msg-image-grid 缩略图、上限 10 张 / 单张 8MB、图床失败回退 base64 直传
+
+**顺带修复存量缺陷（optsOverride 位序）**：Web 处理器曾把 userIDStr 放在 optsOverride[2]（resumeContextOverride 位），
+agent 侧 `sysPrompt += resumeContextOverride` 会把用户 ID 拼进系统提示词；且 sessionId 未传导致所有人共用全局
+"default" 会话（跨用户上下文串话风险）。修复：位序对齐 ChatWithContext 签名（[0]sysPrompt [1]sessionID
+[2]resumeContext [3]skillQuestionBlock [4]imagesJSON [5]skillDirName），sessionId 改传 req.SessionID 启用会话记忆。
+
+**验证（e2e，smoke 环境 18080 + agent-browser）**：
+
+| 项 | 结果 |
+|---|---|
+| 图床 curl | ✅ 1x1 红 PNG multipart POST → 返回真实外链（请求发 img.scdn.io，实测返回 img.cdn1.vip 域名） |
+| URL 添加图片 | ✅ chip 入 pending 条；Enter 后 window.fetch 钩子捕获请求体 `{question, images:[外链], aiConfigId:1, sessionId:""}`（XHR 钩子抓不到——桥接用 fetch） |
+| 服务端 vision 路由 | ✅ 日志三连：createChatModel vision 路由 → `vision: 下发 1 张图片（config=测试视觉模型, model=deepseek-vision-test）` → OpenAI 兼容组件 |
+| 假 key 边界 | ✅ sk-fake-smoke → 401（预期，验证链路到上游 SDK 调用层即止） |
+| 气泡渲染 | ✅ 用户消息 msg-image-grid 缩略图正常渲染 |
+| 发送路径 | ✅ t-chat-sender 的 v-model 不被原生 setter 同步，e2e 用 textarea focus + KeyboardEvent('keydown',{key:'Enter'}) 触发 send |
+
+**环境注意**：smoke2.db 补插 AI 配置（settings open_ai_enable=1 + ai_config 测试视觉模型 support_vision=1）；
+agent-chat.vue 存在 Vue TDZ 陷阱——currentConfigSupportsVision / hasUploadingImage 等 computed 必须声明在
+selectOptions/selectValue 之后，否则整页白屏 ReferenceError。
 
 
 ## 9. 风险登记
