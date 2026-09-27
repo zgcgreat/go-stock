@@ -4,7 +4,7 @@ import apiService from './api.js';
 import { asBlob } from 'html-docx-js-typescript';
 
 // 检测是否在 Wails 环境中
-function isWailsMode() {
+export function isWailsMode() {
   try {
     return !!(typeof window !== 'undefined' && window.go && window.go.main && window.go.main.App);
   } catch (e) {
@@ -56,6 +56,16 @@ function downloadBlob(filename, blob) {
   a.click();
   URL.revokeObjectURL(url);
   a.remove();
+}
+
+// 从 Content-Disposition 头解析文件名：优先 filename*=UTF-8''（RFC 5987），回退 filename=
+function contentDispositionFilename(disposition) {
+  if (!disposition) return '';
+  const star = disposition.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+  if (star && star[1]) return star[1].replace(/^"|"$/g, '');
+  const plain = disposition.match(/filename=("?)([^";]+)\1/i);
+  if (plain && plain[2]) return plain[2];
+  return '';
 }
 
 function normalizeBase64Payload(payload, mimeType) {
@@ -2150,6 +2160,49 @@ export function GetTradingRecordStatistics() {
   return apiService.client.get('/trades/statistics', { headers: getAuthHeaders() })
     .then(res => res.data?.data || {})
     .catch(() => ({}));
+}
+
+// ImportTradingRecordsFromExcel 导入交易记录。
+// Wails 模式：忽略 file 参数，弹原生文件选择框（桌面绑定无参）。
+// Web 模式：需要传入用户选择的 File 对象，multipart 上传到 /trades/import。
+export function ImportTradingRecordsFromExcel(file) {
+  if (isWailsMode()) return window.go.main.App.ImportTradingRecordsFromExcel();
+  if (!file) return Promise.reject(new Error('请先选择要导入的文件'));
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiService.client.post('/trades/import', formData, {
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  }).then(extractApiData);
+}
+
+// ExportTradingRecordTemplate 下载交易记录导入模板（.xlsx）。
+// Wails 模式：弹保存对话框，返回保存路径（空串=用户取消）。
+// Web 模式：拉取附件流触发浏览器下载，返回下载文件名。
+export function ExportTradingRecordTemplate() {
+  if (isWailsMode()) return window.go.main.App.ExportTradingRecordTemplate();
+  return apiService.client.get('/trades/template', {
+    headers: getAuthHeaders(),
+    responseType: 'blob'
+  }).then(res => {
+    const fileName = decodeURIComponent(contentDispositionFilename(res.headers?.get('Content-Disposition'))) || '交易记录导入模板.xlsx';
+    downloadBlob(fileName, new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    return fileName;
+  });
+}
+
+// ExportTableToXLSX 通用表格导出 Excel（.xlsx，支持二级表头）。
+// Wails 模式：弹保存对话框，返回保存路径（空串=用户取消）。
+// Web 模式：POST 表格 JSON 到 /export/table-xlsx，附件流触发浏览器下载，返回下载文件名。
+export function ExportTableToXLSX(fileName, table) {
+  if (isWailsMode()) return window.go.main.App.ExportTableToXLSX(fileName, table);
+  const name = fileName || '导出数据.xlsx';
+  return apiService.client.post('/export/table-xlsx', { fileName: name, table }, {
+    headers: getAuthHeaders(),
+    responseType: 'blob'
+  }).then(res => {
+    downloadBlob(name, new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    return name;
+  });
 }
 
 export function GlobalStockIndexesReadable() {

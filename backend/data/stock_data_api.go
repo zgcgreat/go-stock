@@ -3622,17 +3622,22 @@ func parseFloatSafe(s string) float64 {
 // 列名经别名表（tradingImportAliases）归一，兼容东方财富「成交明细」与「交割单（对账单）」两种口径。
 // 交割单中的非交易业务（红利入账/利息归本/银行转存/申购中签等）会跳过，不计入失败。
 // 同一文件中重复或与数据库已存在（股票代码+方向+交易时间+价格+数量完全一致）的记录会跳过。
-func (receiver StockDataApi) ImportTradingRecords(filePath string) (*TradingRecordImportResult, error) {
+// userID 用于 Web 端用户隔离（写入导入记录并只与同用户已有记录去重）；桌面端传 0（不限制）。
+func (receiver StockDataApi) ImportTradingRecords(filePath string, userID uint) (*TradingRecordImportResult, error) {
 	rows, err := parseTradingImportFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 	result := &TradingRecordImportResult{Total: len(rows)}
 
-	// 加载已有记录作为去重键（个人交易日志数据量有限，全量加载即可）
+	// 加载已有记录作为去重键（个人交易日志数据量有限，全量加载即可）；Web 端按用户隔离去重
 	existingKeys := make(map[string]struct{})
 	var existing []TradingRecord
-	if err := db.Dao.Model(&TradingRecord{}).Find(&existing).Error; err == nil {
+	dedupQ := db.Dao.Model(&TradingRecord{})
+	if userID > 0 {
+		dedupQ = dedupQ.Where("user_id = ?", userID)
+	}
+	if err := dedupQ.Find(&existing).Error; err == nil {
 		for _, r := range existing {
 			existingKeys[tradingRecordDedupKey(r.StockCode, r.Direction, r.TradingTime, r.Price, r.Volume)] = struct{}{}
 		}
@@ -3677,6 +3682,7 @@ func (receiver StockDataApi) ImportTradingRecords(filePath string) (*TradingReco
 			parseFloatSafe(pickImportField(row, "otherFee"))
 
 		rec := TradingRecord{
+			UserID:      userID,
 			StockCode:   stockCode,
 			StockName:   stockName,
 			Direction:   direction,

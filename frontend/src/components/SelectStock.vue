@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {h, onBeforeMount, onMounted, onUnmounted, ref, reactive, computed} from 'vue'
-import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList, GetAllCustomStrategies, SaveCustomStrategy, DeleteCustomStrategy, GetEffectiveSponsorVip, GetConfig, Environment, EventsEmit} from "../services/wails-bridge.js";
+import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList, GetAllCustomStrategies, SaveCustomStrategy, DeleteCustomStrategy, GetEffectiveSponsorVip, GetConfig, Environment, EventsEmit, ExportTableToXLSX} from "../services/wails-bridge.js";
 import {useMessage, NText, NTag, NButton, NPopconfirm} from 'naive-ui'
-import {BookmarkOutline, TrashOutline, CreateOutline, AddOutline} from "@vicons/ionicons5";
+import {BookmarkOutline, TrashOutline, CreateOutline, AddOutline, DownloadOutline} from "@vicons/ionicons5";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
 
 const message = useMessage()
@@ -242,6 +242,33 @@ function DoSearch(question) {
   Search()
 }
 
+// 导出选股结果为 Excel：复用表格列定义（过滤操作列），行数据取当前结果集全量
+function handleExport() {
+  if (!dataList.value.length) {
+    message.warning('当前没有可导出的选股结果')
+    return
+  }
+  const exportColumns = columns.value
+      .filter(col => col.key !== 'actions')
+      .map(col => {
+        const c = {title: col.title, key: col.key}
+        if (col.children && col.children.length) {
+          c.children = col.children.map(child => ({title: child.title, key: child.key}))
+        }
+        return c
+      })
+  const fileName = `指标选股_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`
+  ExportTableToXLSX(fileName, {
+    sheetName: '指标选股',
+    columns: exportColumns,
+    rows: dataList.value,
+  }).then(path => {
+    if (path) message.success('已导出：' + path)
+  }).catch(err => {
+    message.error(err?.message || '导出失败')
+  })
+}
+
 function openSaveModal(isEdit = false, strategy = null) {
   if (isEdit && strategy) {
     saveForm.id = strategy.id
@@ -387,6 +414,10 @@ function openCenteredWindow(url, width, height) {
         <n-input-group style="text-align: left">
           <n-input :rows="1" clearable v-model:value="search" placeholder="请输入选股指标或者要求" @keyup.enter="Search"/>
           <n-button type="primary" @click="Search">搜索A股</n-button>
+          <n-button type="success" @click="handleExport" :disabled="!dataList.length">
+            <template #icon><n-icon :component="DownloadOutline" size="16"/></template>
+            导出
+          </n-button>
           <n-button type="warning" @click="openSaveModal(false)" :disabled="!search">
             <template #icon><n-icon :component="BookmarkOutline" size="16"/></template>
             保存策略

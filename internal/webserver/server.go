@@ -158,6 +158,9 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/trades", handlers.CreateTradeRecord)
 			protected.PUT("/trades/:id", handlers.UpdateTradeRecord)
 			protected.DELETE("/trades/:id", handlers.DeleteTradeRecord)
+			protected.POST("/trades/import", handlers.ImportTradingRecordsHandler)
+			protected.GET("/trades/template", handlers.ExportTradingRecordTemplateHandler)
+			protected.POST("/export/table-xlsx", handlers.ExportTableXLSXHandler)
 
 			protected.GET("/settings", handlers.GetUserSettings)
 			protected.POST("/settings", handlers.SetUserSetting)

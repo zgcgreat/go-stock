@@ -4160,7 +4160,7 @@ func (a *App) ImportTradingRecordsFromExcel() (*data.TradingRecordImportResult, 
 		// 用户取消选择
 		return nil, nil
 	}
-	return data.NewStockDataApi().ImportTradingRecords(filePath)
+	return data.NewStockDataApi().ImportTradingRecords(filePath, 0)
 }
 
 // ExportTradingRecordTemplate 弹出保存对话框，将交易记录导入模板保存为 Excel（.xlsx）文件。

@@ -242,7 +242,7 @@ func TestImportTradingRecordsEastmoneyDelivery(t *testing.T) {
 	}
 
 	api := StockDataApi{}
-	got, err := api.ImportTradingRecords(path)
+	got, err := api.ImportTradingRecords(path, 0)
 	if err != nil {
 		t.Fatalf("导入失败: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestImportTradingRecordsEastmoneyDelivery(t *testing.T) {
 	}
 
 	// 同文件重复导入：全部按基础键命中已有记录跳过
-	again, err := api.ImportTradingRecords(path)
+	again, err := api.ImportTradingRecords(path, 0)
 	if err != nil {
 		t.Fatalf("重复导入失败: %v", err)
 	}
