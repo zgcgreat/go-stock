@@ -166,6 +166,18 @@ func (ws *WebServer) initRouter() {
 			// 004 批1：交易时段查询（信号监控引擎 anyMarketOpen 的 Web 数据源）
 			protected.GET("/market/trading-time", handlers.GetMarketTradingTimeHandler)
 
+			// 004 批2：信号流水持久化（用户隔离；VIP2 门槛与上游同语义留在客户端）
+			protected.POST("/signals/records", handlers.SaveSignalRecordsHandler)
+			protected.GET("/signals/records", handlers.GetSignalRecordPageHandler)
+			protected.DELETE("/signals/records", handlers.ClearSignalRecordsHandler)
+			protected.GET("/signals/stats", handlers.GetSignalStatsHandler)
+
+			// 004 批3：SSE 事件总线（signalMonitorTick 节拍的 Web 载体）
+			protected.GET("/events/stream", handlers.EventsStreamHandler)
+
+			// 004 批4：信号提醒推送（feishu/dingding 服务端转发；app 渠道由前端 Notification 承担）
+			protected.POST("/signals/notify", handlers.NotifySignalHandler)
+
 			protected.GET("/settings", handlers.GetUserSettings)
 			protected.POST("/settings", handlers.SetUserSetting)
 			protected.PUT("/settings/:key", handlers.UpdateUserSetting)
@@ -348,11 +360,11 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/share/text", handlers.ShareText)
 			protected.POST("/share/analysis", handlers.ShareAnalysis)
 
- // 钉钉
- protected.POST("/dingding/message", handlers.SendDingDingMessage)
+			// 钉钉
+			protected.POST("/dingding/message", handlers.SendDingDingMessage)
 
- // 飞书消息推送（用户隔离，与桌面端 SendFeishuMessageByType 对齐）
- protected.POST("/feishu/message", handlers.SendFeishuMessage)
+			// 飞书消息推送（用户隔离，与桌面端 SendFeishuMessageByType 对齐）
+			protected.POST("/feishu/message", handlers.SendFeishuMessage)
 
 			// 赞助
 			protected.GET("/sponsor/info", handlers.GetSponsorInfo)
@@ -418,14 +430,14 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/knowledge-base/vectorizing-statuses", handlers.GetAllKBVectorizingStatuses)
 			protected.POST("/knowledge-base/search-all", handlers.SearchAllKnowledge)
 
- // 用户画像
- protected.GET("/user-profile", handlers.GetUserProfileHandler)
- protected.POST("/user-profile/save", handlers.SaveUserProfileHandler)
- protected.GET("/user-profile/enabled", handlers.GetUserProfileEnabled)
- protected.POST("/user-profile/enabled", handlers.SetUserProfileEnabled)
- protected.GET("/user-profile/updated-at", handlers.GetUserProfileUpdatedAt)
- protected.POST("/user-profile/relearn", handlers.RelearnUserProfile)
- protected.POST("/user-profile/clear", handlers.ClearUserProfile)
+			// 用户画像
+			protected.GET("/user-profile", handlers.GetUserProfileHandler)
+			protected.POST("/user-profile/save", handlers.SaveUserProfileHandler)
+			protected.GET("/user-profile/enabled", handlers.GetUserProfileEnabled)
+			protected.POST("/user-profile/enabled", handlers.SetUserProfileEnabled)
+			protected.GET("/user-profile/updated-at", handlers.GetUserProfileUpdatedAt)
+			protected.POST("/user-profile/relearn", handlers.RelearnUserProfile)
+			protected.POST("/user-profile/clear", handlers.ClearUserProfile)
 			protected.GET("/user-profile/feedback-stats", handlers.GetAgentFeedbackStats)
 			protected.GET("/user-profile/feedback-list", handlers.ListAgentFeedbackPaged)
 			protected.POST("/user-profile/feedback", handlers.SubmitAgentFeedbackHandler)
@@ -448,18 +460,18 @@ func (ws *WebServer) initRouter() {
 			backtestAdmin.POST("/prompt-backtest/tasks/:id/delete", handlers.DeletePromptBacktestTaskHandler)
 			backtestAdmin.POST("/backtest/run", handlers.RunRecommendBacktestHandler)
 
- // 异动监控
- protected.GET("/stock-changes", handlers.GetStockChanges)
- protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
- protected.GET("/stock-changes/history", handlers.GetStockChangeHistoryHandler)
- protected.POST("/stock-changes/save", handlers.SaveStockChangesToHistoryHandler)
- protected.GET("/stock-changes/daily-stats", handlers.GetDailyChangeStats)
- protected.GET("/stock-changes/type-stats", handlers.GetChangeTypeDailyStats)
- protected.GET("/stock-changes/dimension-stats", handlers.GetDailyDimensionStatsHandler)
- protected.GET("/stock-changes/type-stats-by-date", handlers.GetTypeStatsByDateHandler)
+			// 异动监控
+			protected.GET("/stock-changes", handlers.GetStockChanges)
+			protected.GET("/stock-changes/all", handlers.GetAllStockChangesWithPagingHandler)
+			protected.GET("/stock-changes/history", handlers.GetStockChangeHistoryHandler)
+			protected.POST("/stock-changes/save", handlers.SaveStockChangesToHistoryHandler)
+			protected.GET("/stock-changes/daily-stats", handlers.GetDailyChangeStats)
+			protected.GET("/stock-changes/type-stats", handlers.GetChangeTypeDailyStats)
+			protected.GET("/stock-changes/dimension-stats", handlers.GetDailyDimensionStatsHandler)
+			protected.GET("/stock-changes/type-stats-by-date", handlers.GetTypeStatsByDateHandler)
 
- // 用户手册
- protected.GET("/manual", handlers.GetUserManual)
+			// 用户手册
+			protected.GET("/manual", handlers.GetUserManual)
 
 			// 用户管理（仅管理员）
 			admin := protected.Group("/admin")
@@ -568,6 +580,7 @@ func MigrateAllTables() {
 		&models.Skill{},
 		&handlers.UserSetting{},
 		&models.User{},
+		&models.SignalRecord{}, // 004 批2：Web 新库此前不建信号表
 	)
 
 	// Web 端 SQLite 兼容迁移：用户隔离列与历史 settings 缺列补丁。
