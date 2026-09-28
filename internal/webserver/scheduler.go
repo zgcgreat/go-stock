@@ -318,23 +318,8 @@ func fetchStockBasic() {
 	log.Printf("[Scheduler] StockBasic 写入 %d 条", len(*stockBasics))
 }
 
+// isTradingTime 判断当前是否 A 股交易时段（004 批1：收敛到 data 包统一实现，
+// 含法定节假日校验；原副本仅有周末+固定时间窗，且与桌面口径存在 12:57-13:00 差异）。
 func isTradingTime() bool {
-	now := time.Now()
-	weekday := now.Weekday()
-
-	if weekday == time.Saturday || weekday == time.Sunday {
-		return false
-	}
-
-	hour := now.Hour()
-	minute := now.Minute()
-	currentTime := hour*100 + minute
-
-	morningStart := 915
-	morningEnd := 1130
-	afternoonStart := 1257
-	afternoonEnd := 1500
-
-	return (currentTime >= morningStart && currentTime <= morningEnd) ||
-		(currentTime >= afternoonStart && currentTime <= afternoonEnd)
+	return data.IsTradingTime(time.Now())
 }

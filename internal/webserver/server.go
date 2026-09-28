@@ -163,6 +163,9 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/trades/template", handlers.ExportTradingRecordTemplateHandler)
 			protected.POST("/export/table-xlsx", handlers.ExportTableXLSXHandler)
 
+			// 004 批1：交易时段查询（信号监控引擎 anyMarketOpen 的 Web 数据源）
+			protected.GET("/market/trading-time", handlers.GetMarketTradingTimeHandler)
+
 			protected.GET("/settings", handlers.GetUserSettings)
 			protected.POST("/settings", handlers.SetUserSetting)
 			protected.PUT("/settings/:key", handlers.UpdateUserSetting)

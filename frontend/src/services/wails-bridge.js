@@ -2638,19 +2638,32 @@ export function InitCronTasks() {
   return Promise.resolve();
 }
 
+// IsTradingTime/IsHKTradingTime/IsUSTradingTime 交易时段判定（004 批1 复活）。
+// 原 Web 模式硬编码返回 false——信号引擎的 anyMarketOpen() 恒 false，一轮扫描都不会执行；
+// 现走后端统一实现 GET /market/trading-time（与桌面同一份口径，含节假日校验）。
+// 失败回退 false（与桌面引擎对单市场判定失败的容错语义一致）。
 export function IsTradingTime() {
   if (isWailsMode()) return window.go.main.App.IsTradingTime();
-  return Promise.resolve(false);
+  return apiService.client.get('/market/trading-time', { params: { market: 'a' }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then((d) => !!d?.trading)
+    .catch(() => false);
 }
 
 export function IsHKTradingTime() {
   if (isWailsMode()) return window.go.main.App.IsHKTradingTime();
-  return Promise.resolve(false);
+  return apiService.client.get('/market/trading-time', { params: { market: 'hk' }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then((d) => !!d?.trading)
+    .catch(() => false);
 }
 
 export function IsUSTradingTime() {
   if (isWailsMode()) return window.go.main.App.IsUSTradingTime();
-  return Promise.resolve(false);
+  return apiService.client.get('/market/trading-time', { params: { market: 'us' }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then((d) => !!d?.trading)
+    .catch(() => false);
 }
 
 export function NewsPush(arg1, arg2) {
