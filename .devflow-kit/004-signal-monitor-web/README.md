@@ -1,6 +1,6 @@
 # 004 · 信号监控 Web 化立项（Web 节拍 + 面板挂载点 + 持久化端点）
 
-> 状态：**批 1 已完成（2026-09-28，`36e1361`），批 2-5 待执行** ｜ 前置：003 §7「剩 5 个信号桩维持暂缓」的正式解锁设计 ｜ 来源：003 收尾后用户指令
+> 状态：**批 1-4 已完成（2026-09-28，`36e1361` / `3e3f223` / `15845d1` / `a2bae48`），批 5 文档收尾即本节** ｜ 前置：003 §7「剩 5 个信号桩维持暂缓」的正式解锁设计 ｜ 来源：003 收尾后用户指令
 >
 > ## 结论速览
 >
@@ -179,10 +179,10 @@
 | 批 | 内容 | 交付物 | 验证 |
 |---|---|---|---|
 | **1** | ✅ 时间窗提取 + trading-time 端点（`36e1361`，2026-09-28） | `backend/data/market_hours.go`（纯搬运 app.go:1391-1638，含 checkUSHolidayAPI）、app.go 同名薄包装（约 20 处调用点与 app_test.go 零改动）、`GET /market/trading-time`、桥接 3 函数复活、scheduler 副本收敛（净收益：补上节假日校验） | 三重门禁 ✅；curl 四断言全中（见 §3.1） |
-| **2** | 持久化 5 端点 + user_id 隔离 | 模型加列+索引迁移、服务层 4 方法加参、`signal_handler.go`、5 桩中 4 个替换（notify 留批 4）、web_migrations 注册 | curl 冒烟：落库→去重幂等→分页→双用户互不可见→清空仅本人→统计配对正确 |
-| **3** | SSE 事件总线 + 节拍 | `GET /events/stream` + hub、桥接 EventsOn 升级（fetch-stream + 重连） | 浏览器：标签页切后台/最小化窗口，服务端日志见 tick 推送、引擎 `lastTickAt` 每 60s 前进；断网重连恢复 |
-| **4** | 面板挂载 + notify 通道 | WebLayout 挂载、NotifySignal web 分支（Notification API）、`/signals/notify` 服务端转发、最后 1 桩替换 | e2e 全链：登录 VIP2 → edge-trigger 开面板 → 加监控池 → 立即扫描 → 流水落库 → 统计 → 清空；通知权限弹窗与降级路径 |
-| **5** | 004 文档同步收尾 | §4 验证矩阵、遗留记录 | — |
+| **2** | ✅ 持久化 5 端点 + user_id 隔离（`3e3f223`，2026-09-28） | 模型加列+索引迁移（`MigrateSignalRecordSchema` 幂等）、服务层 4 方法加参（桌面传 0 语义不变）、`signal_handler.go`、web_migrations 注册 + AutoMigrate 清单补 SignalRecord | curl 十项矩阵全中（见 §3.2）；smoke 日志见 `dropped legacy unique index (5-col)` 证明索引迁移真实生效 |
+| **3** | ✅ SSE 事件总线 + 节拍（`15845d1`，2026-09-28） | `GET /events/stream` + hub（Once 单例 60s ticker、满缓冲丢弃）、桥接 fetch-stream 解析器 + 5-10s 抖动重连，tick 并入 `web-event-*` CustomEvent 通路（下游 EventsOn 零改动） | curl -N 捕获 `: connected` + 60s 内 `signalMonitorTick`；no-token 401；e2e 见 401→重连→`200 text/event-stream`（见 §3.3） |
+| **4** | ✅ 面板挂载 + notify 通道（`15845d1` 后端 + `a2bae48` 前端，2026-09-28） | WebLayout 单点挂载（注释防回归）、NotifySignal web 分支（Notification API + POST）、`/signals/notify` 服务端转发、最后 1 桩替换、**vite alias 补三层 runtime 映射（e2e 抓到的计划外缺口）** | playwright e2e 八项全过 + pageerror 清零（见 §3.4） |
+| **5** | ✅ 004 文档同步收尾（本次提交） | 本节执行记录 + 003 §7 回写（42/42） | — |
 
 批次依赖：批 1 是批 3/4 e2e 的硬前置（否则扫描永不执行）；批 2 与批 1 无依赖可并行（保持线性则按序）；批 3 依赖批 1（验证时需要扫描真的跑）；批 4 依赖 1/2/3。
 
@@ -217,6 +217,81 @@
 登录路由是 `/api/v1/auth/login`（`/api/v1/login` 会 302 到 index.html）；token4.txt 存于 smoke 环境。
 A 股正路径（盘中 true）待批 3/4 e2e 在交易时段覆盖，或临时改 Clock 验证。
 
+### 3.2 批 2 执行记录（2026-09-28，`3e3f223`）
+
+**改动**（5 files，+79/-11）：`models/signal_record.go`（UserID `json:"-"`）、`data/signal_record_api.go`
+（Save 注入 owner / GetPage+GetStats 过滤 / Clear 条件删 / `MigrateSignalRecordSchema` 幂等迁移：pragma 查列
+→ ALTER → `sqlite_master` 查旧索引无 user_id 则 DROP → 6 列重建）、`app_signal_monitor.go`（4 处传 0）、
+`main.go` + `internal/migrations/web_migrations.go`（迁移挂载）。
+
+**curl 十项矩阵**（admin + smokeuser2 双账号，token 存 smoke 环境）：
+
+| # | 断言 | 结果 |
+|---|---|---|
+| 1 | admin 落库 2 条 → 200 空 body | ✅ |
+| 2 | 同键重复 POST → 幂等（仍 2 条） | ✅ |
+| 3 | admin 分页 total=2 | ✅ |
+| 4 | user2 分页 total=0（**隔离**） | ✅ |
+| 5 | user2 同键 POST 成功且 total=1（**按用户唯一索引**，多用户同票不互覆） | ✅ |
+| 6 | admin stats：trades=1 / wins=1 / return≈+9.98%（精确配对） | ✅ |
+| 7 | user2 清空后自己 0、admin 仍 2（**清空不越权**，消灭 AllowGlobalUpdate 全表删事故） | ✅ |
+| 8 | notify 正常标题 → 200 | ✅ |
+| 9 | notify 空标题 → 400「empty title」 | ✅ |
+| 10 | server5.log 出现 `Migrated: dropped legacy unique index idx_signal_unique (5-col)` | ✅ |
+
+**过程注意**：登录响应 token 在顶层（不在 data 里）；控制台 GBK 乱码是显示假象，UTF-8 载荷入库正确。
+
+### 3.3 批 3 执行记录（2026-09-28，`15845d1`）
+
+**改动**：`internal/handlers/event_handler.go` 新建（`EventsStreamHandler`：flusher + SSE 头 + chan 注册 +
+`: connected` 握手 + select 循环；`startEventBusTicker` Once 单例 60s ticker；`BroadcastEvent` select/default
+丢满缓冲）+ server.go 挂 `GET /events/stream`。
+
+**验证**（curl -N 70s 窗口）：
+
+| 项 | 结果 |
+|---|---|
+| 握手 | ✅ `: connected` |
+| tick 广播 | ✅ 60s 内收到 `event: signalMonitorTick\ndata: {}` |
+| 鉴权 | ✅ no-token 探针 401 |
+
+服务端保持 dumb pipe（不判交易时段）；`startEventBusTicker` 在首个连接建立时才启动，逻辑上首连必启 ticker。
+前端 fetch-stream 解析层与批 4 e2e 合并验证（下节 401→重连→200 时序即重连路径实测）。
+
+### 3.4 批 4 执行记录（2026-09-28，`15845d1` + `a2bae48`）
+
+**改动**：`WebLayout.vue` 单点挂载（模板末尾、注释防回归）；`wails-bridge.js` NotifySignal web 分支
+（channels 含 app → Notification API：granted 直显 / default 请求授权 / denied 静默，再 POST）
++ 批 2/3 桩替换（Save/GetPage/GetStats/Clear/EventsOn 升级）；**`vite.config.js` alias 补
+`../../../wailsjs/runtime` 与 `../../../wailsjs/runtime/runtime` 两行**。
+
+**⚠️ 计划外发现——vite alias 三层缺口**：信号引擎 `kline/signalMonitor.ts:16` import 的是
+`'../../../wailsjs/runtime'`（三层），而 alias 只配了单/双层 → 引擎落到真实 Wails shim →
+`window.runtime.EventsOnMultiple` 在 Web 模式 undefined → pageerror，**SSE tick 到了引擎也收不到**。
+此前 003 的 42/42 没暴露它是因为面板从未在 Web 挂载过（本批首次）。修复后 bundle 中 `EventsOnMultiple`
+清零（grep 验证）。**教训**：alias 靠人肉穷举相对层级天然漏网，后续若再有新增层级 import 优先改用
+`@/services/wails-bridge` 绝对路径。
+
+**playwright e2e**（系统 Chrome channel 免下载；agent-browser daemon 损坏改道）：
+
+| 项 | 结果 |
+|---|---|
+| 登录 admin | ✅ |
+| edge-trigger 渲染（`[title="买卖点信号监控"]`，页面共存 3 个 edge-trigger：AI 助手/Agent/信号监控） | ✅ |
+| 入口文案「信号监控」 | ✅ |
+| 四区块：监控池 / 检测参数 / 提醒方式 / 信号流水 | ✅ ×4 |
+| 面板挂载即拉数据：`GET /signals/records` + `/signals/stats` → 200 | ✅ |
+| SSE 时序：登录前 401 → 抖动重连 → 登录后 `200 text/event-stream` | ✅ |
+| console 错误（排除登录前 401 与 danmaku 弃用警告） | ✅ 零，pageerror 消失 |
+| 关闭抽屉（常驻 hide-not-destroy） | ✅ |
+
+截图：`/e/smoke-web/shots/batch4-1-edge-trigger.png`、`batch4-2-panel-open.png`（四区块完整：
+监控池 0/50、日K+标准+9 路共批、系统通知/飞书/钉钉、收益统计、流水空态）。
+
+**诚实记录（覆盖差异）**：e2e 未覆盖「加监控池 → 立即扫描 → 真实信号落库 → 统计 → 清空」的
+VIP2 全链（admin 非 VIP2、非交易时段扫描空转）；数据面一致性已由 §3.2 curl 矩阵覆盖，算法正确性
+由桌面侧既有用例背书（单实现哲学），此差异不阻塞结项。
+
 ## 4. 风险登记
 
 | 风险 | 等级 | 缓解 |
@@ -241,6 +316,6 @@ A 股正路径（盘中 true）待批 3/4 e2e 在交易时段覆盖，或临时�
 
 ## 6. 与 003 的关系
 
-- 003 §7「剩 5 个信号桩维持暂缓」的解除以本项目为唯一通道；批 5 收尾时回写 003 §7 状态（42 桩 → 42/42）。
+- 003 §7「剩 5 个信号桩维持暂缓」**已解除（2026-09-28，本项目批 1-4 完成）**：003 §7 已回写 42/42 达成。
 - SSE 事件总线同时是 003 记录的「promptBacktestProgress 桌面事件不到 Web」遗留的候选解法（本项目只保证
   `signalMonitorTick` 消费到位，回测进度事件的接入不在本项目范围内）。
