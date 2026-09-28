@@ -26,8 +26,10 @@ export default defineConfig({
       '../../../wailsjs/go/main/App': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
       '../wailsjs/runtime/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
       '../../wailsjs/runtime/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
+      '../../../wailsjs/runtime/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
       '../wailsjs/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
       '../../wailsjs/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
+      '../../../wailsjs/runtime': path.resolve(__dirname, 'src/utils/wails-bridge.js'),
     }
   },
   server: {

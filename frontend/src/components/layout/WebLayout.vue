@@ -62,6 +62,11 @@
         />
       </n-drawer-content>
     </n-drawer>
+
+    <!-- 004 批4：后台买卖点信号监控面板（右侧 edge-trigger 入口 + 常驻抽屉）。
+         挂载约束：全应用只准挂这一处——引擎（kline/signalMonitor.ts）state 是模块级单例，
+         多处挂载会串 UI 状态；面板自带入口与抽屉，无需路由/菜单项。 -->
+    <SignalMonitorPanel />
   </div>
 </template>
 
@@ -101,6 +106,7 @@ import { isTokenExpired } from '../../router/router.js'
 import apiService from '../../services/api.js'
 import { GetConfig } from '../../services/wails-bridge.js'
 import { useMessage, useDialog } from 'naive-ui'
+import SignalMonitorPanel from '../SignalMonitorPanel.vue'
 
 const props = defineProps({
   activeKey: {

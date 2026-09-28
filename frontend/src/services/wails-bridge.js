@@ -995,13 +995,88 @@ export function OpenURL(url) {
   return Promise.resolve(true);
 }
 
-// ========== 事件相关 (Web 模式下使用 CustomEvent) ==========
+// ========== 事件相关 (Web 模式：客户端事件走 CustomEvent；服务端事件经 SSE 总线并入同一通路) ==========
+
+// --- Web 服务端事件总线（004 批3）---
+// 桌面的节拍由 Go cron 经 Wails 事件推送；Web 的等价物是这条 SSE 长连接：
+// GET /events/stream 每 60s 广播 signalMonitorTick，解析后按同款 CustomEvent 分发，
+// 下游 EventsOn 消费者（kline/signalMonitor.ts 等）零改动；promptBacktestProgress
+// 等桌面事件后续也可由服务端经同一总线并入。
+// 注意：客户端 EventsEmit 同样走 'web-event-*' CustomEvent，服务端事件与客户端事件共用分发通道（同名即同义）。
+let webEventStreamController = null
+let webEventStreamStarted = false
+let webEventReconnectTimer = null
+
+/** 拉起服务端事件流（幂等）：首个 EventsOn 注册时触发，页面生命周期内存活 */
+function startWebEventStream() {
+  if (webEventStreamStarted) return
+  webEventStreamStarted = true
+  connectWebEventStream()
+}
+
+function connectWebEventStream() {
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+  const token = localStorage.getItem('token');
+  const origin = window.location.origin;
+  const fullUrl = baseURL.startsWith('http') ? `${baseURL}/events/stream` : `${origin}${baseURL}/events/stream`;
+  const controller = new AbortController();
+  webEventStreamController = controller;
+  fetch(fullUrl, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    signal: controller.signal,
+  }).then(async (res) => {
+    if (!res.ok || !res.body) throw new Error(`SSE HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const ev = parseSSEBlock(block);
+        if (ev) window.dispatchEvent(new CustomEvent('web-event-' + ev.name, { detail: ev.data }));
+      }
+    }
+  }).catch(() => { /* 断线/未授权由下方统一重连（重连时会取到最新 token） */ })
+    .finally(() => {
+      if (controller.signal.aborted) return; // 主动关闭不重连
+      webEventStreamController = null;
+      // 断线重连：5-10s 随机抖动，防服务端重启后的重连雪崩
+      if (!webEventReconnectTimer) {
+        webEventReconnectTimer = setTimeout(() => {
+          webEventReconnectTimer = null;
+          connectWebEventStream();
+        }, 5000 + Math.random() * 5000);
+      }
+    });
+}
+
+/** 解析一个 SSE 块（event/data 行；'-' 前缀注释行跳过）；data 尽力 JSON 化，纯文本原样 */
+function parseSSEBlock(block) {
+  let name = 'message';
+  const dataLines = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith(':') || !line.trim()) continue;
+    if (line.startsWith('event:')) name = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+  }
+  if (!dataLines.length) return null;
+  const raw = dataLines.join('\n');
+  let data = raw;
+  try { data = JSON.parse(raw); } catch { /* 纯文本原样 */ }
+  return { name, data };
+}
 
 export function EventsOn(eventName, callback) {
   if (isWailsMode()) {
     return window.runtime.EventsOn(eventName, callback);
   }
-  // Web 模式下使用 CustomEvent
+  // Web 模式使用 CustomEvent；首个监听注册时拉起服务端 SSE 事件总线（幂等）
+  startWebEventStream()
   const handler = (e) => callback(e.detail);
   window.addEventListener('web-event-' + eventName, handler);
   return () => window.removeEventListener('web-event-' + eventName, handler);
@@ -3057,10 +3132,13 @@ export function GetFuturesPositionTrend(arg1, arg2, arg3) {
 
 // ==================== B-merge 上游新增方法桥接桩 ====================
 
-// [B-merge 桩函数] ClearSignalRecords: 上游新增方法，Web 端点二期接入。
+// [004 批2 解桩] ClearSignalRecords 清空当前用户的信号流水（服务端按 user_id 过滤，
+// 立项时点名的「全表删除」事故级缺口已在服务端消灭）。
 export function ClearSignalRecords() {
   if (isWailsMode()) return window.go.main.App.ClearSignalRecords();
-  return Promise.reject(new Error('Web 模式暂未支持：ClearSignalRecords（待二期接入 Web 端点）'));
+  return apiService.client.delete('/signals/records', { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then(() => '');
 }
 
 // [B-merge 桥接] CreatePromptBacktestTask: Web 端点已接入（/api/v1）。
@@ -3329,16 +3407,30 @@ export function GetRecommendBacktestStats(periodDays) {
     });
 }
 
-// [B-merge 桩函数] GetSignalRecordPage: 上游新增方法，Web 端点二期接入。
-export function GetSignalRecordPage(arg1) {
-  if (isWailsMode()) return window.go.main.App.GetSignalRecordPage(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetSignalRecordPage（待二期接入 Web 端点）'));
+// [004 批2 解桩] SaveSignalRecords 信号流水批量落库。
+// 桌面返回空串=成功、否则为错误信息；Web 侧 HTTP 失败走 reject（引擎 catch 会记 lastError）。
+export function SaveSignalRecords(arg1) {
+  if (isWailsMode()) return window.go.main.App.SaveSignalRecords(arg1);
+  return apiService.client.post('/signals/records', arg1, { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then(() => '');
 }
 
-// [B-merge 桩函数] GetSignalStats: 上游新增方法，Web 端点二期接入。
+// [004 批2 解桩] GetSignalRecordPage 信号流水分页查询。
+// 错误路径与桌面一致：返回空页而非 reject，避免面板把瞬时失败渲染成报错。
+export function GetSignalRecordPage(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetSignalRecordPage(arg1);
+  return apiService.client.get('/signals/records', { params: arg1, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => ({ list: [], total: 0, page: 1, pageSize: 20, totalPages: 1 }));
+}
+
+// [004 批2 解桩] GetSignalStats 信号收益统计（整体 + 按股票）。
 export function GetSignalStats(arg1) {
   if (isWailsMode()) return window.go.main.App.GetSignalStats(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：GetSignalStats（待二期接入 Web 端点）'));
+  return apiService.client.get('/signals/stats', { params: arg1, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => ({ overall: {}, stocks: [] }));
 }
 
 // [B-merge 桥接] GetStoredPolicyNews: Web 端点已接入（/api/v1）。
@@ -3396,10 +3488,31 @@ export function ListRecommendBacktestByTemplate(page, pageSize, templateId, peri
     });
 }
 
-// [B-merge 桩函数] NotifySignal: 上游新增方法，Web 端点二期接入。
+// [004 批4 解桩] NotifySignal 信号提醒推送出口（title, content(markdown), plain, channels）。
+// Web 通道拆分：app 渠道 → 浏览器 Notification API（权限请求 + 降级静默）；
+// feishu/dingding → 服务端 POST /signals/notify 转发（全局配置，与桌面同源）。
+// 提示音/语音是纯前端（alertSound.ts），引擎侧已处理，这里不涉及。
 export function NotifySignal(arg1, arg2, arg3, arg4) {
   if (isWailsMode()) return window.go.main.App.NotifySignal(arg1, arg2, arg3, arg4);
-  return Promise.reject(new Error('Web 模式暂未支持：NotifySignal（待二期接入 Web 端点）'));
+  const channels = Array.isArray(arg4) ? arg4 : [];
+  if (channels.includes('app') && typeof Notification !== 'undefined') {
+    const show = () => {
+      try { new Notification(arg1, { body: arg3 || arg2 || '' }); } catch { /* 非法参数忽略 */ }
+    };
+    if (Notification.permission === 'granted') {
+      show();
+    } else if (Notification.permission === 'default') {
+      // 授权被拒后降级为仅提示音+横幅，不打断信号流程
+      Notification.requestPermission().then((p) => { if (p === 'granted') show(); }).catch(() => {});
+    }
+  }
+  return apiService.client.post('/signals/notify', { title: arg1, content: arg2, plain: arg3, channels }, { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then((d) => d?.message || 'ok')
+    .catch((e) => {
+      console.warn('[NotifySignal] push failed:', e);
+      return 'notify error';
+    });
 }
 
 // [B-merge 桥接] RefreshHotMoneySeats: Web 端点已接入（/api/v1）。
@@ -3462,11 +3575,7 @@ export function SaveKeyDepartments(departments) {
     });
 }
 
-// [B-merge 桩函数] SaveSignalRecords: 上游新增方法，Web 端点二期接入。
-export function SaveSignalRecords(arg1) {
-  if (isWailsMode()) return window.go.main.App.SaveSignalRecords(arg1);
-  return Promise.reject(new Error('Web 模式暂未支持：SaveSignalRecords（待二期接入 Web 端点）'));
-}
+// [004 批2 解桩] SaveSignalRecords 已在上方实现（/signals/records POST）。
 
 // [B-merge 桥接] SetProfileLearnAiConfigId: Web 端点已接入（/api/v1）。
 export function SetProfileLearnAiConfigId(aiConfigId) {
