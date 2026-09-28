@@ -101,7 +101,9 @@ fetch），使后续同步退化为「普通 cherry-pick / merge」，消除结�
 > optsOverride 位序错位（userIDStr 落在 [2] 被 agent 拼进 sysPrompt；sessionId 未传致全局 "default" 会话跨用户
 > 串话风险）→ 位序对齐签名、sessionId 启用会话记忆（见 §8.5）。
 > **剩 5 个信号桩维持暂缓**：SignalMonitorPanel 上游也无人挂载，且信号引擎依赖 Wails 运行时事件（Go cron 60s 节拍），
-> Web 接入属功能开发（需 Web 节拍 + 面板挂载点 + 持久化端点整体设计），非桥接对齐。
+> Web 接入属功能开发（需 Web 节拍 + 面板挂载点 + 持久化端点整体设计），非桥接对齐。**→ 已立项 004**：
+> `.devflow-kit/004-signal-monitor-web/README.md`（2026-09-27，Web 节拍用 SSE 事件总线 + WebLayout 挂载 +
+> user_id 隔离持久化端点，5 批实施；实际解桩范围 8 个——另含 IsTradingTime 三兄弟 web-dead 修复）。
 > **冒烟已通过（2026-09-27，见 §8.1）**：API 19/19 端点 + 浏览器级 7 页点验；抓到并修复 3 个真缺陷（`bf78100`、`5a5d945`）。
 
 1. `51eae6d` + `0fb87dc`：板块/概念点查成分股 ✅（成分股部分）、自选量比列 ✅ + 龙虎榜 K 线弹窗 ✅（`0f5ddea`）
