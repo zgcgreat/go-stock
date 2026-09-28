@@ -2,6 +2,7 @@ package data
 
 import (
 	"go-stock/backend/db"
+	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"sort"
 	"strings"
@@ -17,15 +18,56 @@ func NewSignalRecordService() *SignalRecordService {
 	return &SignalRecordService{}
 }
 
-// SaveSignalRecords 批量落库，按 (code,klt,family,kind,bar_time) 去重。
+// MigrateSignalRecordSchema signal_record 用户隔离迁移（004 批2，幂等，桌面/WEB 两侧启动都必须执行）：
+//  1. 补 user_id 列（GORM AutoMigrate 之外对存量库的兜底）；
+//  2. 唯一索引重建为 (user_id, code, klt, family, kind, bar_time)——GORM AutoMigrate 不会重建
+//     已存在的同名索引，而 SaveSignalRecords 的 ON CONFLICT 冲突目标必须与唯一索引完全一致，
+//     存量 5 列索引会让落库直接报错（SQLite: ON CONFLICT does not match）。
+//
+// 存量数据 user_id=0，桌面语义（0=不过滤）不受影响。
+func MigrateSignalRecordSchema() {
+	var hasCol int64
+	db.Dao.Raw("SELECT COUNT(*) FROM pragma_table_info('signal_record') WHERE name = 'user_id'").Scan(&hasCol)
+	if hasCol == 0 {
+		if err := db.Dao.Exec("ALTER TABLE signal_record ADD COLUMN user_id INTEGER DEFAULT 0").Error; err != nil {
+			logger.SugaredLogger.Errorf("migrate signal_record add user_id error: %s", err.Error())
+			return
+		}
+		logger.SugaredLogger.Info("Migrated: added user_id column to signal_record")
+	}
+
+	var hasIdx int64
+	db.Dao.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_signal_unique'").Scan(&hasIdx)
+	if hasIdx > 0 {
+		var withUser int64
+		db.Dao.Raw("SELECT COUNT(*) FROM pragma_index_info('idx_signal_unique') WHERE name = 'user_id'").Scan(&withUser)
+		if withUser == 0 {
+			if err := db.Dao.Exec("DROP INDEX idx_signal_unique").Error; err != nil {
+				logger.SugaredLogger.Errorf("migrate signal_record drop legacy index error: %s", err.Error())
+				return
+			}
+			logger.SugaredLogger.Info("Migrated: dropped legacy unique index idx_signal_unique (5-col)")
+		}
+	}
+
+	if err := db.Dao.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_signal_unique ON signal_record(user_id, code, klt, family, kind, bar_time)").Error; err != nil {
+		logger.SugaredLogger.Errorf("migrate signal_record unique index error: %s", err.Error())
+	}
+}
+
+// SaveSignalRecords 批量落库，按 (user_id,code,klt,family,kind,bar_time) 去重。
 // 前端在同一根 K 线上重复上报时静默跳过，不会产生重复流水。
-func (s *SignalRecordService) SaveSignalRecords(items []models.SignalRecord) error {
+// userID 为 0 表示桌面单用户语义；Web 侧由处理器注入登录用户，请求体中的 UserID 一律被覆盖。
+func (s *SignalRecordService) SaveSignalRecords(items []models.SignalRecord, userID uint) error {
 	if len(items) == 0 {
 		return nil
 	}
+	for i := range items {
+		items[i].UserID = userID
+	}
 	return db.Dao.Clauses(clause.OnConflict{
 		Columns: []clause.Column{
-			{Name: "code"}, {Name: "klt"}, {Name: "family"}, {Name: "kind"}, {Name: "bar_time"},
+			{Name: "user_id"}, {Name: "code"}, {Name: "klt"}, {Name: "family"}, {Name: "kind"}, {Name: "bar_time"},
 		},
 		DoNothing: true,
 	}).CreateInBatches(items, 50).Error
@@ -34,7 +76,8 @@ func (s *SignalRecordService) SaveSignalRecords(items []models.SignalRecord) err
 // GetSignalRecordPage 分页查询流水：Keyword 模糊匹配代码/名称，
 // StartTime/EndTime 按信号所在 K 线时间（bar_time，Unix 秒）筛选，结果按 K 线时间倒序。
 // 分页参数缺失时兜底默认值，避免漏传时把整表拉走。
-func (s *SignalRecordService) GetSignalRecordPage(query models.SignalRecordQuery) (*models.SignalRecordPageData, error) {
+// userID > 0 时按用户过滤（Web）；0 不过滤（桌面单用户）。
+func (s *SignalRecordService) GetSignalRecordPage(query models.SignalRecordQuery, userID uint) (*models.SignalRecordPageData, error) {
 	if query.Page <= 0 {
 		query.Page = 1
 	}
@@ -43,6 +86,9 @@ func (s *SignalRecordService) GetSignalRecordPage(query models.SignalRecordQuery
 	}
 
 	dbQuery := db.Dao.Model(&models.SignalRecord{})
+	if userID > 0 {
+		dbQuery = dbQuery.Where("user_id = ?", userID)
+	}
 	if kw := strings.TrimSpace(query.Keyword); kw != "" {
 		like := "%" + kw + "%"
 		dbQuery = dbQuery.Where("code LIKE ? OR name LIKE ?", like, like)
@@ -82,8 +128,14 @@ func (s *SignalRecordService) GetSignalRecordPage(query models.SignalRecordQuery
 }
 
 // ClearSignalRecords 清空流水（面板的「清空」按钮）。
-func (s *SignalRecordService) ClearSignalRecords() error {
-	return db.Dao.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.SignalRecord{}).Error
+// userID > 0 时只清该用户的流水（Web 多用户隔离）；0 为桌面语义全表清空。
+// 注意：绝不允许在 userID > 0 时走全局删除——那是 004 立项时点名的事故级缺口。
+func (s *SignalRecordService) ClearSignalRecords(userID uint) error {
+	dbQuery := db.Dao.Session(&gorm.Session{AllowGlobalUpdate: true})
+	if userID > 0 {
+		dbQuery = dbQuery.Where("user_id = ?", userID)
+	}
+	return dbQuery.Delete(&models.SignalRecord{}).Error
 }
 
 // signalStatAcc 统计累加器：同一「代码|周期」内的买点排队等卖点来平。
@@ -133,9 +185,12 @@ const statsLookbackSec = 120 * 86400
 // 区间起点会往前回看 statsLookbackSec：区间内出现的卖点，其对应买点往往落在区间之外，
 // 不回看的话这些平仓笔会被整笔丢弃（区间越短漏得越多，今日区间几乎全漏）。
 // 回看进来的买点在区间内的平仓正常计入，区间之前的卖点只用来推进配对队列、不计入统计。
-func (s *SignalRecordService) GetSignalStats(query models.SignalStatQuery) (*models.SignalStatResult, error) {
+func (s *SignalRecordService) GetSignalStats(query models.SignalStatQuery, userID uint) (*models.SignalStatResult, error) {
 	startTime, endTime := query.StartTime, query.EndTime
 	dbQuery := db.Dao.Model(&models.SignalRecord{}).Where("family = ?", "buysell")
+	if userID > 0 {
+		dbQuery = dbQuery.Where("user_id = ?", userID)
+	}
 	if endTime > 0 {
 		dbQuery = dbQuery.Where("bar_time <= ?", endTime)
 	}

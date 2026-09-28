@@ -311,6 +311,10 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&models.PromptBacktestPick{})
 	db.Dao.AutoMigrate(&models.SignalRecord{})
 
+	// 004 批2：signal_record 用户隔离迁移（补 user_id 列 + 唯一索引重建，
+	// SaveSignalRecords 的 ON CONFLICT 目标已含 user_id，存量 5 列索引必须重建否则落库报错）
+	data.MigrateSignalRecordSchema()
+
 	//updateMultipleModel()
 
 	// 初始化 global_stock_index_cache 定时任务

@@ -10,8 +10,12 @@ import "time"
 //
 // 唯一索引 (code,klt,family,kind,bar_time) 保证同一根 K 线的同向信号只落一条：
 // 前端重复上报（重启后重新扫描、同一 tick 重跑）不会产生重复流水。
+// 004 批2：Web 多用户隔离——索引重建为 (user_id, code, klt, family, kind, bar_time)，
+// 由 data.MigrateSignalRecordSchema 在桌面/WEB 两侧启动时幂等重建（GORM AutoMigrate 不会
+// 重建已存在的同名索引，且 SaveSignalRecords 的 ON CONFLICT 冲突目标必须与索引完全一致）。
 type SignalRecord struct {
 	ID        uint      `json:"id" gorm:"primarykey"`
+	UserID    uint      `json:"-"`                                                   // 004 批2：用户隔离；桌面语义为 0（不过滤），落库时由服务端注入
 	Code      string    `json:"code" gorm:"uniqueIndex:idx_signal_unique;size:32"`   // 股票代码
 	Klt       string    `json:"klt" gorm:"uniqueIndex:idx_signal_unique;size:8"`     // 周期（101=日K）
 	Family    string    `json:"family" gorm:"uniqueIndex:idx_signal_unique;size:16"` // 信号族：buysell / tema

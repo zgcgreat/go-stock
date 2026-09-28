@@ -66,8 +66,9 @@ func (a *App) NotifySignal(title, content, plain string, channels []string) stri
 
 // SaveSignalRecords 信号流水落库（SQLite）。
 // 返回空串表示成功，否则是错误信息；前端不阻塞等待，落库失败不影响提醒本身。
+// 桌面单用户语义传 0（004 批2：Web 侧由处理器注入登录用户）。
 func (a *App) SaveSignalRecords(items []models.SignalRecord) string {
-	if err := data.NewSignalRecordService().SaveSignalRecords(items); err != nil {
+	if err := data.NewSignalRecordService().SaveSignalRecords(items, 0); err != nil {
 		logger.SugaredLogger.Errorf("SaveSignalRecords error:%s", err.Error())
 		return err.Error()
 	}
@@ -77,7 +78,7 @@ func (a *App) SaveSignalRecords(items []models.SignalRecord) string {
 // GetSignalRecordPage 分页查询信号流水（支持代码/名称关键词与命中时刻区间）。
 // 查询条件由前端组装，Go 侧只做条件拼装与分页。
 func (a *App) GetSignalRecordPage(query models.SignalRecordQuery) models.SignalRecordPageData {
-	page, err := data.NewSignalRecordService().GetSignalRecordPage(query)
+	page, err := data.NewSignalRecordService().GetSignalRecordPage(query, 0)
 	if err != nil {
 		logger.SugaredLogger.Errorf("GetSignalRecordPage error:%s", err.Error())
 		return models.SignalRecordPageData{List: []models.SignalRecord{}}
@@ -87,7 +88,7 @@ func (a *App) GetSignalRecordPage(query models.SignalRecordQuery) models.SignalR
 
 // ClearSignalRecords 清空信号流水。
 func (a *App) ClearSignalRecords() string {
-	if err := data.NewSignalRecordService().ClearSignalRecords(); err != nil {
+	if err := data.NewSignalRecordService().ClearSignalRecords(0); err != nil {
 		logger.SugaredLogger.Errorf("ClearSignalRecords error:%s", err.Error())
 		return err.Error()
 	}
@@ -97,7 +98,7 @@ func (a *App) ClearSignalRecords() string {
 // GetSignalStats 统计区间内按买卖点信号操作下来的收益与胜率（整体 + 按股票）。
 // 区间由前端按「今日」算好（K 线时间的 Unix 秒），Go 侧只做配对与汇总。
 func (a *App) GetSignalStats(query models.SignalStatQuery) models.SignalStatResult {
-	res, err := data.NewSignalRecordService().GetSignalStats(query)
+	res, err := data.NewSignalRecordService().GetSignalStats(query, 0)
 	if err != nil {
 		logger.SugaredLogger.Errorf("GetSignalStats error:%s", err.Error())
 		return models.SignalStatResult{Stocks: []models.SignalStatItem{}}

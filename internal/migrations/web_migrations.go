@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"go-stock/backend/data"
 	"go-stock/backend/db"
 )
 
@@ -28,6 +29,9 @@ func ApplyWebCompatibilityMigrations() {
 
 	migrateSettingsMissingColumns()
 	migrateAIConfigMissingColumns()
+
+	// 004 批2：signal_record 用户隔离（补列 + 唯一索引重建，桌面/WEB 同一实现）
+	data.MigrateSignalRecordSchema()
 }
 
 func migrateUserIDColumns(tableNames []string) {
