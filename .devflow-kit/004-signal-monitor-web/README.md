@@ -1,6 +1,6 @@
 # 004 · 信号监控 Web 化立项（Web 节拍 + 面板挂载点 + 持久化端点）
 
-> 状态：**已立项待执行**（2026-09-27）｜ 前置：003 §7「剩 5 个信号桩维持暂缓」的正式解锁设计 ｜ 来源：003 收尾后用户指令
+> 状态：**批 1 已完成（2026-09-28，`36e1361`），批 2-5 待执行** ｜ 前置：003 §7「剩 5 个信号桩维持暂缓」的正式解锁设计 ｜ 来源：003 收尾后用户指令
 >
 > ## 结论速览
 >
@@ -178,13 +178,44 @@
 
 | 批 | 内容 | 交付物 | 验证 |
 |---|---|---|---|
-| **1** | 时间窗提取 + trading-time 端点 | `backend/data/market_hours.go`（纯搬运）、App 包装改调、`GET /market/trading-time`、桥接 3 函数复活、（可选）scheduler 副本收敛 | curl 三市场真假值（盘中/盘后各测一次）；桌面 App 方法回归（编译 + 冒烟调用） |
+| **1** | ✅ 时间窗提取 + trading-time 端点（`36e1361`，2026-09-28） | `backend/data/market_hours.go`（纯搬运 app.go:1391-1638，含 checkUSHolidayAPI）、app.go 同名薄包装（约 20 处调用点与 app_test.go 零改动）、`GET /market/trading-time`、桥接 3 函数复活、scheduler 副本收敛（净收益：补上节假日校验） | 三重门禁 ✅；curl 四断言全中（见 §3.1） |
 | **2** | 持久化 5 端点 + user_id 隔离 | 模型加列+索引迁移、服务层 4 方法加参、`signal_handler.go`、5 桩中 4 个替换（notify 留批 4）、web_migrations 注册 | curl 冒烟：落库→去重幂等→分页→双用户互不可见→清空仅本人→统计配对正确 |
 | **3** | SSE 事件总线 + 节拍 | `GET /events/stream` + hub、桥接 EventsOn 升级（fetch-stream + 重连） | 浏览器：标签页切后台/最小化窗口，服务端日志见 tick 推送、引擎 `lastTickAt` 每 60s 前进；断网重连恢复 |
 | **4** | 面板挂载 + notify 通道 | WebLayout 挂载、NotifySignal web 分支（Notification API）、`/signals/notify` 服务端转发、最后 1 桩替换 | e2e 全链：登录 VIP2 → edge-trigger 开面板 → 加监控池 → 立即扫描 → 流水落库 → 统计 → 清空；通知权限弹窗与降级路径 |
 | **5** | 004 文档同步收尾 | §4 验证矩阵、遗留记录 | — |
 
 批次依赖：批 1 是批 3/4 e2e 的硬前置（否则扫描永不执行）；批 2 与批 1 无依赖可并行（保持线性则按序）；批 3 依赖批 1（验证时需要扫描真的跑）；批 4 依赖 1/2/3。
+
+### 3.1 批 1 执行记录（2026-09-28，`36e1361`）
+
+**改动**（6 files，+351/-264）：
+
+- `backend/data/market_hours.go` 新建：app.go 1391-1638 整块纯搬运——`tradingDayCache`、A 股
+  `IsTradingDay`/`IsTradingTime`（timor.tech 节假日）、`PreCacheTradingDays`、港股 `IsHKTradingTime`/
+  `isHKTradingDay`（东财 HSI K线探假）、美股 `IsUSTradingTime`/`isUSTradingDay`（fincalapi）、
+  `checkUSHolidayAPI`（勘察时挖出的漏网函数）。零逻辑改动，仅导出名 + data 包自带 `shanghaiTZ`。
+- `app.go`：原块替换为 5 个同名薄包装（`isTradingDay`/`preCacheTradingDays`/`isTradingTime`/`IsHKTradingTime`/
+  `IsUSTradingTime` → data.*），桌面调用点（app_linux/darwin/windows/monitor_plan + app.go 约 20 处）与
+  app_test.go **一行未动**；`ShanghaiTimezone`（app_common.go 时间格式化在用）**未搬**，留在 main。
+- `internal/webserver/scheduler.go`：本地 A 股副本（仅周末+固定窗 915-1130/1257-1500）收敛为
+  `data.IsTradingTime(time.Now())`——净收益：节假日校验补上；行为差异 12:57-13:00 从「算开市」变「不算」（更正确）。
+- `internal/handlers/market_handler.go` + server.go 路由：`GET /market/trading-time?market=a|hk|us`，
+  时区口径与桌面一致（A/HK 东八区、US 函数内自转 ET）。
+- `wails-bridge.js`：三个 web-dead 函数复活为端点调用（`extractApiData` + `catch→false`，保留引擎容错语义）。
+
+**验证**：
+
+| 项 | 结果 |
+|---|---|
+| 三重门禁 | ✅ go build / go vet（internal+backend）/ vite build（53s） |
+| `market=a` | ✅ `trading:false`（周一 20:52 CST，已收盘；链路含 timor.tech 节假日 API） |
+| `market=hk` | ✅ `trading:false`（已收盘） |
+| `market=us` | ✅ `trading:true`（ET 周一 08:52 命中 `hour==8` 扩展时段口径——**正路径打通**，含 fincalapi 假日 API） |
+| `market=xx` | ✅ 400 + 「market 参数仅支持 a/hk/us」 |
+
+**过程注意**：smoke 旧进程（旧二进制）占 18080，未知路由 200 是 SPA fallback 会误导探测——重启前先 taskkill；
+登录路由是 `/api/v1/auth/login`（`/api/v1/login` 会 302 到 index.html）；token4.txt 存于 smoke 环境。
+A 股正路径（盘中 true）待批 3/4 e2e 在交易时段覆盖，或临时改 Clock 验证。
 
 ## 4. 风险登记
 
