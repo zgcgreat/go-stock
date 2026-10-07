@@ -140,6 +140,18 @@ const loading = ref(false)
 const loadingHistory = ref(false)
 const errorText = ref('')
 const activeDataSource = ref('')
+
+// 左侧指标栏收起状态（记忆上次选择，避免每次进来重新收）
+const SIDEBAR_COLLAPSED_KEY = 'kline-sidebar-collapsed'
+const sidebarCollapsed = ref(false)
+
+/** 收起/展开左侧指标栏，把宽度让给 K 线 */
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed.value ? '1' : '0')
+  } catch { /* 隐私模式下 localStorage 不可用，忽略 */ }
+}
 // 场内 ETF 识别：沪市前缀 50/51/52/53/56/58，深市前缀 15/16；ETF 默认不复权且隐藏复权切换
 const isEtfCode = computed(() => {
   const digits = String(props.code || '').replace(/[^\d]/g, '')
@@ -4068,6 +4080,9 @@ watch(longCostStr, (v) => {
 })
 
 onMounted(() => {
+  try {
+    sidebarCollapsed.value = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  } catch { /* 隐私模式下 localStorage 不可用，用默认值 */ }
   nextTick(() => {
     ensureChart()
     loadData()
@@ -4139,12 +4154,12 @@ watch(showLongPosition, (newVal) => {
 <template>
   <div class="lw-kline-root" :class="{ 'lw-kline--dark': darkTheme }">
     <div class="lw-kline-body">
-      <div class="lw-kline-sidebar">
-        <div class="lw-kline-sidebar__inner">
+      <div class="lw-kline-sidebar" :class="{ 'lw-kline-sidebar--collapsed': sidebarCollapsed }">
+        <div v-show="!sidebarCollapsed" class="lw-kline-sidebar__inner">
           <NFlex vertical :size="6">
             <div class="lw-kline-sidebar__section">
               <NText depth="3" style="font-size: 13px; font-weight: 700; display: block; margin-bottom: 4px; padding: 2px 6px; background: rgba(239,68,68,0.08); border-radius: 4px; border-left: 3px solid #ef4444; color: #ef4444">📈趋势</NText>
-              <NFlex :size="4" wrap style="row-gap: 4px">
+              <div class="lw-kline-sidebar__group">
                 <NTooltip :delay="500" placement="right-start">
                   <template #trigger>
                     <NButton size="tiny" :type="showMA ? 'primary' : 'default'" :secondary="!showMA" @click="toggleMA">MA</NButton>
@@ -4223,11 +4238,11 @@ watch(showLongPosition, (newVal) => {
                   </template>
                   <span style="white-space: pre-line; text-align: left">{{ indicatorTips.tema }}</span>
                 </NTooltip>
-              </NFlex>
+              </div>
             </div>
             <div class="lw-kline-sidebar__section">
               <NText depth="3" style="font-size: 13px; font-weight: 700; display: block; margin-bottom: 4px; padding: 2px 6px; background: rgba(245,158,11,0.08); border-radius: 4px; border-left: 3px solid #f59e0b; color: #d97706">🎢波动</NText>
-              <NFlex :size="4" wrap style="row-gap: 4px">
+              <div class="lw-kline-sidebar__group">
                 <NTooltip :delay="500" placement="right-start">
                   <template #trigger>
                     <NButton size="tiny" :type="showBOLL ? 'primary' : 'default'" :secondary="!showBOLL" @click="toggleBOLL">BOLL</NButton>
@@ -4288,11 +4303,11 @@ watch(showLongPosition, (newVal) => {
                   </template>
                   <span style="white-space: pre-line; text-align: left">{{ indicatorTips.smc }}</span>
                 </NTooltip>
-              </NFlex>
+              </div>
             </div>
             <div class="lw-kline-sidebar__section">
               <NText depth="3" style="font-size: 13px; font-weight: 700; display: block; margin-bottom: 4px; padding: 2px 6px; background: rgba(59,130,246,0.08); border-radius: 4px; border-left: 3px solid #3b82f6; color: #2563eb">💫动量</NText>
-              <NFlex :size="4" wrap style="row-gap: 4px">
+              <div class="lw-kline-sidebar__group">
                 <NTooltip :delay="500" placement="right-start">
                   <template #trigger>
                     <NButton size="tiny" :type="showMACD ? 'primary' : 'default'" :secondary="!showMACD" @click="toggleMACD">MACD</NButton>
@@ -4365,11 +4380,11 @@ watch(showLongPosition, (newVal) => {
                   </template>
                   <span style="white-space: pre-line; text-align: left">{{ indicatorTips.coppock }}</span>
                 </NTooltip>
-              </NFlex>
+              </div>
             </div>
             <div class="lw-kline-sidebar__section">
               <NText depth="3" style="font-size: 13px; font-weight: 700; display: block; margin-bottom: 4px; padding: 2px 6px; background: rgba(16,185,129,0.08); border-radius: 4px; border-left: 3px solid #10b981; color: #059669">📊量价</NText>
-              <NFlex :size="4" wrap style="row-gap: 4px">
+              <div class="lw-kline-sidebar__group">
                 <NTooltip :delay="500" placement="right-start">
                   <template #trigger>
                     <NButton size="tiny" :type="showOBV ? 'primary' : 'default'" :secondary="!showOBV" @click="toggleOBV">OBV</NButton>
@@ -4418,11 +4433,11 @@ watch(showLongPosition, (newVal) => {
                   </template>
                   <span style="white-space: pre-line; text-align: left">{{ indicatorTips.vwapBands }}</span>
                 </NTooltip>
-              </NFlex>
+              </div>
             </div>
             <div class="lw-kline-sidebar__section">
               <NText depth="3" style="font-size: 13px; font-weight: 700; display: block; margin-bottom: 4px; padding: 2px 6px; background: rgba(139,92,246,0.08); border-radius: 4px; border-left: 3px solid #8b5cf6; color: #7c3aed">📏强度</NText>
-              <NFlex :size="4" wrap style="row-gap: 4px">
+              <div class="lw-kline-sidebar__group">
                 <NTooltip :delay="500" placement="right-start">
                   <template #trigger>
                     <NButton size="tiny" :type="showADX ? 'primary' : 'default'" :secondary="!showADX" @click="toggleADX">ADX</NButton>
@@ -4468,10 +4483,16 @@ watch(showLongPosition, (newVal) => {
                 >
                   筹码
                 </NButton>
-              </NFlex>
+              </div>
             </div>
           </NFlex>
         </div>
+        <button
+          type="button"
+          class="lw-kline-sidebar__toggle"
+          :title="sidebarCollapsed ? '展开指标栏' : '收起指标栏'"
+          @click="toggleSidebar"
+        >{{ sidebarCollapsed ? '›' : '‹' }}</button>
       </div>
       <div class="lw-kline-main">
         <NFlex :size="6" wrap style="row-gap: 4px; align-items: center">
@@ -4793,19 +4814,83 @@ watch(showLongPosition, (newVal) => {
 }
 .lw-kline-sidebar {
   flex: 0 0 auto;
-  width: 140px;
-  min-width: 120px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* 一行放 4 个指标按钮所需的宽度；窄屏时按视口收缩 */
+  width: clamp(260px, 20vw, 340px);
+  min-width: 240px;
+  overflow: hidden;
+  transition: width 0.15s ease;
+}
+/* 收起后只留一条窄边，宽度让给 K 线 */
+.lw-kline-sidebar--collapsed {
+  width: 18px;
+  min-width: 18px;
 }
 .lw-kline--dark .lw-kline-sidebar {
   border-color: #3f3f46;
 }
 .lw-kline-sidebar__inner {
   min-width: 0;
-  position: sticky;
-  top: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* 指标放不下时自身滚动，不撑高页面 */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+/* 收起/展开按钮：钉在指标栏右上角，不随指标列表滚动 */
+.lw-kline-sidebar__toggle {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 5;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  line-height: 1;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #64748b;
+}
+.lw-kline-sidebar__toggle:hover {
+  color: #0ea5e9;
+  border-color: #0ea5e9;
+}
+.lw-kline--dark .lw-kline-sidebar__toggle {
+  background: #18181b;
+  border-color: #3f3f46;
+  color: #94a3b8;
+}
+.lw-kline--dark .lw-kline-sidebar__toggle:hover {
+  color: #38bdf8;
+  border-color: #38bdf8;
 }
 .lw-kline-sidebar__section {
   margin-bottom: 6px;
+}
+/* 指标按钮一行 4 个，行数减半便于整屏显示 */
+.lw-kline-sidebar .lw-kline-sidebar__group {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.lw-kline-sidebar .lw-kline-sidebar__group > .n-button {
+  width: 100%;
+  min-width: 0;
+}
+/* 带附加开关的复合项（背离/买卖点/TEMA转折）占两列，否则会挤出格子 */
+.lw-kline-sidebar .lw-kline-sidebar__group > .n-flex {
+  grid-column: span 2;
+}
+/* 过长的英文指标名省略显示，悬停有完整说明 */
+.lw-kline-sidebar .lw-kline-sidebar__group :deep(.n-button__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .lw-kline-main {
   flex: 1 1 0;
