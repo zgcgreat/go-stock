@@ -3,9 +3,82 @@ import { GetStockList, GetConfig, GetEffectiveSponsorVip, EventsOn } from '../se
 import StockLightweightKlineChart from './StockLightweightKlineChart.vue'
 import { NAutoComplete, NButton, NFlex, NText, NInputGroup, NModal, NCard } from 'naive-ui'
 import { useMessage } from 'naive-ui'
-import { onBeforeMount, onMounted, onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeMount, onMounted, onBeforeUnmount, ref } from 'vue'
+import { pinyin } from 'pinyin-pro'
 
 const message = useMessage()
+
+// ── 拼音检索索引 ──────────────────────────────────────────────
+// 归一化：全角转半角，并去掉空格、连字符等分隔符，保证「连打」能命中
+// 例：五 粮 液 → 五粮液、中巨芯-U → 中巨芯u、万  科Ａ → 万科a
+function normalizeSearchKey(s) {
+  return String(s || '')
+    .replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .toLowerCase()
+}
+
+// 繁→简（常用公司/港股名用字）：pinyin-pro 的多音词组词典只按简体建索引，
+// 不转换会把「恒生銀行」的行读成 xíng（yx）而不是 háng（yh）
+const TRAD_TO_SIMP = {
+  銀: '银', 業: '业', 發: '发', 長: '长', 慶: '庆', 廈: '厦', 門: '门', 樂: '乐', 娛: '娱',
+  東: '东', 鑰: '钥', 給: '给', 側: '侧', 祕: '秘', 魯: '鲁', 國: '国', 華: '华', 興: '兴',
+  際: '际', 藥: '药', 證: '证', 險: '险', 產: '产', 團: '团', 島: '岛', 灣: '湾', 龍: '龙',
+  萬: '万', 亞: '亚', 恆: '恒', 豐: '丰', 實: '实', 創: '创', 營: '营', 聯: '联', 匯: '汇',
+  滙: '汇', 財: '财', 貿: '贸', 運: '运', 輸: '输', 電: '电', 鋼: '钢', 鐵: '铁', 銅: '铜',
+  鋁: '铝', 輕: '轻', 車: '车', 馬: '马', 醫: '医', 學: '学', 農: '农', 縣: '县', 鎮: '镇',
+  廣: '广', 寧: '宁', 寶: '宝', 麗: '丽', 潤: '润', 貴: '贵', 陽: '阳', 蘇: '苏', 閩: '闽',
+  雲: '云', 煙: '烟', 臺: '台', 網: '网', 訊: '讯', 軟: '软', 數: '数', 據: '据', 機: '机',
+  構: '构', 認: '认', 議: '议', 記: '记', 務: '务', 勢: '势', 億: '亿', 債: '债', 儲: '储',
+  權: '权', 錢: '钱', 濟: '济', 眾: '众', 競: '竞', 總: '总', 會: '会',
+}
+
+function toSimplified(s) {
+  let out = ''
+  for (const ch of String(s || '')) out += TRAD_TO_SIMP[ch] || ch
+  return out
+}
+
+// 股票名称拼音首字母（gzmt → 贵州茅台）：pinyin-pro 带词组词典，可正确处理多音字（银行→yh、重庆→cq）
+const pinyinCache = new Map()
+
+function initialsOf(name) {
+  const key = String(name || '')
+  if (!key) return ''
+  if (pinyinCache.has(key)) return pinyinCache.get(key)
+  let py = ''
+  try {
+    py = pinyin(toSimplified(key), { pattern: 'first', toneType: 'none', type: 'array' }).join('')
+  } catch (_) {
+    py = ''
+  }
+  const normalized = normalizeSearchKey(py)
+  pinyinCache.set(key, normalized)
+  return normalized
+}
+
+// 单条索引（归一化名称 + 拼音首字母），幂等：已建好就直接返回
+function ensureItemIndex(item) {
+  if (!item || item.nameKey !== undefined) return
+  item.nameKey = normalizeSearchKey(item.name)
+  item.pyInit = initialsOf(item.name)
+}
+
+let indexBuilt = false
+
+// 分片建立检索索引，避免一次性转换上万条名称卡住界面
+function buildPinyinIndex() {
+  indexBuilt = false
+  let i = 0
+  const step = () => {
+    const end = Math.min(i + 1500, stockList.value.length)
+    for (; i < end; i++) ensureItemIndex(stockList.value[i])
+    if (i < stockList.value.length) setTimeout(step, 0)
+    else indexBuilt = true
+  }
+  step()
+}
+
 const searchQuery = ref('')
 const selectedCode = ref('000001.SH')
 const selectedName = ref('上证指数')
@@ -64,20 +137,29 @@ function startVipCheck() {
   }
 }
 
-function findStockList(val) {
-  if (!val || !val.trim()) {
-    options.value = []
-    return
+// 由关键字生成候选，供右上角搜索框与快捷搜索面板复用
+function buildOptions(val) {
+  if (!val || !val.trim()) return []
+  // 分片建索引尚未完成时先补齐剩余条目，避免搜索落在这个时间窗口里漏检
+  if (!indexBuilt) {
+    for (const item of stockList.value) ensureItemIndex(item)
+    indexBuilt = true
   }
   const q = val.trim().toLowerCase()
-  const filtered = stockList.value.filter(item =>
+  const qn = normalizeSearchKey(val)
+  return stockList.value.filter(item =>
     item.name.toLowerCase().includes(q) ||
-    item.ts_code.toLowerCase().includes(q)
-  ).slice(0, 30)
-  options.value = filtered.map(item => ({
+    item.ts_code.toLowerCase().includes(q) ||
+    (qn && ((item.nameKey && item.nameKey.includes(qn)) ||
+      (item.pyInit && item.pyInit.includes(qn))))
+  ).slice(0, 30).map(item => ({
     label: item.name + ' - ' + item.ts_code,
     value: item.ts_code,
   }))
+}
+
+function findStockList(val) {
+  options.value = buildOptions(val)
 }
 
 function handleSearch(value) {
@@ -120,6 +202,90 @@ function loadRecentStocks() {
   } catch {}
 }
 
+// 快捷搜索面板：任意键盘输入直接唤起，↑↓ 选择、Enter 切换、Esc 关闭
+const quickSearchVisible = ref(false)
+const quickSearchQuery = ref('')
+const quickOptions = ref([])
+const quickSearchIndex = ref(0)
+const quickInputRef = ref(null)
+
+function refreshQuickOptions() {
+  const q = quickSearchQuery.value
+  quickOptions.value = q && q.trim() ? buildOptions(q).slice(0, 10) : []
+  if (quickSearchIndex.value >= quickOptions.value.length) quickSearchIndex.value = 0
+}
+
+function openQuickSearch(initial) {
+  quickSearchQuery.value = initial || ''
+  quickSearchIndex.value = 0
+  refreshQuickOptions()
+  quickSearchVisible.value = true
+  nextTick(() => {
+    if (quickInputRef.value) quickInputRef.value.focus()
+  })
+}
+
+function closeQuickSearch() {
+  quickSearchVisible.value = false
+  quickSearchQuery.value = ''
+  quickOptions.value = []
+  quickSearchIndex.value = 0
+}
+
+function onQuickInput(e) {
+  quickSearchQuery.value = e.target.value
+  refreshQuickOptions()
+}
+
+function moveQuick(step) {
+  const n = quickOptions.value.length
+  if (!n) return
+  quickSearchIndex.value = (quickSearchIndex.value + step + n) % n
+}
+
+function pickQuick(opt) {
+  handleSearch(opt.value)
+  closeQuickSearch()
+}
+
+function onQuickKeydown(e) {
+  if (e.key === 'Escape') {
+    closeQuickSearch()
+    e.preventDefault()
+  } else if (e.key === 'ArrowDown') {
+    moveQuick(1)
+    e.preventDefault()
+  } else if (e.key === 'ArrowUp') {
+    moveQuick(-1)
+    e.preventDefault()
+  } else if (e.key === 'Enter') {
+    const opt = quickOptions.value[quickSearchIndex.value]
+    if (opt) pickQuick(opt)
+    e.preventDefault()
+  }
+}
+
+// 回车/点放大镜：有候选优先取第一条，避免把拼音/名称文本当成美股代码（如 gzmt → GZMT.US）
+function submitSearch() {
+  if (options.value.length) {
+    handleSearch(options.value[0].value)
+    return
+  }
+  handleSearch(searchQuery.value)
+}
+
+// 全局键盘监听：焦点不在输入框时，敲任意可见字符即唤起快捷搜索
+function onGlobalKeydown(e) {
+  if (quickSearchVisible.value || showVipModal.value) return
+  if (e.ctrlKey || e.metaKey || e.altKey) return
+  const t = e.target
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+  const k = e.key
+  if (!k || k.length !== 1 || k === ' ') return
+  e.preventDefault()
+  openQuickSearch(k)
+}
+
 function selectRecent(code, name) {
   const emCode = toEastMoneyCode(code)
   if (!emCode) {
@@ -139,6 +305,7 @@ function updateChartHeight() {
 onBeforeMount(() => {
   GetStockList('').then(result => {
     stockList.value = result || []
+    buildPinyinIndex()
   }).catch(err => { console.error('GetStockList error:', err) })
   GetConfig().then(result => {
     darkTheme.value = !!result.darkTheme
@@ -149,6 +316,7 @@ onMounted(async () => {
   loadRecentStocks()
   updateChartHeight()
   window.addEventListener('resize', updateChartHeight)
+  window.addEventListener('keydown', onGlobalKeydown)
 
   await refreshEffectiveVip()
   startVipCheck()
@@ -171,6 +339,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateChartHeight)
+  window.removeEventListener('keydown', onGlobalKeydown)
   if (vipTimer) {
     clearInterval(vipTimer)
     vipTimer = null
@@ -198,12 +367,12 @@ onBeforeUnmount(() => {
         <n-auto-complete
           v-model:value="searchQuery"
           :options="options"
-          placeholder="股票名称/代码搜索..."
+          placeholder="名称/代码/拼音首字母（如 gzmt）..."
           clearable
           :on-select="handleSearch"
           @update:value="findStockList"
         />
-        <n-button type="primary">
+        <n-button type="primary" @click="submitSearch">
           🔍
         </n-button>
       </n-input-group>
@@ -222,6 +391,33 @@ onBeforeUnmount(() => {
           {{ s.name }}
         </n-button>
       </div>
+    </div>
+
+    <div v-if="quickSearchVisible" class="quick-search" :class="{ 'quick-search--dark': darkTheme }">
+      <input
+        ref="quickInputRef"
+        class="quick-search-input"
+        type="text"
+        spellcheck="false"
+        placeholder="输入名称/代码/拼音首字母快速切换"
+        :value="quickSearchQuery"
+        @input="onQuickInput"
+        @keydown="onQuickKeydown"
+      />
+      <div class="quick-search-hint">↑↓ 选择 · Enter 切换 · Esc 关闭</div>
+      <div v-if="quickOptions.length" class="quick-search-list">
+        <div
+          v-for="(o, i) in quickOptions"
+          :key="o.value"
+          class="quick-search-item"
+          :class="{ 'quick-search-item--active': i === quickSearchIndex }"
+          @mouseenter="quickSearchIndex = i"
+          @click="pickQuick(o)"
+        >
+          {{ o.label }}
+        </div>
+      </div>
+      <div v-else class="quick-search-empty">无匹配结果</div>
     </div>
 
     <n-modal v-model:show="showVipModal" :close-on-esc="true" :mask-closable="true" :z-index="9999">
@@ -274,5 +470,77 @@ onBeforeUnmount(() => {
   gap: 4px;
   margin-top: 4px;
   flex-wrap: wrap;
+}
+/* 快捷搜索面板：任意键盘输入唤起 */
+.quick-search {
+  position: fixed;
+  top: 56px;
+  left: 16px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  z-index: 3000;
+  overflow: hidden;
+}
+.quick-search--dark {
+  background: #1a1a1a;
+  border-color: #333;
+}
+.quick-search-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px 6px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+}
+.quick-search-input::placeholder {
+  color: #aaa;
+}
+.quick-search--dark .quick-search-input::placeholder {
+  color: #666;
+}
+.quick-search-hint {
+  padding: 0 12px 8px;
+  font-size: 11px;
+  color: #999;
+}
+.quick-search-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 1px solid #f0f0f0;
+}
+.quick-search--dark .quick-search-list {
+  border-top-color: #333;
+}
+.quick-search-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quick-search-item--active {
+  background: #e8f2ff;
+}
+.quick-search--dark .quick-search-item--active {
+  background: #14314f;
+}
+.quick-search-empty {
+  padding: 12px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 12px;
+  color: #999;
+  text-align: center;
+}
+.quick-search--dark .quick-search-empty {
+  border-top-color: #333;
 }
 </style>
