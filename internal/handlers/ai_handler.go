@@ -98,8 +98,15 @@ func AITradeAnalyze(c *gin.Context) {
 	flusher.Flush()
 
 	aiAgent := agent.NewStockAiAgentApi()
-	userIDStr := strconv.FormatUint(uint64(userID), 10)
-	msgCh := aiAgent.ChatWithContext(c.Request.Context(), question, aiConfigID, req.SysPromptID, false, 10, req.Thinking, "", "", "", userIDStr)
+	msgCh := aiAgent.ChatWithContext(c.Request.Context(), agent.ChatRequest{
+		Question:    question,
+		AIConfigID:  aiConfigID,
+		SysPromptID: req.SysPromptID,
+		MemoryCount: 10,
+		ThinkingMode: req.Thinking,
+		// 用户隔离：Web 端按当前登录用户加载其自己的 AI 配置
+		UserID: userID,
+	})
 
 	var fullContent strings.Builder
 
@@ -387,7 +394,20 @@ func AgentChat(c *gin.Context) {
 		skillPromptOverride = sb.String()
 	}
 
-	msgCh := aiAgent.ChatWithContext(ctx, req.Question, aiConfigID, req.SysPromptID, memoryMode, memoryCount, req.Thinking, req.AgentMode, skillPromptOverride, req.SessionID, "", "", imagesJSON, "")
+	msgCh := aiAgent.ChatWithContext(ctx, agent.ChatRequest{
+		Question:          req.Question,
+		AIConfigID:        aiConfigID,
+		SysPromptID:       req.SysPromptID,
+		MemoryMode:        memoryMode,
+		MemoryCount:       memoryCount,
+		ThinkingMode:      req.Thinking,
+		AgentMode:         req.AgentMode,
+		SysPromptOverride: skillPromptOverride,
+		SessionIDOverride: req.SessionID,
+		ImagesJSON:        imagesJSON,
+		// 用户隔离：Web 端按当前登录用户加载其自己的 AI 配置
+		UserID: userID,
+	})
 
 	for msg := range msgCh {
 		if msg == nil {

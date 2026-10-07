@@ -61,7 +61,18 @@ type Settings struct {
 	SponsorCode           string `json:"sponsorCode"`
 	HttpProxy             string `json:"httpProxy"`
 	HttpProxyEnabled      bool   `json:"httpProxyEnabled"`
-	EnableAgent           bool   `json:"enableAgent"`
+	// BinanceProxy 币安 USDT-M 永续合约专用 HTTP 代理（如 http://127.0.0.1:7890）。
+	// 与全局 HttpProxy 完全独立：仅作用于币安合约数据源（国内直连 fapi.binance.com 常被阻断），
+	// 不影响 A股/港美股等国内数据源的直连行为。留空表示币安不使用代理。
+	BinanceProxy string `json:"binanceProxy" gorm:"column:binance_proxy"`
+	// BitgetProxy Bitget 美股永续合约专用 HTTP 代理（如 http://127.0.0.1:10809）。
+	// 与全局 HttpProxy、币安 BinanceProxy 三者相互独立：仅作用于 Bitget 美股永续数据源
+	// （国内直连 api.bitget.com 常被阻断），不影响 A股/港美股/币安的既有行为。留空表示不使用代理。
+	BitgetProxy string `json:"bitgetProxy" gorm:"column:bitget_proxy"`
+	// EnableContracts 控制「合约行情」独立页面与菜单项的显隐：展示币安 USDT-M 永续（加密）
+	// 与 Bitget 美股永续（RWA）全部合约。默认开启，可在设置页关闭。
+	EnableContracts bool   `json:"enableContracts" gorm:"column:enable_contracts;default:true"`
+	EnableAgent     bool   `json:"enableAgent"`
 	QgqpBId               string `json:"qgqpBId" gorm:"column:qgqp_b_id"`
 	IwencaiApiKey         string `json:"iwencaiApiKey" gorm:"column:iwencai_api_key"`
 	EmApiKey              string `json:"emApiKey" gorm:"column:em_api_key"`
@@ -189,6 +200,9 @@ func UpdateConfig(s *SettingConfig) string {
 			"sponsor_code":               s.SponsorCode,
 			"http_proxy":                 s.HttpProxy,
 			"http_proxy_enabled":         s.HttpProxyEnabled,
+			"binance_proxy":              s.BinanceProxy,
+			"bitget_proxy":               s.BitgetProxy,
+			"enable_contracts":           s.EnableContracts,
 			"enable_agent":               s.EnableAgent,
 			"qgqp_b_id":                  s.QgqpBId,
 			"iwencai_api_key":            s.IwencaiApiKey,
@@ -324,6 +338,10 @@ func GetSettingConfig() *SettingConfig {
 	aiConfigs := make([]*AIConfig, 0)
 	// 处理数据库查询可能返回的空结果
 	result := db.Dao.Model(&Settings{}).First(settings)
+	// 新用户无设置记录时，默认开启「合约行情」页（仅补该字段，不改动既有 DarkTheme/OpenAiEnable 默认逻辑）
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		settings.EnableContracts = true
+	}
 	if settings.OpenAiEnable {
 		// 处理AI配置查询可能出现的错误
 		result = db.Dao.Model(&AIConfig{}).Find(&aiConfigs)
