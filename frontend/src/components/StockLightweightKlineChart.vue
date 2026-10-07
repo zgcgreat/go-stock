@@ -23,7 +23,7 @@ import {
 } from './kline/calc'
 import { makeToggle } from './kline/indicators/toggle'
 import { parseNumStr, formatPrice2, formatVolumeCn, formatAmountCn, formatPctField, formatSigned2 } from './kline/format'
-import { createMeasurePrimitive } from './kline/measurePrimitive'
+import { createVolumeProfilePrimitive, POC_COLOR } from './kline/volumeProfilePrimitive'
 import { createWavePrimitive } from './kline/wavePrimitive'
 import { createDrawingHost, DRAWING_TOOLS } from './kline/drawingManagerHost'
 import {
@@ -97,6 +97,8 @@ const showPivot = ref(false)
 const showDEMA = ref(false)
 const showZigZag = ref(false)
 const showSATS = ref(false)
+/** 成交量分布 VPVR（可见区间）：红=买方主导/绿=卖方主导，橙虚线=POC */
+const showVolumeProfile = ref(false)
 const showAvgAmp = ref(false)
 const showAlligator = ref(false)
 const showAO = ref(false)
@@ -333,6 +335,13 @@ let pollTimer = null
 let mergedRawRows = []
 /** 每次 mergedRawRows 变更后递增，供 computed 感知变化 */
 const mergedRawRowsVersion = ref(0)
+/** 成交量分布 VPVR primitive 实例（叠加在主图 pane 上） */
+let volumeProfilePrimitive = null
+/** VPVR 用的 OHLCV 缓存（按 mergedRawRowsVersion 失效，避免每帧重排序） */
+const volumeProfileBarsCache = { version: -1, data: null }
+/** POC 数值标签（挂在价格刻度上；横向虚线仍由 primitive 画，这里只取轴上的 tag） */
+let pocPriceLineHandle = null
+let pocTagRaf = 0
 const hasMoreOlder = ref(true)
 let loadOlderDebounceTimer = null
 /** Wails/WebView 下可见区回调偶发不触发，用轻量轮询兜底 */
@@ -1510,8 +1519,84 @@ function syncSubPaneIndicators(times, closes, highs, lows, vols) {
   }
 }
 
+/** VPVR 数据源：按 mergedRawRowsVersion 缓存，避免 primitive 每帧重排序 */
+function getVolumeProfileBars() {
+  if (volumeProfileBarsCache.version !== mergedRawRowsVersion.value) {
+    volumeProfileBarsCache.data = extractOHLCV(mergedRawRows)
+    volumeProfileBarsCache.version = mergedRawRowsVersion.value
+  }
+  return volumeProfileBarsCache.data
+}
+
+/** 移除价格刻度上的 POC 数值标签 */
+function clearPocPriceLine() {
+  if (pocTagRaf) {
+    cancelAnimationFrame(pocTagRaf)
+    pocTagRaf = 0
+  }
+  if (pocPriceLineHandle && candleSeries) {
+    try { candleSeries.removePriceLine(pocPriceLineHandle) } catch { /* ignore */ }
+  }
+  pocPriceLineHandle = null
+}
+
+/** 把当前 POC 价格同步到价格刻度；price 为 null 表示当前无 POC（无数据或可见区间为空） */
+function applyPocPriceLine(price) {
+  if (!candleSeries) return
+  if (price == null) {
+    clearPocPriceLine()
+    return
+  }
+  if (pocPriceLineHandle) {
+    pocPriceLineHandle.applyOptions({ price })
+    return
+  }
+  pocPriceLineHandle = candleSeries.createPriceLine({
+    price,
+    color: POC_COLOR,
+    lineWidth: 1,
+    lineStyle: LineStyle.Dashed,
+    // 横向虚线由 volumeProfilePrimitive 绘制，这里只要刻度上那枚 POC 数值标签
+    lineVisible: false,
+    axisLabelVisible: true,
+    title: 'POC',
+  })
+}
+
+/** primitive 在图表绘制周期内回调，延到下一帧再动价格线，避免在绘制过程中改图 */
+function onPocPriceChange(price) {
+  if (pocTagRaf) cancelAnimationFrame(pocTagRaf)
+  pocTagRaf = requestAnimationFrame(() => {
+    pocTagRaf = 0
+    applyPocPriceLine(price)
+  })
+}
+
+function ensureVolumeProfilePrimitive() {
+  if (volumeProfilePrimitive || !candleSeries) return
+  volumeProfilePrimitive = createVolumeProfilePrimitive(candleSeries, getVolumeProfileBars, onPocPriceChange)
+}
+
+/** 按开关状态挂载/卸载成交量分布 primitive（开关点击与指标重建两条路径都走这里） */
+function syncVolumeProfilePrimitive() {
+  if (!candleSeries) return
+  if (showVolumeProfile.value) {
+    ensureVolumeProfilePrimitive()
+    volumeProfilePrimitive?.requestRedraw()
+  } else {
+    if (volumeProfilePrimitive) {
+      try { candleSeries.detachPrimitive(volumeProfilePrimitive) } catch { /* ignore */ }
+    }
+    volumeProfilePrimitive = null
+    clearPocPriceLine()
+  }
+}
+
 function syncIndicators() {
   if (!chart || !candleSeries) return
+
+  // VPVR 走独立 primitive（attach/detach），不随本函数的主图指标增删而重画
+  syncVolumeProfilePrimitive()
 
   const { times, opens, closes, highs, lows, vols } = extractOHLCV(mergedRawRows)
   if (!times.length) {
@@ -3447,6 +3532,9 @@ function disposeChart() {
     candleSeries = null
     volSeries = null
   }
+  // VPVR 与 POC 标签随图表一起销毁，避免 chart=null 后 primitive 仍持有旧 series
+  volumeProfilePrimitive = null
+  clearPocPriceLine()
   ind.ma5 = ind.ma10 = ind.ma20 = ind.ma60 = null
   ind.bollU = ind.bollM = ind.bollL = null
   ind.obv = null
@@ -3823,6 +3911,8 @@ const togglePivot = makeToggle(showPivot, syncIndicators)
 const toggleDEMA = makeToggle(showDEMA, syncIndicators)
 const toggleZigZag = makeToggle(showZigZag, syncIndicators)
 const toggleSATS = makeToggle(showSATS, syncIndicators)
+/** VPVR 走 primitive attach/detach，与主图指标增删解耦，故单独一个回调 */
+const toggleVolumeProfile = makeToggle(showVolumeProfile, syncVolumeProfilePrimitive)
 const toggleAvgAmp = makeToggle(showAvgAmp, syncIndicators)
 const toggleAlligator = makeToggle(showAlligator, syncIndicators)
 const toggleAO = makeToggle(showAO, syncIndicators)
@@ -4108,6 +4198,12 @@ watch(showLongPosition, (newVal) => {
                     <NButton size="tiny" :type="showSATS ? 'primary' : 'default'" :secondary="!showSATS" @click="toggleSATS">SATS</NButton>
                   </template>
                   <span style="white-space: pre-line; text-align: left">{{ indicatorTips.sats }}</span>
+                </NTooltip>
+                <NTooltip :delay="500" placement="right-start">
+                  <template #trigger>
+                    <NButton size="tiny" :type="showVolumeProfile ? 'primary' : 'default'" :secondary="!showVolumeProfile" @click="toggleVolumeProfile">VPVR</NButton>
+                  </template>
+                  <span style="display: block; white-space: pre-line; text-align: left">{{ indicatorTips.volumeProfile }}</span>
                 </NTooltip>
                 <NTooltip :delay="500" placement="right-start">
                   <template #trigger>
