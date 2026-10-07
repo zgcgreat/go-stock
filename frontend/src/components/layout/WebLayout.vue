@@ -97,6 +97,7 @@ import {
   SunnyOutline,
   TimerOutline,
   AnalyticsOutline,
+  GlobeOutline,
 } from '@vicons/ionicons5'
 import { Robot } from '@vicons/fa'
 import { useResponsive } from '../../composables/useResponsive'
@@ -185,6 +186,7 @@ ensureUserInfo()
 // AI/基金菜单可见性控制（与桌面端 enableAgent/enableFund 配置一致）
 const enableAgent = ref(false) // 默认隐藏，与后端默认值一致，配置加载后按实际值控制
 const enableFund = ref(true)   // 默认显示，与后端默认值一致，配置加载后按实际值控制
+const enableContracts = ref(true) // 合约行情页显隐（设置页 enableContracts，默认开启）
 
 function loadMenuVisibility() {
   // 未登录/令牌失效时跳过，避免启动阶段向受保护接口发请求产生 401 刷屏
@@ -196,6 +198,9 @@ function loadMenuVisibility() {
     }
     if (config && typeof config.enableFund === 'boolean') {
       enableFund.value = config.enableFund
+    }
+    if (config && typeof config.enableContracts === 'boolean') {
+      enableContracts.value = config.enableContracts
     }
   }).catch(() => {})
 }
@@ -228,6 +233,9 @@ onMounted(() => {
     if (config && typeof config.enableFund === 'boolean') {
       enableFund.value = config.enableFund
     }
+    if (config && typeof config.enableContracts === 'boolean') {
+      enableContracts.value = config.enableContracts
+    }
   })
 })
 
@@ -237,6 +245,7 @@ const mainTabs = [
   { key: 'stock', label: '自选', icon: StarOutline, route: { name: 'stock' } },
   { key: 'market', label: '行情', icon: NewspaperOutline, route: { name: 'market' } },
   { key: 'klineAnalysis', label: 'K线', icon: StatsChartOutline, route: { name: 'klineAnalysis' } },
+  { key: 'contracts', label: '合约', icon: GlobeOutline, route: { name: 'contracts' }, contractsOnly: true },
   { key: 'dailyOperationPlans', label: '计划', icon: CalendarOutline, route: { name: 'dailyOperationPlans' } },
   { key: 'fund', label: '基金', icon: SparklesOutline, route: { name: 'fund' }, fundOnly: true },
   { key: 'agent', label: 'AI', icon: Robot, route: { name: 'agent' }, agentOnly: true },
@@ -271,6 +280,7 @@ const visibleMainTabs = computed(() => {
     if (tab.adminOnly && !isAdmin.value) return false
     if (tab.agentOnly && !enableAgent.value) return false
     if (tab.fundOnly && !enableFund.value) return false
+    if (tab.contractsOnly && !enableContracts.value) return false
     return true
   })
   if (isMobile.value) {
@@ -287,6 +297,7 @@ const overflowTabs = computed(() => {
     if (tab.adminOnly && !isAdmin.value) return false
     if (tab.agentOnly && !enableAgent.value) return false
     if (tab.fundOnly && !enableFund.value) return false
+    if (tab.contractsOnly && !enableContracts.value) return false
     return true
   })
   if (isMobile.value) {

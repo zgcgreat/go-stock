@@ -3616,3 +3616,98 @@ export function SubmitAgentFeedback(fb) {
       throw msg;
     });
 }
+
+// ============================================================================
+// 005 批5a：合约行情桥接（币安 USDT-M 永续 / Bitget 美股永续）
+//
+// 桌面端走 app.go 的 Wails 绑定；Web 端改为 /api/v1/contracts/* HTTP 端点
+// （internal/handlers/contract_handler.go）。刻意不写入 frontend/wailsjs/——
+// 那是 Wails 自动生成物，跨版本 diff 巨大、冲突高发，本项目一律用本文件做回退映射。
+//
+// 后端响应统一 {code:0, message:"success", data:...}，此处剥壳后返回 data，
+// 与桌面端绑定的返回类型保持一致，组件侧无需区分运行模式。
+// ============================================================================
+
+/** 剥 shell：取 data 字段；后端已按约定返回 {code,message,data} */
+function unwrapContract(res) {
+  return res?.data?.data
+}
+
+/** 合约代理由服务端统一持有（出网配置，非用户偏好），读写均走专用端点 */
+export function GetContractProxy() {
+  if (isWailsMode()) return window.go.main.App.GetConfig();
+  return apiService.client.get('/contracts/proxy', { headers: getAuthHeaders() })
+    .then(unwrapContract);
+}
+
+export function SetContractProxy(binanceProxy, bitgetProxy) {
+  if (isWailsMode()) return window.go.main.App.GetConfig();
+  return apiService.client.post('/contracts/proxy', { binanceProxy, bitgetProxy }, { headers: getAuthHeaders() })
+    .then(unwrapContract);
+}
+
+export function GetBinanceFuturesSymbols() {
+  if (isWailsMode()) return window.go.main.App.GetBinanceFuturesSymbols();
+  return apiService.client.get('/contracts/binance/symbols', { headers: getAuthHeaders() })
+    .then(unwrapContract);
+}
+
+export function GetBinanceFuturesTicker(symbols) {
+  if (isWailsMode()) return window.go.main.App.GetBinanceFuturesTicker(symbols);
+  return apiService.client.get('/contracts/binance/ticker', {
+    headers: getAuthHeaders(),
+    params: { symbols: symbols || '' },
+  }).then(unwrapContract);
+}
+
+export function GetBinanceFuturesPremium() {
+  if (isWailsMode()) return window.go.main.App.GetBinanceFuturesPremium();
+  return apiService.client.get('/contracts/binance/premium', { headers: getAuthHeaders() })
+    .then(unwrapContract);
+}
+
+export function GetBinanceFuturesDerivatives(symbol, period, limit) {
+  if (isWailsMode()) return window.go.main.App.GetBinanceFuturesDerivatives(symbol, period, limit);
+  return apiService.client.get('/contracts/binance/derivatives', {
+    headers: getAuthHeaders(),
+    params: { symbol, period: period || '1h', limit: limit || 120 },
+  }).then(unwrapContract);
+}
+
+export function GetBinanceFundingRateHistory(symbol, limit) {
+  if (isWailsMode()) return window.go.main.App.GetBinanceFundingRateHistory(symbol, limit);
+  return apiService.client.get('/contracts/binance/funding-rate', {
+    headers: getAuthHeaders(),
+    params: { symbol, limit: limit || 100 },
+  }).then(unwrapContract);
+}
+
+export function GetBitgetFuturesSymbols() {
+  if (isWailsMode()) return window.go.main.App.GetBitgetFuturesSymbols();
+  return apiService.client.get('/contracts/bitget/symbols', { headers: getAuthHeaders() })
+    .then(unwrapContract);
+}
+
+export function GetBitgetFuturesTicker(symbols) {
+  if (isWailsMode()) return window.go.main.App.GetBitgetFuturesTicker(symbols);
+  return apiService.client.get('/contracts/bitget/ticker', {
+    headers: getAuthHeaders(),
+    params: { symbols: symbols || '' },
+  }).then(unwrapContract);
+}
+
+export function GetBitgetFuturesDerivatives(symbol) {
+  if (isWailsMode()) return window.go.main.App.GetBitgetFuturesDerivatives(symbol);
+  return apiService.client.get('/contracts/bitget/derivatives', {
+    headers: getAuthHeaders(),
+    params: { symbol },
+  }).then(unwrapContract);
+}
+
+export function GetBitgetFundingRateHistory(symbol, limit) {
+  if (isWailsMode()) return window.go.main.App.GetBitgetFundingRateHistory(symbol, limit);
+  return apiService.client.get('/contracts/bitget/funding-rate', {
+    headers: getAuthHeaders(),
+    params: { symbol, limit: limit || 100 },
+  }).then(unwrapContract);
+}

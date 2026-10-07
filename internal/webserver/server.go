@@ -178,6 +178,20 @@ func (ws *WebServer) initRouter() {
 			// 004 批4：信号提醒推送（feishu/dingding 服务端转发；app 渠道由前端 Notification 承担）
 			protected.POST("/signals/notify", handlers.NotifySignalHandler)
 
+			// 005 批5a：合约行情（币安 USDT-M 永续 / Bitget 美股永续）
+			// 桌面端走 app.go 的 Wails 绑定，Web 端在 wails-bridge.js 补 HTTP 回退映射
+			protected.GET("/contracts/proxy", handlers.GetContractProxyHandler)
+			protected.POST("/contracts/proxy", handlers.SetContractProxyHandler)
+			protected.GET("/contracts/binance/symbols", handlers.GetBinanceFuturesSymbolsHandler)
+			protected.GET("/contracts/binance/ticker", handlers.GetBinanceFuturesTickerHandler)
+			protected.GET("/contracts/binance/premium", handlers.GetBinanceFuturesPremiumHandler)
+			protected.GET("/contracts/binance/derivatives", handlers.GetBinanceFuturesDerivativesHandler)
+			protected.GET("/contracts/binance/funding-rate", handlers.GetBinanceFundingRateHistoryHandler)
+			protected.GET("/contracts/bitget/symbols", handlers.GetBitgetFuturesSymbolsHandler)
+			protected.GET("/contracts/bitget/ticker", handlers.GetBitgetFuturesTickerHandler)
+			protected.GET("/contracts/bitget/derivatives", handlers.GetBitgetFuturesDerivativesHandler)
+			protected.GET("/contracts/bitget/funding-rate", handlers.GetBitgetFundingRateHistoryHandler)
+
 			protected.GET("/settings", handlers.GetUserSettings)
 			protected.POST("/settings", handlers.SetUserSetting)
 			protected.PUT("/settings/:key", handlers.UpdateUserSetting)

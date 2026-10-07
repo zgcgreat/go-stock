@@ -11,13 +11,35 @@ import {
   UpdateConfig,
   CheckSponsorCode,
   FetchAiModels,
-  FetchAiModelInfo
+  FetchAiModelInfo,
+  GetContractProxy,
+  SetContractProxy
 } from "../services/wails-bridge.js";
 import {NTag, NTooltip, NIcon, useMessage} from "naive-ui";
 import {EventsEmit} from "../services/wails-bridge.js";
 import {HelpCircleFilledIcon, HelpIcon} from "tdesign-icons-vue-next";
 
 const message = useMessage()
+
+// 合约代理（币安 USDT-M / Bitget 美股永续共用一项）：
+// 与爬虫 httpProxy 完全独立，且是「服务端出网配置」而非用户偏好——
+// 代理值由后端 client 读取，多个用户共享同一份，故走 /contracts/proxy 专用端点，
+// 不进 UpdateConfig 的 per-user 整行覆盖路径（那会覆盖其它字段的并发修改）。
+const binanceProxy = ref('')
+
+function loadContractProxy() {
+  GetContractProxy()
+    .then(cfg => { binanceProxy.value = (cfg && cfg.binanceProxy) || '' })
+    .catch(() => { /* 读取失败保持空=直连 */ })
+}
+
+function onBinanceProxyInput(v) {
+  binanceProxy.value = v || ''
+  SetContractProxy(binanceProxy.value, '')
+    .then(() => message.success('合约代理已保存，留空表示直连'))
+    .catch(err => message.error('合约代理保存失败: ' + (err?.response?.data?.message || err?.message || err)))
+}
+
 
 const formRef = ref(null)
 const formValue = ref({
@@ -204,6 +226,7 @@ async function fetchModelInfo(aiConfig, modelName) {
 }
 
 onMounted(() => {
+  loadContractProxy()
   GetConfig().then(res => {
     console.log('GetConfig 返回数据:', res)
     formValue.value.ID = res.ID || 1
@@ -715,6 +738,11 @@ function deletePrompt(ID) {
             <n-form-item-gi :span="10" v-if="formValue.httpProxyEnabled" title="http代理地址"
                             label="http代理地址" path="httpProxy">
               <n-input type="text" placeholder="爬虫http代理地址" v-model:value="formValue.httpProxy" clearable/>
+            </n-form-item-gi>
+            <n-form-item-gi :span="10" title="合约行情专用 HTTP 代理，与上方爬虫代理完全独立，仅作用于合约接口；留空表示直连"
+                            label="合约代理(可选)" path="binanceProxy">
+              <n-input type="text" placeholder="如 http://127.0.0.1:7890，留空表示直连"
+                        :value="binanceProxy" @update:value="onBinanceProxyInput" clearable/>
             </n-form-item-gi>
 
 

@@ -451,6 +451,37 @@ func GetSettingConfigByUserID(userID uint) *SettingConfig {
 	return settingConfig
 }
 
+// UpdateContractProxies 只更新合约专用代理两列，不触碰其余设置字段。
+//
+// 为什么不用 UpdateConfig：那条路径是整行覆盖式 Updates，调用方必须先读全量再回写，
+// 合约页只需这两个字段，顺手整份回写会覆盖其它字段的并发修改。
+// 找不到记录时按 user_id=0 落一行——binance/bitget client 读的是全局设置，
+// 这里刻意不做 Web 用户隔离：代理是「服务端出网配置」而非「用户偏好」，
+// 与前端 /settings 的 per-user 隔离是两条独立语义。
+func UpdateContractProxies(binanceProxy, bitgetProxy string) error {
+	if db.Dao == nil {
+		return errors.New("数据库未初始化")
+	}
+	updates := map[string]any{
+		"binance_proxy": binanceProxy,
+		"bitget_proxy":  bitgetProxy,
+	}
+	var existing Settings
+	result := db.Dao.Model(&Settings{}).Where("user_id = ?", 0).First(&existing)
+	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("查询现有配置失败: %w", result.Error)
+	}
+	if result.RowsAffected > 0 {
+		return db.Dao.Model(&Settings{}).Where("id = ?", existing.ID).Updates(updates).Error
+	}
+	// 无全局设置行时建一行；仅填这两个字段，其余走 GORM 零值 + 列默认值
+	settings := &Settings{BinanceProxy: binanceProxy, BitgetProxy: bitgetProxy}
+	if err := db.Dao.Create(settings).Error; err != nil {
+		return fmt.Errorf("创建设置行失败: %w", err)
+	}
+	return nil
+}
+
 // UpdateConfigByUserID 根据用户ID更新配置（Web端用户隔离）
 func UpdateConfigByUserID(userID uint, s *SettingConfig) error {
 	if s.Settings == nil {
