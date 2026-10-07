@@ -1,5 +1,5 @@
 <script setup>
-import {h, onBeforeMount, onBeforeUnmount, onMounted, reactive, ref, computed} from "vue";
+import {h,onBeforeMount,onBeforeUnmount,onMounted,reactive,ref,computed,watch} from "vue";
 import {Add, ChatboxOutline, RefreshOutline} from "@vicons/ionicons5";
 import {NButton, NEllipsis, NText, useMessage, NTag, NModal, NDataTable, NPopover, NIcon} from "naive-ui";
 import {
@@ -16,12 +16,23 @@ import {
 import {Environment} from "../services/wails-bridge.js";
 import vueDanmaku from 'vue3-danmaku'
 import FundKlineChart from "./FundKlineChart.vue";
+import { KLINE_MODAL_CONTENT_STYLE, KLINE_MODAL_STYLE, useKlineModalFit } from "./kline/useKlineModalFit";
 
 const danmus = ref([])
 const ws = ref(null)
 const icon = ref(null)
 const message = useMessage()
 const chartModalShow = ref(false)
+// K 线弹窗：宽度与全站其他 K 线弹窗统一；图表下方还有历史净值表格，故取比例高度不参与铺满收敛
+const klineWrapRef = ref(null)
+const { chartHeight: klineChartHeight, attach: attachKlineFit, detach: detachKlineFit } = useKlineModalFit(klineWrapRef, { scrollable: true })
+watch(chartModalShow, (v) => {
+  if (v) {
+    attachKlineFit()
+    return
+  }
+  detachKlineFit()
+})
 const chartFundCode = ref('')
 const chartFundName = ref('')
 const netValueData = ref([])
@@ -464,17 +475,25 @@ function blinkBorder(findId) {
     v-model:show="chartModalShow"
     :title="chartFundName + ' - ' + chartFundCode"
     preset="card"
-    style="width: 90vw; max-width: 1100px;"
+    :style="KLINE_MODAL_STYLE"
+    :content-style="{
+      ...KLINE_MODAL_CONTENT_STYLE,
+      overflowY: 'auto',
+      // 图表下方还有历史净值表格，给表格留出空间后仍让整卡控制在 94vh 内
+      maxHeight: 'calc(94vh - 120px)',
+    }"
     :mask-closable="true"
   >
-    <FundKlineChart
-      v-if="chartFundCode"
-      :key="chartFundCode"
-      :fund-code="chartFundCode"
-      :fund-name="chartFundName"
-      :dark-theme="darkTheme"
-      :chart-height="400"
-    />
+    <div ref="klineWrapRef">
+      <FundKlineChart
+        v-if="chartFundCode"
+        :key="chartFundCode"
+        :fund-code="chartFundCode"
+        :fund-name="chartFundName"
+        :dark-theme="darkTheme"
+        :chart-height="klineChartHeight"
+      />
+    </div>
 
     <n-divider style="margin: 12px 0 8px 0">{{ isOnExchangeFund(chartFundCode) ? '历史行情' : '历史净值' }}</n-divider>
 

@@ -83,6 +83,7 @@ import {useRoute, useRouter} from 'vue-router'
 import MoneyTrend from "./moneyTrend.vue";
 import StockSparkLine from "./stockSparkLine.vue";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
+import { KLINE_MODAL_CONTENT_STYLE, KLINE_MODAL_STYLE, useKlineModalFit } from "./kline/useKlineModalFit";
 
 const route = useRoute()
 const router = useRouter()
@@ -128,6 +129,9 @@ const modalShow5 = ref(false)
 const modalShow6 = ref(false)
 const lwKlineCode = ref('')
 const lwKlineName = ref('')
+// 多周期 K 线弹窗：尺寸与图表高度自适应，与全站其他 K 线弹窗统一
+const klineWrapRef = ref(null)
+const { chartHeight: lwKlineChartHeight, attach: attachKlineFit, detach: detachKlineFit } = useKlineModalFit(klineWrapRef)
 const currentStockTradingPrice = ref({
   stockCode: '',
   costPrice: 0,
@@ -2758,9 +2762,14 @@ function searchStockReport(stockCode) {
   })
 }
 
-// 监听多周期 K 线模态框关闭，清除定时器
+// 监听多周期 K 线模态框：关闭时清除定时器，开关同时驱动图表高度自适应
 watch(modalShow6, (newVal) => {
-  if (!newVal && klineAutoCloseTimer.value) {
+  if (newVal) {
+    attachKlineFit()
+    return
+  }
+  detachKlineFit()
+  if (klineAutoCloseTimer.value) {
     clearTimeout(klineAutoCloseTimer.value)
     klineAutoCloseTimer.value = null
   }
@@ -3227,31 +3236,27 @@ watch(modalShow6, (newVal) => {
     v-model:show="modalShow6"
     :title="(lwKlineName || '') + ' — 多周期K线'"
     preset="card"
-    style="width: min(1100px, 96vw); max-width: 96vw; box-sizing: border-box"
-    :content-style="{
-      maxHeight: 'min(85vh, 820px)',
-      overflowY: 'auto',
-      overflowX: 'hidden',
-      minWidth: 0,
-      boxSizing: 'border-box',
-    }"
+    :style="KLINE_MODAL_STYLE"
+    :content-style="KLINE_MODAL_CONTENT_STYLE"
   >
-    <stock-lightweight-kline-chart
-      v-if="modalShow6"
-      :key="'lightweight-' + lwKlineCode"
-      :code="lwKlineCode"
-      :stock-name="lwKlineName"
-      :dark-theme="data.darkTheme"
-      :chart-height="500"
-      :long-entry-price="currentStockTradingPrice.entryPrice"
-      :long-stop-loss-price="currentStockTradingPrice.stopLossPrice"
-      :long-take-profit-price="currentStockTradingPrice.takeProfitPrice"
-      :cost-price="currentStockTradingPrice.costPrice"
-      @update:longEntryPrice="handleLongEntryPriceUpdate"
-      @update:longStopLossPrice="handleLongStopLossPriceUpdate"
-      @update:longTakeProfitPrice="handleLongTakeProfitPriceUpdate"
-      @update:costPrice="handleCostPriceUpdate"
-    />
+    <div ref="klineWrapRef">
+      <stock-lightweight-kline-chart
+        v-if="modalShow6"
+        :key="'lightweight-' + lwKlineCode"
+        :code="lwKlineCode"
+        :stock-name="lwKlineName"
+        :dark-theme="data.darkTheme"
+        :chart-height="lwKlineChartHeight"
+        :long-entry-price="currentStockTradingPrice.entryPrice"
+        :long-stop-loss-price="currentStockTradingPrice.stopLossPrice"
+        :long-take-profit-price="currentStockTradingPrice.takeProfitPrice"
+        :cost-price="currentStockTradingPrice.costPrice"
+        @update:longEntryPrice="handleLongEntryPriceUpdate"
+        @update:longStopLossPrice="handleLongStopLossPriceUpdate"
+        @update:longTakeProfitPrice="handleLongTakeProfitPriceUpdate"
+        @update:costPrice="handleCostPriceUpdate"
+      />
+    </div>
   </n-modal>
 </template>
 

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import {h, onBeforeMount, onMounted, onUnmounted, ref, reactive, computed} from 'vue'
+import {h,onBeforeMount,onMounted,onUnmounted,ref,reactive,computed,watch} from 'vue'
 import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList, GetAllCustomStrategies, SaveCustomStrategy, DeleteCustomStrategy, GetEffectiveSponsorVip, GetConfig, Environment, EventsEmit, ExportTableToXLSX} from "../services/wails-bridge.js";
 import {useMessage, NText, NTag, NButton, NPopconfirm} from 'naive-ui'
 import {BookmarkOutline, TrashOutline, CreateOutline, AddOutline, DownloadOutline} from "@vicons/ionicons5";
 import StockLightweightKlineChart from "./StockLightweightKlineChart.vue";
+import { KLINE_MODAL_CONTENT_STYLE, KLINE_MODAL_STYLE, useKlineModalFit } from "./kline/useKlineModalFit";
 
 const message = useMessage()
 const search = ref('')
@@ -18,6 +19,16 @@ const showSaveModal = ref(false)
 const vipLevel = ref(0)
 const darkTheme = ref(false)
 const klineModalShow = ref(false)
+// K 线弹窗尺寸与图表高度自适应：与全站其他 K 线弹窗统一
+const klineWrapRef = ref(null)
+const { chartHeight: klineChartHeight, attach: attachKlineFit, detach: detachKlineFit } = useKlineModalFit(klineWrapRef)
+watch(klineModalShow, (v) => {
+  if (v) {
+    attachKlineFit()
+    return
+  }
+  detachKlineFit()
+})
 const klineStockCode = ref('')
 const klineStockName = ref('')
 let klineAutoCloseTimer = null
@@ -493,17 +504,20 @@ function openCenteredWindow(url, width, height) {
     v-model:show="klineModalShow"
     :title="(klineStockName || '') + ' - ' + klineStockCode + ' K线图'"
     preset="card"
-    style="width: 1400px;max-width: calc(100vw - 32px);"
+    :style="KLINE_MODAL_STYLE"
+    :content-style="KLINE_MODAL_CONTENT_STYLE"
     :mask-closable="true"
   >
-    <StockLightweightKlineChart
-      v-if="klineModalShow && klineStockCode"
-      :key="klineStockCode"
-      :code="klineStockCode"
-      :stock-name="klineStockName"
-      :dark-theme="darkTheme"
-      :chart-height="460"
-    />
+    <div ref="klineWrapRef">
+      <StockLightweightKlineChart
+        v-if="klineModalShow && klineStockCode"
+        :key="klineStockCode"
+        :code="klineStockCode"
+        :stock-name="klineStockName"
+        :dark-theme="darkTheme"
+        :chart-height="klineChartHeight"
+      />
+    </div>
   </n-modal>
 </template>
 
