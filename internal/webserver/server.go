@@ -596,6 +596,7 @@ func MigrateAllTables() {
 		&models.User{},
 		&models.SignalRecord{}, // 004 批2：Web 新库此前不建信号表
 		&models.MorningStrategy{}, // 盘前策略表：Web 此前未建表，手动生成/查询会报 no such table
+		&models.DailyReview{}, // 复盘报告表：Web 此前未建表，手动生成/查询会报 no such table
 	)
 
 	// Web 端 SQLite 兼容迁移：用户隔离列与历史 settings 缺列补丁。
