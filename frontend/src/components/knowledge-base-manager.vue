@@ -1097,27 +1097,50 @@ async function exportKbqaAnswerImage() {
   }
 }
 
-// AI 回答流式输出时自动滚动到最新内容
-// - 仅在回答中(kbqaAnswering=true)时自动滚，避免用户手动上滚查看时被强制拉回
-// - MdPreview 内部渲染为异步，nextTick 后再延迟一帧确保 DOM 已更新
-watch(kbqaAnswer, () => {
-  if (!kbqaAnswering.value) return
-  nextTick(() => {
+// AI 回答/思考过程流式输出时自动滚动到最新内容
+//
+// 为什么不直接用 behavior:'smooth'：smooth 是异步动画，SSE 每来一个 chunk 就启动一次
+// 滚动动画，动画期间持续改变滚动位置；md-editor-v3 内的 CodeMirror 6 挂了 ResizeObserver
+// 做测量（onResize / measureSoon 回调里改 DOM 尺寸），两者叠加会出现
+// "ResizeObserver loop completed with undelivered notifications"。
+//
+// 处理：滚动统一走 rAF 且同一帧只执行一次（合并 chunk 触发的多次调用）；
+// 回答结束后再用 smooth 滚一次，保留末尾的平滑观感。
+let kbqaScrollRaf = 0
+let kbqaLastAutoScrollAt = 0
+
+function kbqaAutoScrollToEnd(smooth) {
+  if (typeof window === 'undefined') return
+  const run = () => {
+    kbqaScrollRaf = 0
     const el = kbqaAnswerEndRef.value
     if (el && el.scrollIntoView) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'end' })
     }
-  })
-})
+  }
+  if (kbqaScrollRaf) {
+    cancelAnimationFrame(kbqaScrollRaf)
+  }
+  kbqaScrollRaf = requestAnimationFrame(run)
+}
+
+/** 流式增量到达：跟随滚动（无动画），并按 120ms 节流，避免高频 chunk 把主线程打满 */
+function kbqaFollowStream() {
+  if (!kbqaAnswering.value) return
+  const now = Date.now()
+  if (now - kbqaLastAutoScrollAt < 120) return
+  kbqaLastAutoScrollAt = now
+  kbqaAutoScrollToEnd(false)
+}
+
+watch(kbqaAnswer, kbqaFollowStream)
 // 思考过程流式输出也跟随滚动
-watch(kbqaReasoning, () => {
-  if (!kbqaAnswering.value) return
-  nextTick(() => {
-    const el = kbqaAnswerEndRef.value
-    if (el && el.scrollIntoView) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }
-  })
+watch(kbqaReasoning, kbqaFollowStream)
+
+// 回答结束：DOM 已稳定，用 smooth 滚到末尾做一次收尾
+watch(kbqaAnswering, (v) => {
+  if (v) return
+  nextTick(() => kbqaAutoScrollToEnd(true))
 })
 
 // ============ 知识库列表 ============
@@ -1734,6 +1757,10 @@ onUnmounted(() => {
   if (vectorizingPollTimer) {
     clearInterval(vectorizingPollTimer)
     vectorizingPollTimer = null
+  }
+  if (kbqaScrollRaf) {
+    cancelAnimationFrame(kbqaScrollRaf)
+    kbqaScrollRaf = 0
   }
   EventsOff(KBQA_EVENT)
 })
