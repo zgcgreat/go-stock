@@ -149,7 +149,9 @@ const learnModelOptions = ref([])
 
 function loadLearnModel() {
   GetConfig().then((res) => {
-    const chatModels = (res?.aiConfigs || []).filter((it) => it.modelType === '' || it.modelType === 'chat')
+    // Web 端响应包在 {code,message,data} 信封里；Wails 桌面端直接返回配置对象
+    const cfg = (res && res.data) ? res.data : (res || {})
+    const chatModels = (cfg.aiConfigs || []).filter((it) => it.modelType === '' || it.modelType === 'chat')
     learnModelOptions.value = [
       {label: '学习模型：自动（首个可用对话模型）', value: 0},
       ...chatModels.map((it) => ({label: `${it.name}（${it.modelName}）`, value: it.ID})),
@@ -217,7 +219,9 @@ function buildProfileDiff(beforeText, afterText) {
 function loadFeedback(p) {
   const cur = p || page.value
   ListAgentFeedback(cur, pageSize).then((res) => {
-    const list = res?.list || []
+    // Web 端响应包在 {code,message,data} 信封里；Wails 桌面端直接返回原始结构体
+    const data = (res && res.data) ? res.data : (res || {})
+    const list = data.list || []
     // 后端 FeedbackItem 内嵌 models.AgentFeedback，JSON 序列化后字段是扁平的
     // 小驼峰（question/reason/rating），不存在嵌套的 AgentFeedback 对象
     feedbacks.value = list.map((it) => ({
@@ -228,26 +232,41 @@ function loadFeedback(p) {
       category: classifyFeedbackReason(it.reason || ''),
       feedbackAtStr: it.feedbackAtStr || '',
     }))
-    total.value = res?.total || 0
+    total.value = data.total || 0
   })
 }
 
 function loadStats() {
   GetAgentFeedbackStats().then((res) => {
-    stats.value = res || stats.value
+    // Web 端响应包在 {code,message,data} 信封里；Wails 桌面端直接返回原始结构体。
+    // 两种形态统一拆出内部数据，并按默认值兜底，避免 upRate 为 undefined 时 toFixed 崩溃。
+    const data = (res && res.data) ? res.data : (res || {})
+    stats.value = {
+      total: data.total || 0,
+      upCount: data.upCount || 0,
+      downCount: data.downCount || 0,
+      upRate: typeof data.upRate === 'number' ? data.upRate : 0,
+    }
   })
 }
 
 function loadProfile() {
+  // Web 端响应包在 {code,message,data} 信封里；Wails 桌面端直接返回原始值
   GetUserProfile().then((res) => {
-    profile.value = res || ''
+    const data = (res && res.data) ? res.data : (res || '')
+    profile.value = data || ''
   })
-  GetUserProfileUpdatedAt().then((res) => { profileUpdatedAt.value = res || '' })
+  GetUserProfileUpdatedAt().then((res) => {
+    const data = (res && res.data) ? res.data : (res || '')
+    profileUpdatedAt.value = data || ''
+  })
 }
 
 function loadProfileEnabled() {
   GetUserProfileEnabled().then((res) => {
-    profileEnabled.value = res !== false
+    // Web 端 data 为布尔；Wails 桌面端直接返回布尔
+    const data = (res && res.data !== undefined) ? res.data : res
+    profileEnabled.value = data !== false
   })
 }
 
@@ -278,7 +297,9 @@ function relearn() {
   const oldProfile = profile.value
   RelearnUserProfile()
     .then((res) => {
-      profile.value = res || ''
+      // 成功时返回原始字符串；异常时返回 {code:1,message} 信封，统一拆包兜底
+      const data = (res && res.data) ? res.data : (res || '')
+      profile.value = data || ''
       lastDiff.value = buildProfileDiff(oldProfile, profile.value)
       if (lastDiff.value.length) {
         showDiff.value = true
@@ -305,7 +326,9 @@ function clear() {
 
 onMounted(() => {
   GetConfig().then((res) => {
-    darkTheme.value = !!res.darkTheme
+    // Web 端响应包在 {code,message,data} 信封里；Wails 桌面端直接返回配置对象
+    const cfg = (res && res.data) ? res.data : (res || {})
+    darkTheme.value = !!cfg.darkTheme
   })
   loadProfile()
   loadProfileEnabled()
