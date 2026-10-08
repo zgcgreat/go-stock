@@ -121,6 +121,11 @@ async function loadReport() {
   loadingReport.value = true
   try {
     report.value = await GetDailyReviewByDate(dateStr.value)
+    // 若仍处于生成中（上一次生成被中断/仍在后台进行），启动轮询以在完成后自动刷新，
+    // 避免页面永久停在“生成中”转圈。后端对已超 10 分钟的陈旧 generating 记录会在读取时自动复位为失败。
+    if (report.value && report.value.status === 'generating') {
+      pollStatus()
+    }
   } catch (e) {
     console.error('加载复盘报告失败', e)
   } finally {

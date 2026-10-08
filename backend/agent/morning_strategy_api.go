@@ -268,6 +268,15 @@ func (a *MorningStrategyApi) GetMorningStrategyByDate(date string) *models.Morni
 	if err != nil {
 		return nil
 	}
+	// 陈旧 generating 记录自动复位（进程被杀/异常退出导致，避免前端按钮/页面永久锁定在“生成中”转圈）
+	if strategy.Status == "generating" && time.Since(strategy.UpdatedAt) > 10*time.Minute {
+		strategy.Status = "failed"
+		strategy.ErrorMessage = "生成中断（超过10分钟无进度，已自动复位，可重新生成）"
+		db.Dao.Model(&models.MorningStrategy{}).Where("id = ?", strategy.ID).Updates(map[string]interface{}{
+			"status":         "failed",
+			"error_message": strategy.ErrorMessage,
+		})
+	}
 	return &strategy
 }
 
