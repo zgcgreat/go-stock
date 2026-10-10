@@ -147,6 +147,14 @@ const profileUpdatedAt = ref('')
 const learnModelId = ref(0)
 const learnModelOptions = ref([])
 
+// 拆响应信封：Web 端响应为 {code,message,data} 信封（data 可能为 null/空串，
+// 必须按「是否存在 data 键」判断而不是真值判断，否则 null 时会误回退到整个信封对象）；
+// Wails 桌面端直接返回原始值。返回字符串安全值。
+function unwrapEnvelopeString(res) {
+  const data = (res && typeof res === 'object' && 'data' in res) ? res.data : res
+  return typeof data === 'string' ? data : ''
+}
+
 function loadLearnModel() {
   GetConfig().then((res) => {
     // Web 端响应包在 {code,message,data} 信封里；Wails 桌面端直接返回配置对象
@@ -251,14 +259,11 @@ function loadStats() {
 }
 
 function loadProfile() {
-  // Web 端响应包在 {code,message,data} 信封里；Wails 桌面端直接返回原始值
   GetUserProfile().then((res) => {
-    const data = (res && res.data) ? res.data : (res || '')
-    profile.value = data || ''
+    profile.value = unwrapEnvelopeString(res)
   })
   GetUserProfileUpdatedAt().then((res) => {
-    const data = (res && res.data) ? res.data : (res || '')
-    profileUpdatedAt.value = data || ''
+    profileUpdatedAt.value = unwrapEnvelopeString(res)
   })
 }
 
@@ -298,8 +303,7 @@ function relearn() {
   RelearnUserProfile()
     .then((res) => {
       // 成功时返回原始字符串；异常时返回 {code:1,message} 信封，统一拆包兜底
-      const data = (res && res.data) ? res.data : (res || '')
-      profile.value = data || ''
+      profile.value = unwrapEnvelopeString(res)
       lastDiff.value = buildProfileDiff(oldProfile, profile.value)
       if (lastDiff.value.length) {
         showDiff.value = true
@@ -308,7 +312,7 @@ function relearn() {
       loadStats()
       return GetUserProfileUpdatedAt()
     })
-    .then((updatedAt) => { if (updatedAt) profileUpdatedAt.value = updatedAt })
+    .then((updatedAt) => { profileUpdatedAt.value = unwrapEnvelopeString(updatedAt) || profileUpdatedAt.value })
     .catch((e) => { message.error('学习失败: ' + e) })
     .finally(() => { learning.value = false })
 }
