@@ -56,6 +56,7 @@ func (s *Scheduler) Start() {
 
 	go s.runMarketStatisticTask()
 	go s.runBKFundFlowTask()
+	go s.runConceptFundFlowTask()
 	go s.runHotWordsTask()
 
 	// 启动用户自定义定时任务调度器
@@ -213,6 +214,40 @@ func (s *Scheduler) fetchBKFundFlow() {
 		return
 	}
 	logger.SugaredLogger.Debugf("[Scheduler] 板块资金流向采集成功，保存 %d 条", count)
+}
+
+func (s *Scheduler) runConceptFundFlowTask() {
+	s.fetchConceptFundFlow()
+
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopChan:
+			log.Println("[Scheduler] 概念资金流向采集任务已停止")
+			return
+		case <-ticker.C:
+			if isTradingTime() {
+				s.fetchConceptFundFlow()
+			}
+		}
+	}
+}
+
+func (s *Scheduler) fetchConceptFundFlow() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.SugaredLogger.Errorf("[Scheduler] 获取概念资金流向失败: %v", r)
+		}
+	}()
+
+	count, err := data.NewConceptFundFlowApi().FetchAndSave()
+	if err != nil {
+		logger.SugaredLogger.Errorf("[Scheduler] 获取概念资金流向失败: %v", err)
+		return
+	}
+	logger.SugaredLogger.Debugf("[Scheduler] 概念资金流向采集成功，保存 %d 条", count)
 }
 
 func (s *Scheduler) runHotWordsTask() {

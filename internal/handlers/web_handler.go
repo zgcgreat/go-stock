@@ -1173,6 +1173,25 @@ func GetAllConceptCodes(c *gin.Context) {
 	})
 }
 
+// FetchAndSaveConceptFundFlow 手动触发概念资金流向数据采集
+func FetchAndSaveConceptFundFlow(c *gin.Context) {
+	count, err := data.NewConceptFundFlowApi().FetchAndSave()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    -1,
+			"message": "获取概念资金流向失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "获取成功",
+		"data": gin.H{
+			"count": count,
+		},
+	})
+}
+
 // GetConceptFundFlowListByDate 获取某个概念指定日期的资金流向历史数据
 func GetConceptFundFlowListByDate(c *gin.Context) {
 	code := c.Query("code")

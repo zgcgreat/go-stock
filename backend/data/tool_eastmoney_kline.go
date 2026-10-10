@@ -339,7 +339,7 @@ func IsCSIIndexCode(code string) bool {
 // 东方财富 secid 前缀 100 = 海外指数，代码为字母（DJIA/SPX/NDX/HSI），convertStockCode 原样返回即为有效 secid。
 // MAC 主客户端不识别此类代码（tdxMarketFromStockCode 会落入 default 返回 MarketSH，
 // MACSymbolBars 把 "100.DJIA" 当沪市代码查询返回错误非空数据），故海外指数不走 MAC，直接走东方财富。
-// 新浪/腾讯/通达信标准协议均不支持海外指数。
+// 新浪/通达信不支持海外指数；腾讯支持（hkHSI/usDJI/usINX/usNDX），作为东财失败后的降级源（2026-10-10 实测）。
 func IsGlobalIndexCode(code string) bool {
 	upper := strings.ToUpper(strings.TrimSpace(code))
 	if !strings.HasPrefix(upper, "100.") {

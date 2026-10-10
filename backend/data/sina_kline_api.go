@@ -385,6 +385,20 @@ func tencentPeriodFromKlt(klt string) string {
 
 func tencentSymbolFromStockCode(stockCode string) string {
 	code := strings.ToUpper(strings.TrimSpace(stockCode))
+	// 海外指数（100.XXX，字母后缀）：腾讯行情用 hkHSI/usDJI/usINX/usNDX 等符号，
+	// 实测 web.ifzq.gtimg.cn fqkline 对其正常返回日K（2026-10-10 验证）
+	if strings.HasPrefix(code, "100.") && IsGlobalIndexCode(code) {
+		switch code[len("100."):] {
+		case "HSI":
+			return "hkHSI"
+		case "DJIA", "DJI":
+			return "usDJI"
+		case "SPX", "INX":
+			return "usINX"
+		case "NDX", "IXIC":
+			return "usNDX"
+		}
+	}
 	if strings.Contains(code, ".") {
 		parts := strings.Split(code, ".")
 		if len(parts) == 2 {
@@ -441,7 +455,12 @@ func (t *TencentKLineApi) GetKLineData(stockCode, klt string, limit int) *[]KLin
 	params := url.Values{}
 	params.Set("_var", varName)
 	params.Set("param", param)
+	// 美股指数（usDJI/usINX/usNDX 等）需走 usfqkline 专用端点才返回完整历史，
+	// fqkline 对其只返回最近 1 根（2026-10-10 实测）
 	reqURL := "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?" + params.Encode()
+	if strings.HasPrefix(symbol, "us") && IsGlobalIndexCode(stockCode) {
+		reqURL = "https://web.ifzq.gtimg.cn/appstock/app/usfqkline/get?" + params.Encode()
+	}
 
 	req := t.client.R()
 	req.SetHeader("User-Agent", getRandomUA())
@@ -464,6 +483,8 @@ func (t *TencentKLineApi) GetKLineData(stockCode, klt string, limit int) *[]KLin
 		logger.SugaredLogger.Errorf("TencentKLine: failed to strip var prefix, body prefix: %s", truncateStr(body, 200))
 		return result
 	}
+	// usfqkline 美股指数行内第 7 列是空对象 {}，[][]string 无法反序列化，替换为 "0"
+	jsonStr = strings.ReplaceAll(jsonStr, "{},", "\"0\",")
 
 	var tResp TencentKLineResponse
 	if err := json.Unmarshal([]byte(jsonStr), &tResp); err != nil {
@@ -607,8 +628,18 @@ func FetchKLineWithFallback(stockCode, stockName, klt string, limit int, end str
 		return eastMoneyResult
 	}
 
-	// 港美股/中证指数/海外指数：MAC失败后仅走东方财富，新浪/腾讯/通达信不支持港美股/.CSI/100.XXX海外指数
+	// 港美股/中证指数/海外指数：MAC失败后仅走东方财富，新浪/腾讯/通达信不支持港美股/.CSI
+	// 例外：海外指数（100.XXX）腾讯行情实测可用（hkHSI/usDJI/usINX/usNDX），东财失败后降级腾讯
 	if IsHKStockCode(stockCode) || IsUSStockCode(stockCode) || IsCSIIndexCode(stockCode) || IsGlobalIndexCode(stockCode) {
+		if IsGlobalIndexCode(stockCode) {
+			tencentResult := fetchFromTencent(stockCode, klt, limit)
+			if tencentResult != nil && tencentResult.Data != nil && len(*tencentResult.Data) > 0 {
+				tencentResult.Source = "tencent"
+				fillVolumeRatio(tencentResult.Data)
+				return tencentResult
+			}
+			logger.SugaredLogger.Warnf("海外指数腾讯数据源也为空，返回空数据: code=%s klt=%s", stockCode, klt)
+		}
 		if macResult != nil {
 			macResult.Source = "tdx-mac-ex"
 			return macResult

@@ -3797,7 +3797,7 @@ function ensureChart() {
   candleSeries.priceScale().applyOptions({
     scaleMargins: { top: 0.06, bottom: 0.22 },
   })
-  drawingHost = createDrawingHost(chart, candleSeries, chartContainerRef.value)
+  drawingHost = createDrawingHost({ chart, series: candleSeries, container: chartContainerRef.value })
   logicalRangeHandler = onVisibleLogicalRangeChanged
   chart.timeScale().subscribeVisibleLogicalRangeChange(logicalRangeHandler)
   visibleTimeRangeHandler = onVisibleTimeRangeChanged

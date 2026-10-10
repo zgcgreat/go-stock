@@ -413,6 +413,7 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/market/concept-fund-flow/codes", handlers.GetAllConceptCodes)
 			protected.GET("/market/concept-fund-flow/list", handlers.GetConceptFundFlowListByDate)
 			protected.GET("/market/concept-fund-flow/top", handlers.GetConceptFundFlowTopListByDate)
+			protected.POST("/market/concept-fund-flow/fetch", handlers.FetchAndSaveConceptFundFlow)
 
 			// 概念板块详情/K线/成分股/实时行情
 			protected.GET("/market/concept-detail", handlers.GetConceptDetail)
