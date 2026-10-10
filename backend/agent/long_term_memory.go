@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -93,6 +94,85 @@ var (
 	longTermMemoryErr  error // 初始化失败原因（用于日志与降级判断）
 	longTermMemoryInit bool  // 是否已尝试初始化（失败后允许重试）
 )
+
+// embedding 熔断状态：供应商明确返回 404/401（不支持 /embeddings 或凭据无效）后，
+// 重试注定失败，进程内标记该 AIConfig 不可用，避免每次归档/检索都白发无效请求。
+//
+// 背景（真实案例）：无 ModelType=embedding 配置时自动回退选中 DeepSeek 官方 API，
+// 而 DeepSeek 官方根本没有 /embeddings 端点，text-embedding-3-small 打过去 404，
+// 每次归档报告都重复失败。熔断在 resetLongTermMemoryStore（用户切换向量服务）时清除。
+var (
+	embeddingFailMu              sync.Mutex
+	embeddingFailedCfgIDs        = map[uint]string{} // aiConfig.ID -> 失败原因摘要
+	longTermMemoryEmbeddingCfgID uint                // 当前 collection 绑定的 aiConfig ID（0=未知）
+)
+
+// embeddingConfigGuide embedding 功能不可用时的操作指引（日志中透出，引导用户配置）
+const embeddingConfigGuide = "修复方法：在「AI模型服务配置」为支持向量模型的供应商设置" +
+	" ModelType=embedding 或填写 EmbeddingModel 字段；或在知识库页指定长期记忆向量服务。" +
+	"注意：DeepSeek 官方 API（api.deepseek.com）无 /embeddings 端点，不能用作向量服务"
+
+// markEmbeddingUnavailable 标记某个 AIConfig 的 embedding 接口在本进程内不可用
+func markEmbeddingUnavailable(cfgID uint, reason string) {
+	if cfgID == 0 {
+		return
+	}
+	embeddingFailMu.Lock()
+	defer embeddingFailMu.Unlock()
+	embeddingFailedCfgIDs[cfgID] = reason
+}
+
+// embeddingUnavailableReason 查询某个 AIConfig 是否已被熔断，返回失败原因
+func embeddingUnavailableReason(cfgID uint) (string, bool) {
+	if cfgID == 0 {
+		return "", false
+	}
+	embeddingFailMu.Lock()
+	defer embeddingFailMu.Unlock()
+	reason, broken := embeddingFailedCfgIDs[cfgID]
+	return reason, broken
+}
+
+// currentEmbeddingBroken 检查当前 collection 绑定的向量服务是否已熔断
+func currentEmbeddingBroken() (string, bool) {
+	embeddingFailMu.Lock()
+	defer embeddingFailMu.Unlock()
+	reason, broken := embeddingFailedCfgIDs[longTermMemoryEmbeddingCfgID]
+	return reason, broken
+}
+
+// setCurrentEmbeddingCfgID 记录当前 collection 绑定的 aiConfig ID（initLongTermMemoryStore 成功路径调用）
+func setCurrentEmbeddingCfgID(cfgID uint) {
+	embeddingFailMu.Lock()
+	defer embeddingFailMu.Unlock()
+	longTermMemoryEmbeddingCfgID = cfgID
+}
+
+// markIfEmbeddingFailure 识别 chromem-go 的 embedding 生成失败（404/401）并熔断当前服务。
+// 仅对"重试无意义"的错误熔断：404=端点不存在（供应商不支持 embedding）、401=凭据无效；
+// 429 限流、网络抖动等瞬态错误不熔断，保留重试机会。
+func markIfEmbeddingFailure(err error) {
+	if err == nil {
+		return
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "couldn't create embedding") {
+		return
+	}
+	if !strings.Contains(msg, "404") && !strings.Contains(msg, "401") {
+		return
+	}
+	cfgID := func() uint {
+		embeddingFailMu.Lock()
+		defer embeddingFailMu.Unlock()
+		return longTermMemoryEmbeddingCfgID
+	}()
+	if _, already := embeddingUnavailableReason(cfgID); already {
+		return
+	}
+	markEmbeddingUnavailable(cfgID, msg)
+	logger.SugaredLogger.Warnf("embedding 接口确认不可用（%s），本进程内已熔断长期记忆向量入库/检索。%s", msg, embeddingConfigGuide)
+}
 
 // MemoryRecall 单条历史经验检索结果
 type MemoryRecall struct {
@@ -164,8 +244,29 @@ func initLongTermMemoryStore() {
 	longTermMemoryColl = coll
 	longTermMemoryErr = nil
 	longTermMemoryInit = true
+	setCurrentEmbeddingCfgID(parseEmbeddingCfgID(aiCfgInfo))
 	logger.SugaredLogger.Infof("长期记忆向量库已就绪: path=%s collection=%s docs=%d embedding=%s",
 		storePath, longTermMemoryCollectionName, coll.Count(), aiCfgInfo)
+}
+
+// parseEmbeddingCfgID 从 buildEmbeddingFunc 的配置摘要中解析 aiConfig ID。
+// 摘要格式固定为 "aiConfig#<ID>:<baseUrl>=<model>"（见 buildEmbeddingFuncWith）；
+// 解析失败返回 0（0 在熔断逻辑中等价于"未知，不熔断"，安全降级）。
+func parseEmbeddingCfgID(summary string) uint {
+	idx := strings.Index(summary, "aiConfig#")
+	if idx < 0 {
+		return 0
+	}
+	rest := summary[idx+len("aiConfig#"):]
+	end := strings.IndexByte(rest, ':')
+	if end <= 0 {
+		return 0
+	}
+	id, err := strconv.ParseUint(rest[:end], 10, 32)
+	if err != nil {
+		return 0
+	}
+	return uint(id)
 }
 
 // resetLongTermMemoryStore 重置长期记忆向量库单例（切换向量服务后调用）。
@@ -182,6 +283,11 @@ func resetLongTermMemoryStore() {
 	longTermMemoryColl = nil
 	longTermMemoryErr = nil
 	longTermMemoryInit = false
+	// 同步清除 embedding 熔断标记：用户切换向量服务后应允许新配置重试
+	setCurrentEmbeddingCfgID(0)
+	embeddingFailMu.Lock()
+	embeddingFailedCfgIDs = map[uint]string{}
+	embeddingFailMu.Unlock()
 }
 
 // buildEmbeddingFunc 从 data.AIConfig 构造 OpenAI 兼容 embedding 函数（长期记忆专用）。
@@ -254,6 +360,12 @@ func buildEmbeddingFuncWith(aiConfigID uint, embeddingModel string) (chromem.Emb
 	}
 
 	// 模型名解析：参数 > env > (type=embedding 时用 ModelName) > AIConfig.EmbeddingModel > default
+	// 熔断检查：该服务此前已确认不支持 embedding（404/401）时直接拒绝，
+	// 避免重新初始化后继续发注定失败的请求。
+	if reason, broken := embeddingUnavailableReason(aiConfig.ID); broken {
+		return nil, "", fmt.Errorf("AI服务 %q (ID=%d) 的 embedding 接口此前已失败（%s），本进程内不再重试。%s",
+			aiConfig.Name, aiConfig.ID, reason, embeddingConfigGuide)
+	}
 	model := strings.TrimSpace(embeddingModel)
 	if model == "" {
 		if env := strings.TrimSpace(os.Getenv(envEmbeddingModel)); env != "" {
@@ -323,6 +435,12 @@ func AddMemory(question, response string, mode Mode, reportPath, userKey string)
 
 // addMemorySync 同步执行切片+入库逻辑（供 AddMemory 的 goroutine 调用）。
 func addMemorySync(ctx context.Context, question, response string, mode Mode, reportPath, userKey string) error {
+	// 熔断检查：向量服务此前已确认不支持 embedding 时直接跳过，不再发无效请求。
+	// 必须在 initLongTermMemoryStore 之前判断——collection 一旦初始化成功就不再重建，
+	// 后续 404 只会发生在 AddDocument 阶段。
+	if reason, broken := currentEmbeddingBroken(); broken {
+		return fmt.Errorf("向量服务已熔断，跳过入库（%s）", reason)
+	}
 	initLongTermMemoryStore()
 	if longTermMemoryColl == nil {
 		return fmt.Errorf("向量库未初始化: %v", longTermMemoryErr)
@@ -361,6 +479,9 @@ func addMemorySync(ctx context.Context, question, response string, mode Mode, re
 		}
 
 		if err := longTermMemoryColl.AddDocument(ctx, doc); err != nil {
+			// embedding 端点 404/401 属于"重试无意义"的确定性失败，标记熔断；
+			// 下次归档直接跳过，不再白发请求刷日志
+			markIfEmbeddingFailure(err)
 			return fmt.Errorf("写入 chunk %d/%d 失败: %w", i, total, err)
 		}
 	}
@@ -424,6 +545,11 @@ func SearchRelevant(ctx context.Context, query string, topK int, userKey string)
 	}()
 
 	if strings.TrimSpace(query) == "" {
+		return nil
+	}
+	// 熔断检查：向量服务已确认不支持 embedding 时跳过检索，
+	// 调用方（buildSelfEvolutionPrompt）自动降级到文件名扫描 fallback
+	if _, broken := currentEmbeddingBroken(); broken {
 		return nil
 	}
 	if topK <= 0 {

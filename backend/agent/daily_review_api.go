@@ -7,8 +7,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
@@ -338,19 +336,15 @@ func (a *DailyReviewApi) DeleteDailyReview(id uint) error {
 
 // ---------------- 通用辅助（复盘/盘前策略共用） ----------------
 
-// safeEventsEmit 安全推送 Wails 事件：ctx 非法或未初始化时静默跳过（测试环境等场景）
+// safeEventsEmit 安全推送 Wails 事件：ctx 不携带 wails events 句柄时（Web 端
+// context.Background()、单元测试）直接跳过。
+//
+// 早期实现只靠 defer recover 兜底，实际拦不住——wails 的 getEvents(ctx) 在找不到
+// "events" 键时走 log.Fatalf（os.Exit(1)）而非 panic，recover 对进程退出无效。
+// 曾导致 Web 端手动生成复盘报告时整个服务进程被杀（exit status 1）。
+// 现改为调用前校验，recover 仅作第二道防线。详见 data.SafeEventsEmit。
 func safeEventsEmit(ctx context.Context, event string, payload any) {
-	if ctx == nil {
-		return
-	}
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logger.SugaredLogger.Warnf("emit event %s panic recovered: %v", event, r)
-			}
-		}()
-		runtime.EventsEmit(ctx, event, payload)
-	}()
+	data.SafeEventsEmit(ctx, event, payload)
 }
 
 // progressEmitter 流式进度事件发射器（复盘/盘前策略共用）：

@@ -17,7 +17,6 @@ import (
 	"github.com/duke-git/lancet/v2/random"
 	"github.com/duke-git/lancet/v2/strutil"
 	"github.com/tidwall/gjson"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // buildUserMessageContent 构造用户消息的 content。
@@ -577,7 +576,7 @@ func (o *OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptI
 					"question":     question,
 					"extraContent": "***❗获取股票价格失败,分析结果可能不准确***<hr>",
 				}
-				go runtime.EventsEmit(o.ctx, "warnMsg", "❗获取股票价格失败,分析结果可能不准确")
+				SafeEventsEmit(o.ctx, "warnMsg", "❗获取股票价格失败,分析结果可能不准确")
 				return
 			}
 			price := ""
@@ -612,7 +611,7 @@ func (o *OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptI
 					"question":     question,
 					"extraContent": "***❗获取股票财报失败,分析结果可能不准确***<hr>",
 				}
-				go runtime.EventsEmit(o.ctx, "warnMsg", "❗获取股票财报失败,分析结果可能不准确")
+				SafeEventsEmit(o.ctx, "warnMsg", "❗获取股票财报失败,分析结果可能不准确")
 				return
 			}
 			msg = append(msg, map[string]interface{}{

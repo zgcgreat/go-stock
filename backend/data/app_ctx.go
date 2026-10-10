@@ -3,8 +3,6 @@ package data
 import (
 	"context"
 	"sync"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // @Author spark
@@ -27,13 +25,11 @@ func SetAppCtx(ctx context.Context) {
 }
 
 // EmitStockDataChanged 向前端推送「股票数据已变更」事件，触发前端刷新分组/概念缓存。
-// 安全调用：AppCtx 未设置时静默跳过（如测试环境）。异步 emit 避免阻塞工具 handler。
+// 安全调用：ctx 缺失或不携带 wails events 句柄时静默跳过（Web 端、测试环境、启动早期）。
+// 异步 emit 避免阻塞工具 handler。
 func EmitStockDataChanged() {
 	appCtxMu.RLock()
 	ctx := appCtx
 	appCtxMu.RUnlock()
-	if ctx == nil {
-		return
-	}
-	go runtime.EventsEmit(ctx, "stockDataChanged", "")
+	SafeEventsEmit(ctx, "stockDataChanged", "")
 }
