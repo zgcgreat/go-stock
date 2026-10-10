@@ -126,3 +126,9 @@ deploy/
 
 
 */__pycache__/*
+
+# vite 临时构建验证目录（本机 safe-delete 拦截自动删除，手动清理即可）
+frontend/dist-buildtest/
+
+# 临时诊断目录
+.diag/

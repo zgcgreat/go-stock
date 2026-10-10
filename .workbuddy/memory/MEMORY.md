@@ -1,5 +1,18 @@
 # MEMORY.md - go-stock 项目长期记忆
 
+## ⚠️ StockLightweightKlineChart 初始加载丢数据模式（2026-10-10 血泪）
+- `onMounted` 的 `nextTick` 回调里 `ensureChart(); loadData(); setupPoll();` 是**一条链**：
+  ensureChart 内任何异常（如 createDrawingHost 参数不匹配）都会静默吞掉初始 loadData——
+  无请求、无 errorText、只有"暂无K线数据"占位符，watch(props.code) 二次触发会掩盖问题
+  （code 动态的页面能恢复，code 硬编码的页面如「重大指数」永远空白）。
+- 排查口诀：先看 pageerror（playwright 捕获），再查网络；"没有请求"≠后端问题。
+- `createDrawingHost` 签名是**对象参数** `{chart, series, container}`，不是位置参数。
+- 诊断基建：临时注册账号拿 token 直调端点；`go test` 直调 `FetchKLineWithFallback`；
+  playwright 用 `channel:'msedge'` + NODE_PATH 全局 node_modules。
+- 本机 `push2his.eastmoney.com`（东财历史K线）连接被重置（EOF），实时行情主机正常；
+  海外指数(HK/US)东财失败后代码明确不降级 → 网络被墙时海外指数必挂。
+
+
 ## 项目基本信息
 - **项目名**: go-stock
 - **定位**: 基于大语言模型的 AI 赋能股票分析工具（桌面应用 + Web端）
@@ -77,3 +90,18 @@
 - Web 端 AI 菜单功能对齐（2026-06-21）：agentMode 修复、enableAgent/enableFund 联动、会话持久化、提示词/思考/记忆/分享/导出图片
 - 登录页 API 拦截（2026-06-21）：axios 拦截器统一拦截无 token 业务请求
 - 设置保存修复（2026-06-21）：enableAgent/enableFund 强制覆盖 bug、保存成功提示红叉
+
+## ⚠️ wails runtime 调用的致命约束（2026-10-08 血泪）
+- **wails v2 `runtime.*` 在 ctx 非法时是 `log.Fatalf` → `os.Exit(1)`，不是 panic**
+  → `defer recover()` **拦不住**。曾因 `agent.safeEventsEmit` 只写 recover 而导致
+  Web 端生成复盘报告时整个进程被杀（exit status 1）。
+- **铁律**：后台任务（cron / Web handler / 异步 goroutine）里调任何 `runtime.*` 前，
+  ctx 必须来自 Wails 生命周期钩子。统一走 `data.SafeEventsEmit(ctx, event, payload)`
+  （内部先 `HasWailsEvents` 探测 `"events"` 键，无则直接返回）。
+- 新增 wails 事件推送时**不要**再手写 `defer recover()` 伪安全封装。
+
+## ⚠️ Web/桌面端功能对齐检查（2026-10-10 教训）
+- 桌面端 app.go 的 cron 采集任务与 Web 端 internal/webserver/scheduler.go 是**两套独立注册**，
+  上游同步/新功能移植时容易漏掉 Web 侧任务（已发生：概念资金流向采集缺失，表 0 行 UI 空白）。
+- 排查口诀：数据空白先查本地表有没有行（sqlite3 data/stock.db），再查外部源可达性，最后查调度器注册清单。
+- Web 端手动采集端点模式：POST /market/xxx/fetch + handler 包 FetchAndSaveXxx。
