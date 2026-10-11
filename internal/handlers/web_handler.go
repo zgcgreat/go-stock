@@ -392,11 +392,11 @@ func GetAllStocks(c *gin.Context) {
 
 // GetSponsorInfo 获取赞助信息（综合用户管理和本地配置）
 func GetSponsorInfo(c *gin.Context) {
-	// 获取本地配置的赞助信息
-	level, active := data.EffectiveSponsorVipLevel()
+	// 获取本地配置的赞助信息（Web 端按用户隔离解析）
+	userID, _ := middleware.GetUserIDFromContext(c)
+	level, active := data.EffectiveSponsorVipLevelForUser(userID)
 
 	// 检查用户管理中的 VIP 信息
-	userID, _ := middleware.GetUserIDFromContext(c)
 	if userID > 0 {
 		var user models.User
 		if err := db.Dao.Where("id = ?", userID).First(&user).Error; err == nil {
@@ -435,6 +435,38 @@ func GetSponsorInfo(c *gin.Context) {
 			"active":   active,
 		},
 	})
+}
+
+// CheckSponsorCode 校验赞助码并持久化到当前用户配置（对应桌面端 App.CheckSponsorCode）。
+// 请求体 {"sponsorCode": "..."}；校验通过后写入用户 settings，前端据此提示成功/失败。
+func CheckSponsorCode(c *gin.Context) {
+	var req struct {
+		SponsorCode string `json:"sponsorCode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "赞助码不能为空,请输入正确的赞助码!"})
+		return
+	}
+	sponsorCode := strings.TrimSpace(req.SponsorCode)
+	if sponsorCode == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "赞助码不能为空,请输入正确的赞助码!"})
+		return
+	}
+	if _, err := data.SafeDecryptSponsorCode(sponsorCode, data.SponsorDecryptKeyHex); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "赞助码错误，请输入正确的赞助码!"})
+		return
+	}
+	// 校验通过后持久化到当前用户配置
+	userID, _ := middleware.GetUserIDFromContext(c)
+	config := data.GetSettingConfigByUserID(userID)
+	if config != nil && config.SponsorCode != sponsorCode {
+		config.SponsorCode = sponsorCode
+		if err := data.UpdateConfigByUserID(userID, config); err != nil {
+			c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "赞助码校验成功，但保存配置失败: " + err.Error()})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"code": 1, "msg": "赞助码校验成功，感谢您的支持!"}})
 }
 
 // GetCronTaskTypes 获取定时任务类型

@@ -20,7 +20,17 @@ import (
 	"go-stock/internal/webserver"
 )
 
+// BuildKey 赞助码解密密钥（hex），编译时通过 -ldflags "-X main.BuildKey=<hex>" 注入，
+// 与桌面端 main.go 保持一致；为空时回退默认密钥。
+var BuildKey string
+
 func main() {
+	// 赞助码解密密钥：与桌面端 checkDir 的回退逻辑保持一致
+	if BuildKey == "" {
+		BuildKey = "cc1e0d684e32f176c56ff1fcf384dcd9"
+	}
+	data.SponsorDecryptKeyHex = BuildKey
+
 	port := os.Getenv("GO_STOCK_WEB_PORT")
 	if port == "" {
 		port = "8080"

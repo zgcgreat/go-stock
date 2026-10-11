@@ -382,6 +382,7 @@ func (ws *WebServer) initRouter() {
 
 			// 赞助
 			protected.GET("/sponsor/info", handlers.GetSponsorInfo)
+			protected.POST("/sponsor/check", handlers.CheckSponsorCode)
 
 			// 指标选股
 			protected.GET("/market/hot-strategy", handlers.GetHotStrategy)

@@ -49,6 +49,19 @@ func SafeDecryptSponsorCode(sponsorCode, keyHex string) (raw []byte, err error) 
 	return cryptor.AesEcbDecrypt(encrypted, key), nil
 }
 
+// EffectiveSponsorVipLevelForUser 按用户配置解析赞助码 VIP 等级（Web 端用户隔离场景）。
+func EffectiveSponsorVipLevelForUser(userID uint) (level int, active bool) {
+	keyHex := strings.TrimSpace(SponsorDecryptKeyHex)
+	if keyHex == "" {
+		keyHex = DefaultSponsorAESKeyHex
+	}
+	config := GetSettingConfigByUserID(userID)
+	if config == nil {
+		return 0, false
+	}
+	return parseSponsorVipLevel(config.SponsorCode, keyHex)
+}
+
 // EffectiveSponsorVipLevel 根据设置中的 sponsorCode 解析 VIP 等级，并按 vipAuthTime / vipStartTime / vipEndTime 判断是否当前有效。
 // 与 app.isVip 时间判断逻辑保持一致。
 func EffectiveSponsorVipLevel() (level int, active bool) {
@@ -56,7 +69,12 @@ func EffectiveSponsorVipLevel() (level int, active bool) {
 	if keyHex == "" {
 		keyHex = DefaultSponsorAESKeyHex
 	}
-	raw, err := SafeDecryptSponsorCode(GetSettingConfig().SponsorCode, keyHex)
+	return parseSponsorVipLevel(GetSettingConfig().SponsorCode, keyHex)
+}
+
+// parseSponsorVipLevel 解密赞助码并按时间窗口判断 VIP 是否生效。
+func parseSponsorVipLevel(sponsorCode, keyHex string) (level int, active bool) {
+	raw, err := SafeDecryptSponsorCode(sponsorCode, keyHex)
 	if err != nil || len(raw) == 0 {
 		return 0, false
 	}

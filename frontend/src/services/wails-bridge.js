@@ -1528,7 +1528,11 @@ export function CheckFrequentTrading(arg1) {
 
 export function CheckSponsorCode(arg1) {
   if (isWailsMode()) return window.go.main.App.CheckSponsorCode(arg1);
-  return Promise.resolve({ valid: false });
+  // Web 端赞助码可能以字符串或 {sponsorCode} 对象形式传入，统一拆包后 POST /sponsor/check
+  const code = typeof arg1 === 'string' ? arg1 : arg1?.sponsorCode;
+  return apiService.client.post('/sponsor/check', { sponsorCode: code }, { headers: getAuthHeaders() })
+    .then(res => res.data?.data || res.data || { code: 0, msg: '赞助码验证失败' })
+    .catch(() => ({ code: 0, msg: '赞助码验证失败' }));
 }
 
 export function CheckUpdate(arg1) {
