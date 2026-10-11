@@ -129,6 +129,7 @@ deploy/
 
 # vite 临时构建验证目录（本机 safe-delete 拦截自动删除，手动清理即可）
 frontend/dist-buildtest/
+frontend/dist-sync-test/
 
 # 临时诊断目录
 .diag/
