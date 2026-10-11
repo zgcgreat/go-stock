@@ -18,8 +18,11 @@ import {
 import {NTag, NTooltip, NIcon, useMessage} from "naive-ui";
 import {EventsEmit} from "../services/wails-bridge.js";
 import {HelpCircleFilledIcon, HelpIcon} from "tdesign-icons-vue-next";
+import {useIsWebMode} from '../composables/useResponsive'
 
 const message = useMessage()
+// Web 端不走赞助码：VIP 由本地用户管理（管理员设置 vipLevel）发放，设置页隐藏赞助码入口
+const {isWebMode} = useIsWebMode()
 
 // 合约代理（币安 USDT-M / Bitget 美股永续共用一项）：
 // 与爬虫 httpProxy 完全独立，且是「服务端出网配置」而非用户偏好——
@@ -324,7 +327,7 @@ function saveConfig() {
     promptPlazaApiBase: formValue.value.promptPlazaApiBase,
   }
 
-  if (config.sponsorCode) {
+  if (!isWebMode.value && config.sponsorCode) {
     CheckSponsorCode(config.sponsorCode).then(res => {
       if (!res.code) {
         message.warning(res.msg || '赞助码验证失败')
@@ -620,7 +623,7 @@ function deletePrompt(ID) {
               </n-tooltip>
             </n-form-item-gi>
 
-            <n-form-item-gi :span="24" path="sponsorCode" class="sponsor-code-item">
+            <n-form-item-gi v-if="!isWebMode" :span="24" path="sponsorCode" class="sponsor-code-item">
               <div class="sponsor-code-box">
                 <div class="sponsor-code-label">
                   <n-tag type="warning" size="small" :bordered="false" round>👑 VIP</n-tag>
