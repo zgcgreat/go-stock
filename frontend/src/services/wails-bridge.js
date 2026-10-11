@@ -1874,10 +1874,13 @@ export function GlobalStockIndexes() {
     .catch(() => ({}));
 }
 
-export function ListAiAssistantSessions() {
-  if (isWailsMode()) return window.go.main.App.ListAiAssistantSessions ? window.go.main.App.ListAiAssistantSessions() : Promise.resolve([]);
-  // Web 模式：调用后端 API
-  return apiService.client.get('/ai/assistant/sessions', { headers: getAuthHeaders() })
+export function ListAiAssistantSessions(keyword, limit) {
+  if (isWailsMode()) return window.go.main.App.ListAiAssistantSessions ? window.go.main.App.ListAiAssistantSessions(keyword, limit) : Promise.resolve([]);
+  // Web 模式：调用后端 API（keyword 模糊搜索 / limit 条数，均可选）
+  const params = {};
+  if (keyword) params.keyword = keyword;
+  if (limit) params.limit = limit;
+  return apiService.client.get('/ai/assistant/sessions', { headers: getAuthHeaders(), params })
     .then(res => res.data?.data || [])
     .catch(() => []);
 }

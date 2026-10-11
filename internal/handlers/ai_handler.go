@@ -656,9 +656,12 @@ func SaveAiAssistantSessionHandler(c *gin.Context) {
 }
 
 // ListAiAssistantSessionsHandler 列出AI助手所有会话
+// 支持 keyword（模糊搜索会话正文）与 limit（返回条数，默认 10）查询参数
 func ListAiAssistantSessionsHandler(c *gin.Context) {
 	userID, _ := middleware.GetUserIDFromContext(c)
-	list, err := data.ListAiAssistantSessions(userID)
+	keyword := c.Query("keyword")
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	list, err := data.ListAiAssistantSessions(userID, keyword, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    1,
