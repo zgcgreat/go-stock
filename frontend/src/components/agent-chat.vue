@@ -669,7 +669,9 @@ onBeforeMount(() => {
     console.log(res)
     // 视觉理解模型加 [视觉] 标记（与桌面端一致）
     selectOptions.value = (res || []).map(c => ({...c, name: (c.name ?? '') + (c.supportVision ? ' [视觉]' : '')}))
-    selectValue.value = res[0].ID
+    if (res && res.length > 0) {
+      selectValue.value = res[0].ID
+    }
   })
 })
 

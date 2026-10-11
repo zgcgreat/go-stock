@@ -1860,9 +1860,9 @@ export function GetAllMCPTools() {
     .catch(() => []);
 }
 
-export function FollowFund(arg1) {
+export function FollowFund(arg1, arg2) {
   if (isWailsMode()) return window.go.main.App.FollowFund(arg1);
-  return apiService.client.post('/funds/follow', { code: arg1 }, { headers: getAuthHeaders() })
+  return apiService.client.post('/funds/follow', { fundCode: arg1, fundName: arg2 || '' }, { headers: getAuthHeaders() })
     .then(res => res.data?.message || '关注成功')
     .catch(err => err.message || '关注失败');
 }
@@ -2076,7 +2076,8 @@ export function GetFollowedFund() {
 
 export function GetfundList(arg1) {
   if (isWailsMode()) return window.go.main.App.GetfundList(arg1);
-  return apiService.client.get('/funds', { params: arg1, headers: getAuthHeaders() })
+  // 桌面端 arg1 是搜索关键字；Web 端转成 q 参数（模糊匹配 code/name/full_name）
+  return apiService.client.get('/funds', { params: { q: arg1 || '' }, headers: getAuthHeaders() })
     .then(extractApiData)
     .catch(() => []);
 }
@@ -2879,11 +2880,13 @@ export function GetFundRanking(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function GetFundHistoryNetValue(arg1, arg2, arg3, arg4, arg5) {
   if (isWailsMode()) return window.go.main.App.GetFundHistoryNetValue(arg1, arg2, arg3, arg4, arg5);
+  // 桌面端第 2 参语义是 pageSize（取最近 N 条，Go 方法为 (fundCode, pageSize, startDate, endDate)），
+  // Web 端对齐：pageIndex 固定 1，否则深翻页会取到陈旧数据且易触发上游超时
   const params = {
-    pageIndex: arg2 || 1,
-    pageSize: arg3 || 20,
-    startDate: arg4 || '',
-    endDate: arg5 || '',
+    pageIndex: 1,
+    pageSize: arg2 || 30,
+    startDate: arg3 || '',
+    endDate: arg4 || '',
   };
   return apiService.client.get(`/funds/${arg1}/history`, { params, headers: getAuthHeaders() })
     .then(res => res.data?.data || [])

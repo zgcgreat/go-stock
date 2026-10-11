@@ -2169,6 +2169,40 @@ func SearchAllKnowledge(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": []interface{}{}})
 }
 
+// ========== 知识库/长期记忆补充 Stub ==========
+// 与上方知识库 stub 同一设计：Web 端未启用 chromem-go 向量库，
+// 补齐路由避免前端 404，返回形状与前端消费方式对齐。
+
+// ListKBDocumentsPagedHandler 文档分页列表（前端读 res.items / res.total）
+func ListKBDocumentsPagedHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"items": []interface{}{}, "total": 0})
+}
+
+// GetLongTermMemoryAiConfigIdHandler 返回 0（自动模式默认值，前端读裸数值）
+func GetLongTermMemoryAiConfigIdHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, 0)
+}
+
+// SetLongTermMemoryAiConfigIdHandler Web 未启用向量库，返回 501 让前端走失败分支提示
+func SetLongTermMemoryAiConfigIdHandler(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"code": 1, "message": "知识库功能需要 chromem-go 向量数据库支持，Web端暂未启用"})
+}
+
+// GetLongTermMemoryInfoHandler 长期记忆信息（前端读 ready 等字段）
+func GetLongTermMemoryInfoHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"ready": false, "documentCount": 0, "message": "Web端暂未启用长期记忆"})
+}
+
+// SearchLongTermMemoryHandler 长期记忆检索（前端直接当数组消费）
+func SearchLongTermMemoryHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, []interface{}{})
+}
+
+// ChatWithAgentKBQAHandler 知识库问答（依赖向量库，Web 未启用）
+func ChatWithAgentKBQAHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "message": "知识库功能需要 chromem-go 向量数据库支持，Web端暂未启用"})
+}
+
 // ========== 用户画像 Handler ==========
 // Web端用户画像：agent 自动学习模块未启用，画像文本持久化到 user_settings 表（按用户隔离）
 

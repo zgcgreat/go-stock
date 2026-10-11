@@ -32,6 +32,22 @@ func ApplyWebCompatibilityMigrations() {
 
 	// 004 批2：signal_record 用户隔离（补列 + 唯一索引重建，桌面/WEB 同一实现）
 	data.MigrateSignalRecordSchema()
+
+	migrateFollowedFundLegacyFields()
+}
+
+// migrateFollowedFundLegacyFields 回填 followed_fund 的 legacy 字段（code/name）。
+// FundBasic 关联（foreignKey:Code）与前端组件均依赖 code/name，
+// 早期 Web 端只写 fund_code/fund_name 导致关联失败、页面空白。
+func migrateFollowedFundLegacyFields() {
+	result := db.Dao.Exec("UPDATE followed_fund SET code = fund_code, name = fund_name WHERE code = '' AND fund_code <> ''")
+	if result.Error != nil {
+		log.Printf("Migrate followed_fund legacy fields failed: %v", result.Error)
+		return
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("Migrated: Backfilled %d followed_fund rows (code/name <- fund_code/fund_name)", result.RowsAffected)
+	}
 }
 
 func migrateUserIDColumns(tableNames []string) {

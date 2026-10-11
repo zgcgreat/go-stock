@@ -223,6 +223,11 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/funds/follow", handlers.FollowFund)
 			protected.DELETE("/funds/unfollow", handlers.UnFollowFund)
 			protected.GET("/funds/follow/list", handlers.GetFollowedFund)
+			protected.GET("/funds/follow/paged", handlers.GetFollowedFundPaged)
+			protected.GET("/funds/search", handlers.SearchFundCodesWeb)
+			protected.GET("/funds/:code/kline", handlers.GetFundKLineWeb)
+			protected.GET("/funds/:code/history", handlers.GetFundHistoryNetValueWeb)
+			protected.GET("/funds/:code/holdings", handlers.GetFundTop10HoldingsWeb)
 
 			// 新闻/电报
 			protected.GET("/telegraph", handlers.GetTelegraphList)
@@ -445,6 +450,12 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/knowledge-base/vectorizing-status", handlers.GetKBVectorizingStatus)
 			protected.GET("/knowledge-base/vectorizing-statuses", handlers.GetAllKBVectorizingStatuses)
 			protected.POST("/knowledge-base/search-all", handlers.SearchAllKnowledge)
+			protected.GET("/knowledge-base/documents-paged", handlers.ListKBDocumentsPagedHandler)
+			protected.GET("/knowledge-base/long-term-memory-info", handlers.GetLongTermMemoryInfoHandler)
+			protected.POST("/knowledge-base/search-long-term-memory", handlers.SearchLongTermMemoryHandler)
+			protected.POST("/knowledge-base/chat-qa", handlers.ChatWithAgentKBQAHandler)
+			protected.GET("/settings/long-term-memory-ai-config-id", handlers.GetLongTermMemoryAiConfigIdHandler)
+			protected.POST("/settings/long-term-memory-ai-config-id", handlers.SetLongTermMemoryAiConfigIdHandler)
 
 			// 用户画像
 			protected.GET("/user-profile", handlers.GetUserProfileHandler)
