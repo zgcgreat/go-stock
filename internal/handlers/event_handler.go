@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"go-stock/backend/data"
 )
 
 // SSE 事件总线（004 批3）：桌面模式「Go cron 60s → Wails 事件」节拍的 Web 等价物。
@@ -23,7 +25,10 @@ import (
 var (
 	eventBusMu      sync.Mutex
 	eventBusClients = make(map[chan string]struct{})
-	eventBusOnce    sync.Once
+
+	// signalTickMu 保护信号节拍循环的热更新（007：扫描间隔 30~600s 可配置）
+	signalTickMu   sync.Mutex
+	signalTickStop chan struct{}
 )
 
 // EventsStreamHandler 服务端事件流：GET /events/stream（JWT 保护，fetch-stream 读取，
@@ -47,7 +52,7 @@ func EventsStreamHandler(c *gin.Context) {
 		delete(eventBusClients, ch)
 		eventBusMu.Unlock()
 	}()
-	startEventBusTicker()
+	startSignalTickLoop()
 
 	// 立即冲刷响应头并写一行注释作为握手确认（SSE 注释行对客户端不可见）
 	_, _ = fmt.Fprint(c.Writer, ": connected\n\n")
@@ -66,17 +71,41 @@ func EventsStreamHandler(c *gin.Context) {
 	}
 }
 
-// startEventBusTicker 节拍广播器（进程级单例；空连接时 ticker 空转，零成本）
-func startEventBusTicker() {
-	eventBusOnce.Do(func() {
-		go func() {
-			ticker := time.NewTicker(60 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				BroadcastEvent("event: signalMonitorTick\ndata: {}\n\n")
-			}
-		}()
-	})
+// startSignalTickLoop 节拍广播器（进程级单例；空连接时 ticker 空转，零成本）。
+// 节拍间隔取设置页「扫描间隔」（默认 60s），经 SetSignalScanInterval API 热更新。
+func startSignalTickLoop() {
+	signalTickMu.Lock()
+	defer signalTickMu.Unlock()
+	if signalTickStop != nil {
+		return // 已有循环在跑
+	}
+	signalTickStop = make(chan struct{})
+	go signalTickLoop(data.GetSignalScanIntervalSec(), signalTickStop)
+}
+
+// signalTickLoop 按给定间隔广播 signalMonitorTick；stop 被关闭后退出（由热更新重启新循环）。
+func signalTickLoop(sec int, stop chan struct{}) {
+	ticker := time.NewTicker(time.Duration(sec) * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			BroadcastEvent("event: signalMonitorTick\ndata: {}\n\n")
+		}
+	}
+}
+
+// RestartSignalTickInterval 热更新信号节拍间隔：停止旧循环并以新间隔重启（幂等）。
+func RestartSignalTickInterval(sec int) {
+	signalTickMu.Lock()
+	defer signalTickMu.Unlock()
+	if signalTickStop != nil {
+		close(signalTickStop)
+	}
+	signalTickStop = make(chan struct{})
+	go signalTickLoop(sec, signalTickStop)
 }
 
 // BroadcastEvent 向所有在线连接广播一条 SSE 消息；慢消费者（缓冲满）丢弃本条——

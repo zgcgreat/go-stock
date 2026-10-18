@@ -17,6 +17,7 @@ import {
   SaveAsMarkdown,
   ShareAnalysis,
   SummaryStockNews,
+  AbortSummaryStockNewsByEvent,
   GetAiConfigs,
 } from "../services/wails-bridge.js";
 import {EventsOff, EventsOn} from "../services/wails-bridge.js";
@@ -304,14 +305,30 @@ function industryRank() {
 
 let analysisFailed = false
 
+// [007/41ab84b] 中断状态跟踪：isSummaryStreaming 表示当前有进行中的总结流（控制"中断"按钮显隐）；
+// cancelledOldPending 标记"再次总结"刚取代了旧流，下一条 CANCELLED 属于旧流的退出通知，
+// 不应把新请求的界面状态误标为"已中断"。
+const isSummaryStreaming = ref(false)
+let cancelledOldPending = false
+
+const SUMMARY_EVENT = "summaryStockNews"
+
+function abortSummary() {
+  if (!isSummaryStreaming.value) return
+  AbortSummaryStockNewsByEvent(SUMMARY_EVENT)
+  // 界面状态由后端推送的 CANCELLED 事件统一收尾
+}
+
 function reAiSummary() {
   resetSummaryBuffer()
   aiSummary.value = ""
   analysisFailed = false
   summaryModal.value = true
   loading.value = true
+  isSummaryStreaming.value = true
+  cancelledOldPending = true
   analysisStatus.value = "正在连接AI服务..."
-  SummaryStockNews(question.value,aiConfigId.value, sysPromptId.value,enableTools.value,thinkingMode.value,"summaryStockNews","","","")
+  SummaryStockNews(question.value,aiConfigId.value, sysPromptId.value,enableTools.value,thinkingMode.value,SUMMARY_EVENT,"","","")
 }
 
 function getAiSummary() {
@@ -385,6 +402,7 @@ EventsOn("summaryStockNews", async (msg) => {
     // 结束前先落盘缓冲区，保证保存/展示的内容完整
     flushSummaryBuffer()
     loading.value = false
+    isSummaryStreaming.value = false
     message.destroyAll()
     if (analysisFailed) {
       // 分析过程出错（网络/模型服务/超时），不能提示"分析完成"，也不保存错误内容
@@ -407,23 +425,28 @@ EventsOn("summaryStockNews", async (msg) => {
       analysisStatus.value = ""
     }, 3000)
   } else if (msg === "CANCELLED") {
-    // 当前请求被新的总结请求或手动中断取代：
-    // 若已有内容则标记中断；内容为空说明新的分析正在进行，静默忽略
-    flushSummaryBuffer()
-    if (aiSummary.value) {
-      loading.value = false
-      analysisStatus.value = "分析已被中断"
-      setTimeout(() => {
-        if (analysisStatus.value === "分析已被中断") {
-          analysisStatus.value = ""
-        }
-      }, 3000)
+    // 当前请求被取消：
+    // - cancelledOldPending：刚点了"再次总结"，这条是旧流的退出通知，静默忽略
+    // - 否则为手动中断：结束加载状态；已有内容则标记中断，内容为空也要停掉加载防止一直转圈
+    if (cancelledOldPending) {
+      cancelledOldPending = false
+      return
     }
+    flushSummaryBuffer()
+    isSummaryStreaming.value = false
+    loading.value = false
+    analysisStatus.value = "分析已被中断"
+    setTimeout(() => {
+      if (analysisStatus.value === "分析已被中断") {
+        analysisStatus.value = ""
+      }
+    }, 3000)
   } else {
     if (msg.code === 0) {
       // 后端标记的错误消息（网络/HTTP/超时等），不再以"分析完成"收场
       analysisFailed = true
     }
+    cancelledOldPending = false
     if (msg.chatId) {
       chatId.value = msg.chatId
     }
@@ -998,6 +1021,7 @@ function ReFlesh(source) {
             }"
         />
         <n-button size="tiny" type="warning" @click="reAiSummary">再次总结</n-button>
+        <n-button v-if="isSummaryStreaming" size="tiny" type="error" @click="abortSummary">中断</n-button>
         <n-button size="tiny" type="success" @click="copyToClipboard">复制到剪切板</n-button>
         <n-button size="tiny" type="primary" @click="saveAsMarkdown">保存为Markdown文件</n-button>
         <n-button size="tiny" type="error" @click="share">分享到项目社区</n-button>

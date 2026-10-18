@@ -137,6 +137,9 @@ func (ws *WebServer) initRouter() {
 			protected.POST("/ai/assistant/session", handlers.SaveAiAssistantSessionHandler)
 			protected.GET("/ai/assistant/sessions", handlers.ListAiAssistantSessionsHandler)
 			protected.DELETE("/ai/assistant/session/:sessionId", handlers.DeleteAiAssistantSessionHandler)
+			// 007 同步：会话重命名/置顶（e30b0e2）
+			protected.PUT("/ai/assistant/session/rename", handlers.RenameAiAssistantSessionHandler)
+			protected.PUT("/ai/assistant/session/pinned", handlers.SetAiAssistantSessionPinnedHandler)
 
 			protected.GET("/prompts/templates", handlers.GetPromptTemplates)
 			protected.POST("/prompts/templates", handlers.CreatePromptTemplate)
@@ -172,6 +175,12 @@ func (ws *WebServer) initRouter() {
 			protected.DELETE("/signals/records", handlers.ClearSignalRecordsHandler)
 			protected.GET("/signals/stats", handlers.GetSignalStatsHandler)
 
+			// 007 同步：信号自动交易流水 + 扫描间隔热更新（f455797 / 54e0910 / 6c57d67）
+			protected.GET("/signals/trades", handlers.GetSignalTradePageHandler)
+			protected.DELETE("/signals/trades", handlers.ClearSignalTradeRecordsHandler)
+			protected.GET("/signals/scan-interval", handlers.GetSignalScanIntervalHandler)
+			protected.PUT("/signals/scan-interval", handlers.SetSignalScanIntervalHandler)
+
 			// 004 批3：SSE 事件总线（signalMonitorTick 节拍的 Web 载体）
 			protected.GET("/events/stream", handlers.EventsStreamHandler)
 
@@ -191,6 +200,24 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/contracts/bitget/ticker", handlers.GetBitgetFuturesTickerHandler)
 			protected.GET("/contracts/bitget/derivatives", handlers.GetBitgetFuturesDerivativesHandler)
 			protected.GET("/contracts/bitget/funding-rate", handlers.GetBitgetFundingRateHistoryHandler)
+
+			// 007 同步：OKX（欧易）交易 + 交易所快讯（桌面端走 app_okx.go Wails 绑定）
+			protected.GET("/okx/trading-overview", handlers.GetOKXTradingOverviewHandler)
+			protected.PUT("/okx/leverage", handlers.SetOKXLeverageHandler)
+			protected.GET("/okx/candles", handlers.GetOKXCandleListHandler)
+			protected.GET("/okx/tickers", handlers.GetOKXTickersHandler)
+			protected.GET("/okx/ticker", handlers.GetOKXTickerHandler)
+			protected.GET("/okx/rankings", handlers.GetOKXRankingsHandler)
+			protected.GET("/okx/wallet", handlers.GetOKXWalletHandler)
+			protected.GET("/okx/positions", handlers.GetOKXPositionListHandler)
+			protected.GET("/okx/orders/open", handlers.GetOKXOpenOrdersHandler)
+			protected.GET("/okx/orders/history", handlers.GetOKXHistoryOrdersHandler)
+			protected.GET("/okx/fills", handlers.GetOKXFillsHistoryHandler)
+			protected.POST("/okx/orders", handlers.SubmitOKXOrderHandler)
+			protected.DELETE("/okx/orders", handlers.RevokeOKXOrderHandler)
+			protected.POST("/okx/positions/close", handlers.CloseOKXPositionHandler)
+			protected.GET("/okx/account-config", handlers.GetOKXAccountConfigHandler)
+			protected.GET("/exchange/announcements", handlers.GetExchangeAnnouncementsHandler)
 
 			protected.GET("/settings", handlers.GetUserSettings)
 			protected.POST("/settings", handlers.SetUserSetting)

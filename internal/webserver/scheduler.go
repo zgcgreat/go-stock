@@ -59,6 +59,9 @@ func (s *Scheduler) Start() {
 	go s.runConceptFundFlowTask()
 	go s.runHotWordsTask()
 
+	// 007 同步：OKX 持仓止盈止损监控守护（幂等；开关/阈值在设置页，关闭时循环空转）
+	data.StartOKXTPSLMonitor()
+
 	// 启动用户自定义定时任务调度器
 	s.initCronTasks()
 	s.cron.Start()

@@ -701,6 +701,60 @@ func DeleteAiAssistantSessionHandler(c *gin.Context) {
 	})
 }
 
+// RenameAiAssistantSessionHandler 重命名AI助手会话（设置自定义标题；空标题回退正文派生标题）
+func RenameAiAssistantSessionHandler(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+	var req struct {
+		SessionId string `json:"sessionId" binding:"required"`
+		Title     string `json:"title"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+	if err := data.RenameAiAssistantSession(req.SessionId, req.Title, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    1,
+			"message": "重命名会话失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "重命名成功",
+	})
+}
+
+// SetAiAssistantSessionPinnedHandler 设置AI助手会话置顶标记
+func SetAiAssistantSessionPinnedHandler(c *gin.Context) {
+	userID, _ := middleware.GetUserIDFromContext(c)
+	var req struct {
+		SessionId string `json:"sessionId" binding:"required"`
+		Pinned    bool   `json:"pinned"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    1,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+	if err := data.SetAiAssistantSessionPinned(req.SessionId, req.Pinned, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    1,
+			"message": "设置置顶失败: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "设置成功",
+	})
+}
+
 // 辅助函数：序列化事件数据
 func marshalEvent(data map[string]interface{}) string {
 	bytes, _ := json.Marshal(data)

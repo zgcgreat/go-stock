@@ -19,6 +19,7 @@ import (
 // SaveSignalRecordsHandler 信号流水批量落库：POST /signals/records
 // body 为 []models.SignalRecord 数组（UserID 字段 json:"-"，请求体传入无效，由服务端注入）。
 // 桌面语义：返回空串=成功，否则为错误信息——保持一致，前端不阻塞等待。
+// 落库成功后，本次真正新增/环境合并的信号进入 OKX 信号自动交易调度（开关在设置页）。
 func SaveSignalRecordsHandler(c *gin.Context) {
 	var items []models.SignalRecord
 	if err := c.ShouldBindJSON(&items); err != nil {
@@ -29,23 +30,28 @@ func SaveSignalRecordsHandler(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": ""})
 		return
 	}
-	if err := data.NewSignalRecordService().SaveSignalRecords(items, getUserID(c)); err != nil {
+	news, err := data.NewSignalRecordService().SaveSignalRecords(items, getUserID(c))
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": err.Error()})
 		return
+	}
+	if len(news) > 0 {
+		go data.DispatchOKXSignalTrades(news)
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": ""})
 }
 
 // GetSignalRecordPageHandler 信号流水分页查询：GET /signals/records
-// query: keyword,startTime,endTime(Unix秒),page,pageSize。错误路径与桌面一致返回空页而非 5xx，
-// 避免前端面板把瞬时查询失败渲染成报错横幅。
+// query: keyword,startTime,endTime(Unix秒),page,pageSize,source(crypto/stock/空=全部)。
+// 错误路径与桌面一致返回空页而非 5xx，避免前端面板把瞬时查询失败渲染成报错横幅。
 func GetSignalRecordPageHandler(c *gin.Context) {
 	query := models.SignalRecordQuery{
 		Keyword:   c.Query("keyword"),
 		StartTime: parseQueryInt64(c, "startTime"),
 		EndTime:   parseQueryInt64(c, "endTime"),
 		Page:      int(parseQueryInt64(c, "page")),
-		PageSize:  int(parseQueryInt64(c, "pageSize")),
+		PageSize:   int(parseQueryInt64(c, "pageSize")),
+		Source:    c.Query("source"),
 	}
 	page, err := data.NewSignalRecordService().GetSignalRecordPage(query, getUserID(c))
 	if err != nil {
@@ -56,9 +62,10 @@ func GetSignalRecordPageHandler(c *gin.Context) {
 }
 
 // ClearSignalRecordsHandler 清空当前用户的信号流水：DELETE /signals/records
+// query: source（crypto/stock/空=全部）——股票/OKX 两套监控各自的「清空」只清自己视角的流水。
 // 桌面语义同上：返回空串=成功。
 func ClearSignalRecordsHandler(c *gin.Context) {
-	if err := data.NewSignalRecordService().ClearSignalRecords(getUserID(c)); err != nil {
+	if err := data.NewSignalRecordService().ClearSignalRecords(c.Query("source"), getUserID(c)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "message": err.Error()})
 		return
 	}
@@ -66,11 +73,13 @@ func ClearSignalRecordsHandler(c *gin.Context) {
 }
 
 // GetSignalStatsHandler 信号收益统计：GET /signals/stats
-// query: startTime,endTime(Unix秒)。错误路径与桌面一致返回空统计。
+// query: startTime,endTime(Unix秒),source(crypto/stock/空=全部)。
+// 错误路径与桌面一致返回空统计。
 func GetSignalStatsHandler(c *gin.Context) {
 	query := models.SignalStatQuery{
 		StartTime: parseQueryInt64(c, "startTime"),
 		EndTime:   parseQueryInt64(c, "endTime"),
+		Source:    c.Query("source"),
 	}
 	res, err := data.NewSignalRecordService().GetSignalStats(query, getUserID(c))
 	if err != nil {

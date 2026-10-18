@@ -3142,11 +3142,14 @@ export function GetFuturesPositionTrend(arg1, arg2, arg3) {
 
 // ==================== B-merge 上游新增方法桥接桩 ====================
 
-// [004 批2 解桩] ClearSignalRecords 清空当前用户的信号流水（服务端按 user_id 过滤，
-// 立项时点名的「全表删除」事故级缺口已在服务端消灭）。
-export function ClearSignalRecords() {
-  if (isWailsMode()) return window.go.main.App.ClearSignalRecords();
-  return apiService.client.delete('/signals/records', { headers: getAuthHeaders() })
+// [004 批2 解桩 / 007 补 source] ClearSignalRecords 清空当前用户的信号流水（服务端按 user_id 过滤）。
+// source（crypto/stock/空=全部）：007 同步后股票/OKX 两套监控各自的「清空」只清自己视角的流水。
+export function ClearSignalRecords(source) {
+  if (isWailsMode()) return window.go.main.App.ClearSignalRecords(source || '');
+  return apiService.client.delete('/signals/records', {
+    params: source ? { source } : {},
+    headers: getAuthHeaders()
+  })
     .then(extractApiData)
     .then(() => '');
 }
@@ -3443,6 +3446,113 @@ export function GetSignalStats(arg1) {
     .catch(() => ({ overall: {}, stocks: [] }));
 }
 
+// ==================== 007 同步新增桥接（信号 v2 / OKX / 助手会话） ====================
+
+// [007] GetSignalScanInterval 信号扫描节拍间隔（秒）：前端启动时迁移旧版设置并按三套监控
+// 各自扫描周期的最小值回写。桌面走 Wails 绑定；Web 走 REST，SSE 总线由服务端按该值节拍。
+export function GetSignalScanInterval() {
+  if (isWailsMode()) return window.go.main.App.GetSignalScanInterval();
+  return apiService.client.get('/signals/scan-interval', { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => 60);
+}
+
+// [007] SetSignalScanInterval 设置扫描间隔（30~600 秒）：落库、热更新服务端节拍并经 SSE
+// 通知在线前端重排兜底定时器（等价桌面 signalScanIntervalChanged 事件）。返回空串=成功。
+export function SetSignalScanInterval(sec) {
+  if (isWailsMode()) return window.go.main.App.SetSignalScanInterval(sec);
+  return apiService.client.put('/signals/scan-interval', null, {
+    params: { sec },
+    headers: getAuthHeaders()
+  })
+    .then(extractApiData)
+    .then(() => '')
+    .catch(err => err.response?.data?.message || err.message || '设置失败');
+}
+
+// [007] GetSignalTradePage OKX 信号自动交易流水分页（面板「模拟交易」页签）。
+export function GetSignalTradePage(arg1) {
+  if (isWailsMode()) return window.go.main.App.GetSignalTradePage(arg1);
+  return apiService.client.get('/signals/trades', { params: arg1, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => ({ list: [], total: 0, page: 1, pageSize: 20, totalPages: 1 }));
+}
+
+// [007] ClearSignalTradeRecords 清空 OKX 信号自动交易流水；env 为「模拟盘」/「实盘」时只清该环境。
+export function ClearSignalTradeRecords(env) {
+  if (isWailsMode()) return window.go.main.App.ClearSignalTradeRecords(env || '');
+  return apiService.client.delete('/signals/trades', {
+    params: env ? { env } : {},
+    headers: getAuthHeaders()
+  })
+    .then(extractApiData)
+    .then(() => '');
+}
+
+// [007] RenameAiAssistantSession 设置会话自定义标题；空标题回退正文派生标题。
+export function RenameAiAssistantSession(sessionId, title) {
+  if (isWailsMode()) return window.go.main.App.RenameAiAssistantSession(sessionId, title);
+  return apiService.client.put('/ai/assistant/session/rename', { sessionId, title }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '重命名成功')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message || '重命名失败';
+      throw new Error(msg);
+    });
+}
+
+// [007] SetAiAssistantSessionPinned 设置会话置顶标记；置顶会话在列表中排在最前。
+export function SetAiAssistantSessionPinned(sessionId, pinned) {
+  if (isWailsMode()) return window.go.main.App.SetAiAssistantSessionPinned(sessionId, pinned);
+  return apiService.client.put('/ai/assistant/session/pinned', { sessionId, pinned }, { headers: getAuthHeaders() })
+    .then(res => res.data?.message || '设置成功')
+    .catch(err => {
+      const msg = err.response?.data?.message || err.message || '设置失败';
+      throw new Error(msg);
+    });
+}
+
+// [007] AbortSummaryStockNewsByEvent 仅中断指定事件名（页面入口）的总结流；
+// 多入口并行时互不影响（市场总结与悬浮助手各用各的事件名）。Web 端 SSE 按 key 中断。
+export function AbortSummaryStockNewsByEvent(eventName) {
+  if (isWailsMode()) return window.go.main.App.AbortSummaryStockNewsByEvent(eventName);
+  abortSSEByKey(`SummaryStockNews_${eventName || 'summaryStockNews'}`);
+  return Promise.resolve();
+}
+
+// [007] AbortChatWithAgentBySession 中断指定会话进行中的 Agent 运行。
+// Web 模式：/ai/agent-chat SSE 用固定连接 key（ChatWithAgent），新请求自动顶掉旧流；
+// 此处中断当前活跃流即等价桌面的按会话中止（服务端 ctx 随断连取消）。
+export function AbortChatWithAgentBySession(sessionId) {
+  if (isWailsMode()) return window.go.main.App.AbortChatWithAgentBySession(sessionId);
+  abortSSEByKey('ChatWithAgent');
+  return Promise.resolve();
+}
+
+// [007] SendDesktopNotification 系统桌面通知。Web 模式服务端无法弹系统通知，
+// 用浏览器 Notification API 承担（等价 NotifySignal 的 app 渠道做法）。
+export function SendDesktopNotification(title, content) {
+  if (isWailsMode()) return window.go.main.App.SendDesktopNotification(title, content);
+  try {
+    if (typeof Notification === 'undefined') return Promise.resolve(false);
+    const show = () => {
+      try { new Notification(title || 'go-stock', { body: content || '' }); } catch { /* 参数非法忽略 */ }
+    };
+    if (Notification.permission === 'granted') {
+      show();
+      return Promise.resolve(true);
+    }
+    if (Notification.permission !== 'denied') {
+      return Notification.requestPermission().then(p => {
+        if (p === 'granted') { show(); return true; }
+        return false;
+      }).catch(() => false);
+    }
+    return Promise.resolve(false);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
 // [B-merge 桥接] GetStoredPolicyNews: Web 端点已接入（/api/v1）。
 export function GetStoredPolicyNews(department, keyword, page, pageSize) {
   if (isWailsMode()) return window.go.main.App.GetStoredPolicyNews(department, keyword, page, pageSize);
@@ -3720,4 +3830,237 @@ export function GetBitgetFundingRateHistory(symbol, limit) {
     headers: getAuthHeaders(),
     params: { symbol, limit: limit || 100 },
   }).then(unwrapContract);
+}
+
+// ==================== 007 同步：OKX（欧易）交易桥接 ====================
+// 与桌面 app_okx.go 的 Wails 绑定同语义；Web 走 /okx/* REST 端点。
+// 查询失败返回空结构（面板渲染空态），交易失败把错误带进 result（前端弹提示）。
+
+function okxBoolParam(simulated) {
+  return simulated === false ? 'false' : 'true'; // 缺省按模拟盘语义（与桌面默认一致）
+}
+
+// GetOKXTradingOverview 合约行情总览（当前环境可交易品种 + 24h 行情）。
+export function GetOKXTradingOverview() {
+  if (isWailsMode()) return window.go.main.App.GetOKXTradingOverview();
+  return apiService.client.get('/okx/trading-overview', {
+    params: { simulated: 'true' },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => ({ instruments: [], tickers: [] }));
+}
+
+// GetOKXTradingOverviewEnv 按环境拉取可交易品种（simulated=true 模拟盘 / false 实盘）。
+export function GetOKXTradingOverviewEnv(simulated) {
+  if (isWailsMode()) return window.go.main.App.GetOKXTradingOverviewEnv(simulated);
+  return apiService.client.get('/okx/trading-overview', {
+    params: { simulated: okxBoolParam(simulated) },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => ({ instruments: [], tickers: [] }));
+}
+
+// SetOKXLeverageEnv 按环境设置合约杠杆（cross 全仓）；lever 取值 "1"~"125"。
+export function SetOKXLeverageEnv(simulated, instId, lever) {
+  if (isWailsMode()) return window.go.main.App.SetOKXLeverageEnv(simulated, instId, lever);
+  return apiService.client.put('/okx/leverage', { simulated, instId, lever }, { headers: getAuthHeaders() })
+    .then(extractApiData);
+}
+
+// GetOKXCandleList OKX 公共 K 线。
+export function GetOKXCandleList(instId, bar, limit) {
+  if (isWailsMode()) return window.go.main.App.GetOKXCandleList(instId, bar, limit);
+  return apiService.client.get('/okx/candles', {
+    params: { instId, bar, limit: limit || 500 },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXInstTickers 按 instType 批量取行情。
+export function GetOKXInstTickers(instType) {
+  if (isWailsMode()) return window.go.main.App.GetOKXInstTickers(instType);
+  return apiService.client.get('/okx/tickers', {
+    params: { instType },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXInstTicker 单合约行情。
+export function GetOKXInstTicker(instId) {
+  if (isWailsMode()) return window.go.main.App.GetOKXInstTicker(instId);
+  return apiService.client.get('/okx/ticker', {
+    params: { instId },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => null);
+}
+
+// GetOKXRankings 行情榜单（涨幅/资金费率/多空比等，kind 区分）。
+export function GetOKXRankings(kind, limit) {
+  if (isWailsMode()) return window.go.main.App.GetOKXRankings(kind, limit);
+  return apiService.client.get('/okx/rankings', {
+    params: { kind, limit: limit || 20 },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXWallet 账户余额（当前环境）。
+export function GetOKXWallet() {
+  if (isWailsMode()) return window.go.main.App.GetOKXWallet();
+  return apiService.client.get('/okx/wallet', {
+    params: { simulated: 'true' },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => null);
+}
+
+// GetOKXWalletEnv 按环境查余额。
+export function GetOKXWalletEnv(simulated) {
+  if (isWailsMode()) return window.go.main.App.GetOKXWalletEnv(simulated);
+  return apiService.client.get('/okx/wallet', {
+    params: { simulated: okxBoolParam(simulated) },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => null);
+}
+
+// GetOKXPositionList 持仓列表（当前环境）。
+export function GetOKXPositionList(instId) {
+  if (isWailsMode()) return window.go.main.App.GetOKXPositionList(instId);
+  return apiService.client.get('/okx/positions', {
+    params: { simulated: 'true', instId: instId || '' },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXPositionListEnv 按环境查持仓。
+export function GetOKXPositionListEnv(simulated, instId) {
+  if (isWailsMode()) return window.go.main.App.GetOKXPositionListEnv(simulated, instId);
+  return apiService.client.get('/okx/positions', {
+    params: { simulated: okxBoolParam(simulated), instId: instId || '' },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXOpenOrders 当前挂单（当前环境）。
+export function GetOKXOpenOrders() {
+  if (isWailsMode()) return window.go.main.App.GetOKXOpenOrders();
+  return apiService.client.get('/okx/orders/open', {
+    params: { simulated: 'true' },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXOpenOrdersEnv 按环境查挂单。
+export function GetOKXOpenOrdersEnv(simulated) {
+  if (isWailsMode()) return window.go.main.App.GetOKXOpenOrdersEnv(simulated);
+  return apiService.client.get('/okx/orders/open', {
+    params: { simulated: okxBoolParam(simulated) },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXHistoryOrders 历史订单（当前环境）。
+export function GetOKXHistoryOrders() {
+  if (isWailsMode()) return window.go.main.App.GetOKXHistoryOrders();
+  return apiService.client.get('/okx/orders/history', {
+    params: { simulated: 'true' },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXHistoryOrdersEnv 按环境查历史订单。
+export function GetOKXHistoryOrdersEnv(simulated) {
+  if (isWailsMode()) return window.go.main.App.GetOKXHistoryOrdersEnv(simulated);
+  return apiService.client.get('/okx/orders/history', {
+    params: { simulated: okxBoolParam(simulated) },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXFillsHistory 成交明细（当前环境）。
+export function GetOKXFillsHistory(instType, instId, limit) {
+  if (isWailsMode()) return window.go.main.App.GetOKXFillsHistory(instType, instId, limit);
+  return apiService.client.get('/okx/fills', {
+    params: { simulated: 'true', instType, instId, limit: limit || 50 },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXFillsHistoryEnv 按环境查成交明细。
+export function GetOKXFillsHistoryEnv(simulated, instType, instId, limit) {
+  if (isWailsMode()) return window.go.main.App.GetOKXFillsHistoryEnv(simulated, instType, instId, limit);
+  return apiService.client.get('/okx/fills', {
+    params: { simulated: okxBoolParam(simulated), instType, instId, limit: limit || 50 },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// SubmitOKXOrder 手动下单（当前环境）；受设置页交易开关与模拟盘开关控制（服务端闸门）。
+export function SubmitOKXOrder(req) {
+  if (isWailsMode()) return window.go.main.App.SubmitOKXOrder(req);
+  return apiService.client.post('/okx/orders', { simulated: true, ...req }, { headers: getAuthHeaders() })
+    .then(extractApiData);
+}
+
+// SubmitOKXOrderEnv 按环境手动下单。
+export function SubmitOKXOrderEnv(simulated, req) {
+  if (isWailsMode()) return window.go.main.App.SubmitOKXOrderEnv(simulated, req);
+  return apiService.client.post('/okx/orders', { simulated, ...req }, { headers: getAuthHeaders() })
+    .then(extractApiData);
+}
+
+// RevokeOKXOrder 撤单（当前环境）。
+export function RevokeOKXOrder(instId, ordId) {
+  if (isWailsMode()) return window.go.main.App.RevokeOKXOrder(instId, ordId);
+  return apiService.client.delete('/okx/orders', {
+    params: { simulated: 'true', instId, ordId },
+    headers: getAuthHeaders(),
+  }).then(extractApiData);
+}
+
+// RevokeOKXOrderEnv 按环境撤单。
+export function RevokeOKXOrderEnv(simulated, instId, ordId) {
+  if (isWailsMode()) return window.go.main.App.RevokeOKXOrderEnv(simulated, instId, ordId);
+  return apiService.client.delete('/okx/orders', {
+    params: { simulated: okxBoolParam(simulated), instId, ordId },
+    headers: getAuthHeaders(),
+  }).then(extractApiData);
+}
+
+// CloseOKXPosition 市价平仓（当前环境）。
+export function CloseOKXPosition(instId, posSide, pos) {
+  if (isWailsMode()) return window.go.main.App.CloseOKXPosition(instId, posSide, pos);
+  return apiService.client.post('/okx/positions/close', { simulated: true, instId, posSide, pos }, { headers: getAuthHeaders() })
+    .then(extractApiData);
+}
+
+// CloseOKXPositionEnv 按环境市价平仓。
+export function CloseOKXPositionEnv(simulated, instId, posSide, pos) {
+  if (isWailsMode()) return window.go.main.App.CloseOKXPositionEnv(simulated, instId, posSide, pos);
+  return apiService.client.post('/okx/positions/close', { simulated, instId, posSide, pos }, { headers: getAuthHeaders() })
+    .then(extractApiData);
+}
+
+// GetOKXAccountConfigVM 账户配置·持仓模式（当前环境）。
+export function GetOKXAccountConfigVM() {
+  if (isWailsMode()) return window.go.main.App.GetOKXAccountConfigVM();
+  return apiService.client.get('/okx/account-config', {
+    params: { simulated: 'true' },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => null);
+}
+
+// GetOKXAccountConfigVMEnv 按环境查账户配置。
+export function GetOKXAccountConfigVMEnv(simulated) {
+  if (isWailsMode()) return window.go.main.App.GetOKXAccountConfigVMEnv(simulated);
+  return apiService.client.get('/okx/account-config', {
+    params: { simulated: okxBoolParam(simulated) },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => null);
+}
+
+// GetExchangeAnnouncements 交易所公告资讯（币安 CMS + OKX v5 公告聚合）。
+// source: all/binance/okx；catalog 为分类；page 从 1 开始。
+export function GetExchangeAnnouncements(source, catalog, page) {
+  if (isWailsMode()) return window.go.main.App.GetExchangeAnnouncements(source, catalog, page);
+  return apiService.client.get('/exchange/announcements', {
+    params: { source: source || 'all', catalog: catalog || '', page: page || 1 },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
 }

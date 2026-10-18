@@ -125,21 +125,54 @@ func extractSessionTitle(head string) string {
 // aiAssistantSessionRow 会话列表查询的中间结果（仅取消息前缀用于生成标题）。
 type aiAssistantSessionRow struct {
 	SessionId string
+	Title     string
+	Pinned    bool
 	UpdatedAt time.Time
 	Head      string
 }
 
-// ListAiAssistantSessions 返回会话的元信息（sessionId/标题/更新时间），按更新时间倒序（用户隔离）。
-// userID > 0 时仅返回该用户的会话；keyword 非空时对会话正文做模糊匹配（标题由正文首条用户消息派生，
+// RenameAiAssistantSession 设置会话的自定义标题；标题为空时清除自定义，回退为正文派生标题。
+// userID > 0 时仅允许重命名自己的会话（用户隔离）。
+func RenameAiAssistantSession(sessionId string, title string, userID uint) error {
+	if sessionId == "" {
+		return nil
+	}
+	title = strings.TrimSpace(strings.ReplaceAll(title, "\n", " "))
+	runes := []rune(title)
+	if len(runes) > 40 {
+		title = string(runes[:40])
+	}
+	q := db.Dao.Model(&models.AiAssistantSession{}).Where("session_id = ?", sessionId)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	return q.Update("title", title).Error
+}
+
+// SetAiAssistantSessionPinned 设置会话置顶标记；置顶会话在列表接口中排在最前。
+// userID > 0 时仅允许操作自己的会话（用户隔离）。
+func SetAiAssistantSessionPinned(sessionId string, pinned bool, userID uint) error {
+	if sessionId == "" {
+		return nil
+	}
+	q := db.Dao.Model(&models.AiAssistantSession{}).Where("session_id = ?", sessionId)
+	if userID > 0 {
+		q = q.Where("user_id = ?", userID)
+	}
+	return q.Update("pinned", pinned).Error
+}
+
+// ListAiAssistantSessions 返回会话的元信息（sessionId/标题/更新时间/置顶），置顶优先、其余按更新时间倒序（用户隔离）。
+// userID > 0 时仅返回该用户的会话；keyword 非空时对会话标题与正文做模糊匹配（标题为空时由正文首条用户消息派生，
 // 故可一并命中），用于搜索历史会话；为空时仅返回最近 limit 条（limit<=0 时默认 10 条），
-// 避免一次性加载全部会话。仅取 messages 前 4000 字符生成标题，避免全量反序列化超大消息列。
+// 避免一次性加载全部会话。仅取 messages 前 4000 字符生成派生标题，避免全量反序列化超大消息列。
 func ListAiAssistantSessions(userID uint, keyword string, limit int) ([]models.AiAssistantSessionMeta, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 	query := db.Dao.Model(&models.AiAssistantSession{}).
-		Select("session_id, updated_at, substr(messages, 1, 4000) as head").
-		Order("updated_at DESC").
+		Select("session_id, updated_at, title, pinned, substr(messages, 1, 4000) as head").
+		Order("pinned DESC, updated_at DESC").
 		Limit(limit)
 	// 用户隔离
 	if userID > 0 {
@@ -148,7 +181,8 @@ func ListAiAssistantSessions(userID uint, keyword string, limit int) ([]models.A
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		// 转义 LIKE 通配符，避免用户输入 % / _ 被当作模式匹配
 		escaped := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(kw)
-		query = query.Where("messages LIKE ? ESCAPE '\\'", "%"+escaped+"%")
+		like := "%" + escaped + "%"
+		query = query.Where("messages LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\'", like, like)
 	}
 	var rows []aiAssistantSessionRow
 	err := query.Scan(&rows).Error
@@ -157,10 +191,15 @@ func ListAiAssistantSessions(userID uint, keyword string, limit int) ([]models.A
 	}
 	list := make([]models.AiAssistantSessionMeta, 0, len(rows))
 	for _, r := range rows {
+		title := r.Title
+		if title == "" {
+			title = extractSessionTitle(r.Head)
+		}
 		list = append(list, models.AiAssistantSessionMeta{
 			SessionId: r.SessionId,
-			Title:     extractSessionTitle(r.Head),
+			Title:     title,
 			UpdatedAt: r.UpdatedAt.Format("2006-01-02 15:04:05"),
+			Pinned:    r.Pinned,
 		})
 	}
 	return list, nil
