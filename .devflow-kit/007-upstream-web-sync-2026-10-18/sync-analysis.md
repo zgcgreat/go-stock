@@ -75,3 +75,13 @@
 - go test backend/agentã€backend/agent/toolsï¼šå…¨ç»¿
 - go test backend/dataï¼ˆsponsor/openai/holiday/OKXSim/Signalï¼‰ï¼šå…¨ç»¿
 - vite buildï¼šé€šè¿‡
+
+## Ö´ĞĞºó²¹¼Ç£¨2026-10-18 Íí£©
+
+- **ÊÂ¹ÊÓëĞŞ¸´**£ºf4ca251 Ìá½»Ê±£¬`.gitignore` µÚ 111 ĞĞ `data/` ¹æÔò¾²Ä¬ÍÌµôÁË backend/data/ °üÏÂ
+  È«²¿ 14 ¸öĞÂÔö Go ÎÄ¼ş£¨OKX Êı¾İ²ã/½Ú¼ÙÈÕ»º´æ/²âÊÔ£©£¬½öÒÑ¸ú×ÙÎÄ¼şĞÒÃâ¡£ÒÑÓÃ git add -f ÔÚ
+  52bcf7c ²¹Ìá½»£¬²¢´Ó HEAD È«Á¿ÖØ½¨ÑéÖ¤Í¨¹ı¡£**½ÌÑµ£ºÔÚ backend/data/ ĞÂÔöÎÄ¼ş±ØĞë git add -f£¬
+  »ò°Ñ¸Ã¹æÔòĞŞÕıÎª '/data/'£¨½ö¸ùÄ¿Â¼£©¡ª¡ªÁô´ıÏÂÒ»ÅúÖÎÀí¡£**
+- ×îÖÕÌá½»Á´£ºf4ca251 ¡ú 34f16eb ¡ú 683f417 ¡ú 12acea4£¨ÎÄµµ£©¡ú 52bcf7c£¨²¹Ìá½»ĞŞ¸´£©
+- ÖÕÑé»ùÏß£ºÄ¿±êÎÄ¼ş HEAD Óë origin/dev hash ÖğÒ»ÖÂ 13/13£»go build£¨web/internal/backend/
+  ai-assistant-web£©¡¢go vet Í¬·¶Î§¡¢agent+agent-tools+data ¶¨Ïò²âÊÔ¡¢vite build È«ÂÌ¡£
