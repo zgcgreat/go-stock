@@ -16,6 +16,7 @@ import (
 	"go-stock/backend/agent"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
+	"go-stock/backend/logger"
 	"go-stock/backend/models"
 	"go-stock/internal/middleware"
 )
@@ -305,7 +306,13 @@ func UpdateAiConfigs(c *gin.Context) {
 	})
 }
 
-// AgentChat Agent模式聊天 - SSE流式（与桌面端 ai-assistant-web/server.go 保持一致）
+// AgentChat Agent模式聊天 - SSE流式（与桌面端 app_common.go ChatWithAgent 保持一致）
+//
+// 007 同步对齐上游多会话协议：
+//   - 请求体新增 skillDirName（文件系统技能目录，逗号分隔多选），替代旧的 skillIds 拼提示词方案；
+//     选中技能时忽略 sysPromptId（技能全文经 SysPromptOverride 覆盖系统提示词）。
+//   - 每条 SSE 消息载荷带 sessionId，供前端按会话路由（多会话并行的关键）；
+//   - 结束哨兵为 data: {"content":"agent-DONE","sessionId":...}（与桌面 Wails emit 同格式）。
 func AgentChat(c *gin.Context) {
 	var req struct {
 		Question    string `json:"question" binding:"required"`
@@ -315,7 +322,7 @@ func AgentChat(c *gin.Context) {
 		MemoryCount int    `json:"memoryCount"`
 		Thinking    bool   `json:"thinking"`
 		AgentMode   string `json:"agentMode"`
-		SkillIds    []uint `json:"skillIds"`
+		SkillDirName string `json:"skillDirName"`
 		Images      []string `json:"images"` // 视觉理解：http(s) 外链或 base64 data URL，仅视觉模型生效
 	}
 
@@ -365,7 +372,7 @@ func AgentChat(c *gin.Context) {
 		memoryCount = 10
 	}
 
-	// 视觉理解：图片列表序列化为 imagesJSON（ChatWithContext optsOverride[4]），
+	// 视觉理解：图片列表序列化为 imagesJSON（ChatWithContext ImagesJSON），
 	// 元素为 http(s) 外链或 base64 data URL，仅 SupportVision 模型生效。
 	imagesJSON := ""
 	if len(req.Images) > 0 {
@@ -374,37 +381,34 @@ func AgentChat(c *gin.Context) {
 		}
 	}
 
-	// 构建用户选择的技能提示词追加（optsOverride[0] = sysPromptOverride）
-	var skillPromptOverride string
-	if len(req.SkillIds) > 0 {
-		var sb strings.Builder
-		for _, sid := range req.SkillIds {
-			skill, err := data.NewSkillApi().GetByID(sid)
-			if err != nil || skill == nil {
-				continue
-			}
-			sb.WriteString(fmt.Sprintf("\n### %s\n", skill.Name))
-			if skill.Description != "" {
-				sb.WriteString(fmt.Sprintf("描述：%s\n", skill.Description))
-			}
-			if skill.SystemPrompt != "" {
-				sb.WriteString(fmt.Sprintf("%s\n", skill.SystemPrompt))
-			}
+	// 技能选择（与桌面 buildSkillContext 同语义，见 skill_handler.go）：用户选定文件系统技能目录后，
+	// 技能全文覆盖系统提示词（SysPromptOverride），激活块拼入用户消息，
+	// 并将 SysPromptID 置空以彻底忽略用户选择的系统提示词。
+	effectiveSysPromptId := req.SysPromptID
+	skillPromptOverride := ""
+	skillQuestionBlock := ""
+	if strings.TrimSpace(req.SkillDirName) != "" {
+		skillPromptOverride, skillQuestionBlock = buildSkillContext(req.SkillDirName)
+		if skillPromptOverride == "" {
+			logger.SugaredLogger.Warnf("AgentChat: 技能 %q 全部加载失败，回退到默认系统提示词", req.SkillDirName)
+		} else {
+			effectiveSysPromptId = nil
 		}
-		skillPromptOverride = sb.String()
 	}
 
 	msgCh := aiAgent.ChatWithContext(ctx, agent.ChatRequest{
-		Question:          req.Question,
-		AIConfigID:        aiConfigID,
-		SysPromptID:       req.SysPromptID,
-		MemoryMode:        memoryMode,
-		MemoryCount:       memoryCount,
-		ThinkingMode:      req.Thinking,
-		AgentMode:         req.AgentMode,
-		SysPromptOverride: skillPromptOverride,
+		Question:           req.Question,
+		AIConfigID:         aiConfigID,
+		SysPromptID:        effectiveSysPromptId,
+		MemoryMode:         memoryMode,
+		MemoryCount:        memoryCount,
+		ThinkingMode:       req.Thinking,
+		AgentMode:          req.AgentMode,
+		SysPromptOverride:  skillPromptOverride,
 		SessionIDOverride: req.SessionID,
-		ImagesJSON:        imagesJSON,
+		SkillQuestionBlock: skillQuestionBlock,
+		SkillDirName:       req.SkillDirName,
+		ImagesJSON:         imagesJSON,
 		// 用户隔离：Web 端按当前登录用户加载其自己的 AI 配置
 		UserID: userID,
 	})
@@ -414,11 +418,12 @@ func AgentChat(c *gin.Context) {
 			continue
 		}
 
-		// 创建符合前端期望的消息对象
+		// 创建符合前端期望的消息对象；sessionId 附加到每条载荷（前端按会话路由）
 		responseData := make(map[string]interface{})
 		responseData["role"] = "assistant"
+		responseData["sessionId"] = req.SessionID
 
-		// 同时发送 reasoning_content 和 content（与桌面端 ai-assistant-web/server.go 保持一致）
+		// 同时发送 reasoning_content 和 content（与桌面端 Wails emit 保持一致）
 		if msg.ReasoningContent != "" {
 			responseData["reasoning_content"] = msg.ReasoningContent
 		}
@@ -449,8 +454,14 @@ func AgentChat(c *gin.Context) {
 		flusher.Flush()
 	}
 
-	// 发送完成信号（与桌面端格式保持一致：event: done + data: [DONE]）
-	_, _ = c.Writer.Write([]byte("event: done\ndata: [DONE]\n\n"))
+	// 发送完成哨兵（与桌面端 Wails emit 同格式：content=agent-DONE + sessionId）
+	donePayload := map[string]interface{}{
+		"role":      "assistant",
+		"content":   "agent-DONE",
+		"sessionId": req.SessionID,
+	}
+	rawDone, _ := json.Marshal(donePayload)
+	_, _ = c.Writer.Write([]byte("data: " + string(rawDone) + "\n\n"))
 	flusher.Flush()
 }
 

@@ -1426,6 +1426,8 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
+    // 007 对齐上游桌面签名：question, aiConfigId, sysPromptId, memoryMode, memoryCount,
+    // thinking, agentMode, sessionId, skillDirName, imagesJSON
     body: JSON.stringify({
       question: arg1,
       aiConfigId: toIntOrZero(arg2),
@@ -1434,8 +1436,8 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
       memoryCount: arg5 || 10,
       thinking: arg6 || false,
       agentMode: arg7 || '',
-      skillIds: arg8 || [],
-      sessionId: arg9 || '',
+      sessionId: arg8 || '',
+      skillDirName: arg9 || '',
       images,
     }),
     signal: controller.signal,
@@ -1443,8 +1445,8 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
     if (!response.ok) {
       // ===== 修复：401 清 token 跳登录 + 清理连接记录 + 提取错误体 =====
       handleSSEHttpError(response, connKey).then(errorMsg => {
-        EventsEmit('agent-message', { role: 'assistant', content: '', error: errorMsg });
-        EventsEmit('agent-message', { content: 'agent-DONE' });
+        EventsEmit('agent-message', { role: 'assistant', content: '', error: errorMsg, sessionId: arg8 || '' });
+        EventsEmit('agent-message', { content: 'agent-DONE', sessionId: arg8 || '' });
       });
       return;
     }
@@ -1462,16 +1464,19 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
         const raw = line.slice(5).trim();
         try {
           const parsedData = JSON.parse(raw);
-          if (parsedData && (parsedData.done || parsedData.finish_reason === 'stop' || (parsedData.chatId && eventType === 'done'))) {
-            EventsEmit('agent-message', { content: 'agent-DONE' });
+          // 007 协议：服务端完成哨兵为 {content:"agent-DONE", sessionId}，每条载荷均带 sessionId
+          if (parsedData && parsedData.content === 'agent-DONE') {
+            EventsEmit('agent-message', parsedData);
+          } else if (parsedData && (parsedData.done || parsedData.finish_reason === 'stop')) {
+            EventsEmit('agent-message', { content: 'agent-DONE', sessionId: parsedData.sessionId });
           } else {
             EventsEmit('agent-message', parsedData);
           }
         } catch (e) {
           if (eventType === 'done' || raw === '{}' || raw === '[DONE]') {
-            EventsEmit('agent-message', { content: 'agent-DONE' });
+            EventsEmit('agent-message', { content: 'agent-DONE', sessionId: arg8 || '' });
           } else if (raw) {
-            EventsEmit('agent-message', { content: raw });
+            EventsEmit('agent-message', { content: raw, sessionId: arg8 || '' });
           }
         }
       }
@@ -1488,7 +1493,8 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
         if (done) {
           if (buffer.trim()) processLine(buffer);
           try { reader.releaseLock(); } catch(e) { /* ignore */ }
-          EventsEmit('agent-message', { content: 'agent-DONE' });
+          // 服务端正常流应有 agent-DONE 哨兵；流意外截断时兜底补发（带 sessionId 供前端路由）
+          EventsEmit('agent-message', { content: 'agent-DONE', sessionId: arg8 || '' });
           sseConnections.delete(connKey);
           sseKeys.delete(connKey);
           return;
@@ -1501,8 +1507,8 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
       }).catch(err => {
         console.error('ChatWithAgent SSE read error:', err);
         try { reader.releaseLock(); } catch(e) { /* ignore */ }
-        EventsEmit('agent-message', { role: 'assistant', content: '', error: `流式读取错误: ${err.message || '连接中断'}` });
-        EventsEmit('agent-message', { content: 'agent-DONE' });
+        EventsEmit('agent-message', { role: 'assistant', content: '', error: `流式读取错误: ${err.message || '连接中断'}`, sessionId: arg8 || '' });
+        EventsEmit('agent-message', { content: 'agent-DONE', sessionId: arg8 || '' });
         sseConnections.delete(connKey);
         sseKeys.delete(connKey);
       });
@@ -1512,8 +1518,8 @@ export function ChatWithAgent(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, ar
     if (err.name === 'AbortError') return;
     console.error('ChatWithAgent SSE connect error:', err);
     cleanupSSE(connKey);
-    EventsEmit('agent-message', { role: 'assistant', content: '', error: `连接失败: ${err.message || '网络错误'}` });
-    EventsEmit('agent-message', { content: 'agent-DONE' });
+    EventsEmit('agent-message', { role: 'assistant', content: '', error: `连接失败: ${err.message || '网络错误'}`, sessionId: arg8 || '' });
+    EventsEmit('agent-message', { content: 'agent-DONE', sessionId: arg8 || '' });
   });
 
   return Promise.resolve();
@@ -3112,8 +3118,11 @@ export function PromptPlazaRequest(method, apiBase, path, query, body, token) {
 
 export function ListFilesystemSkills() {
   if (isWailsMode()) return window.go.main.App.ListFilesystemSkills();
-  // Web 模式：返回空列表（本地技能目录不可访问）
-  return [];
+  // Web 模式：列出服务器端技能目录（与桌面同源：agent.RootDir()/skills）
+  return apiService.client.get('/skills/filesystem', { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then(list => (Array.isArray(list) ? list : []))
+    .catch(() => []);
 }
 
 export function PackSkillToBase64(arg1) {
@@ -3830,6 +3839,26 @@ export function GetBitgetFundingRateHistory(symbol, limit) {
     headers: getAuthHeaders(),
     params: { symbol, limit: limit || 100 },
   }).then(unwrapContract);
+}
+
+// [007] ExportSessionMarkdown 导出会话为 Markdown。桌面走系统保存对话框；
+// Web 端服务端无法弹系统对话框，用浏览器 Blob 下载承担（语义一致：返回 Promise，
+// '' = 成功，'cancelled' 保留给桌面语义）。
+export function ExportSessionMarkdown(defaultName, content) {
+  if (isWailsMode()) return window.go.main.App.ExportSessionMarkdown(defaultName, content);
+  try {
+    const blob = new Blob([content || ''], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (defaultName || 'AI对话') + '.md';
+    a.click();
+    URL.revokeObjectURL(url);
+    a.remove();
+    return Promise.resolve('');
+  } catch (e) {
+    return Promise.resolve('导出失败: ' + (e?.message || e));
+  }
 }
 
 // ==================== 007 同步：OKX（欧易）交易桥接 ====================

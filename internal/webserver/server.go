@@ -353,6 +353,7 @@ func (ws *WebServer) initRouter() {
 			// 技能管理（全局共享配置，写操作需管理员）
 			protected.GET("/skills", handlers.GetSkillList)
 			protected.GET("/skills/all", handlers.GetAllSkills)
+			protected.GET("/skills/filesystem", handlers.ListFilesystemSkillsHandler)
 			protected.GET("/skills/export", handlers.ExportAllSkills)
 			protected.GET("/skills/:id", handlers.GetSkillByID)
 			protected.GET("/skills/:id/export", handlers.ExportSkillByID)
