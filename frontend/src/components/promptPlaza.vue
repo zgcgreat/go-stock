@@ -16,7 +16,8 @@ const dialog = useDialog()
 
 const darkTheme = ref(false)
 const editorTheme = ref('light')
-const apiBase = ref('http://go-stock.sparkmemory.top:1918/api')
+const apiBase = ref('') // 由后端配置下发，不写死域名（上游 3a92553）；配置未就绪时用默认反代兜底
+const resolvedApiBase = () => apiBase.value || 'https://proxy.sparkmemory.top/api'
 const localApiBase = ref('/api/v1/plaza') // Web 模式下本地 API
 const token = ref(localStorage.getItem('promptPlazaToken') || '')
 const currentUser = ref(null)
@@ -204,7 +205,7 @@ function getHeaders() {
 }
 
 async function apiGet(path, params = {}) {
-  const url = new URL(apiBase.value + path)
+  const url = new URL(resolvedApiBase() + path)
   Object.entries(params).forEach(([k, v]) => {
     if (v !== null && v !== undefined && v !== '') {
       url.searchParams.set(k, v)
@@ -219,7 +220,7 @@ async function apiGet(path, params = {}) {
 }
 
 async function apiPost(path, body = null) {
-  const resp = await fetch(apiBase.value + path, {
+  const resp = await fetch(resolvedApiBase() + path, {
     method: 'POST',
     headers: getHeaders(),
     body: body ? JSON.stringify(body) : null
@@ -232,7 +233,7 @@ async function apiPost(path, body = null) {
 }
 
 async function apiPut(path, body) {
-  const resp = await fetch(apiBase.value + path, {
+  const resp = await fetch(resolvedApiBase() + path, {
     method: 'PUT',
     headers: getHeaders(),
     body: JSON.stringify(body)
@@ -245,7 +246,7 @@ async function apiPut(path, body) {
 }
 
 async function apiDelete(path) {
-  const resp = await fetch(apiBase.value + path, {
+  const resp = await fetch(resolvedApiBase() + path, {
     method: 'DELETE',
     headers: getHeaders()
   })

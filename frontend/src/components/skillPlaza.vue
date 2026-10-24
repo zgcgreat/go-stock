@@ -17,12 +17,9 @@ const dialog = useDialog()
 
 const darkTheme = ref(false)
 const editorTheme = ref('light')
-// 默认外部广场地址；HTTPS 页面下自动使用 https，避免浏览器混合内容拦截
-const apiBase = ref(
-  (typeof window !== 'undefined' && window.location.protocol === 'https:')
-    ? 'https://go-stock.sparkmemory.top:1918/api'
-    : 'http://go-stock.sparkmemory.top:1918/api'
-)
+// 广场地址：由后端配置下发（GetConfig.promptPlazaApiBase），不写死域名；
+// 空串时后端 plaza/proxy 按默认地址（proxy 反代 + 回退列表）处理（上游 3a92553）
+const apiBase = ref('')
 // Web 模式下本地 API（广场外部服务不可用时的降级来源）
 const localApiBase = ref('/api/v1/skills')
 const isWebMode = computed(() => {

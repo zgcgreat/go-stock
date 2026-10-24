@@ -156,9 +156,10 @@ const KLINE_SOURCE_LABELS = {
   'binance-futures': '币安合约',
   'binance-futures-unreachable': '币安合约·需配置代理',
   'binance-futures-invalid-symbol': '币安合约·代码无效',
+  okx: 'OKX',
 }
 /** 主数据源（非降级）标识集合：其余走降级样式提示 */
-const PRIMARY_KLINE_SOURCES = new Set(['eastmoney', 'tdx-mac', 'tdx-mac-ex', 'binance-futures'])
+const PRIMARY_KLINE_SOURCES = new Set(['eastmoney', 'tdx-mac', 'tdx-mac-ex', 'binance-futures', 'okx'])
 const klineSourceLabel = computed(() => KLINE_SOURCE_LABELS[activeDataSource.value] || activeDataSource.value)
 const klineSourceIsFallback = computed(() => !PRIMARY_KLINE_SOURCES.has(activeDataSource.value))
 
@@ -202,11 +203,14 @@ const isBinanceCode = computed(() => String(props.code || '').toUpperCase().star
 // Bitget 美股永续合约识别：bt: 前缀（如 bt:AAPLUSDT，后端统一小写 bt:aaplusdt）；
 // 同属合约独立行情体系，无 A 股复权/涨跌停概念
 const isBitgetCode = computed(() => String(props.code || '').toUpperCase().startsWith('BT:'))
-// 复权类型：qfq=前复权（默认）、hfq=后复权、none=不复权；仅日K及更长周期有效；场内 ETF/港股/中证指数/海外指数/币安合约/美股永续默认 none
-const activeAdjust = ref((isEtfCode.value || isHkCode.value || isCsiIndexCode.value || isGlobalIndexCode.value || isBinanceCode.value || isBitgetCode.value) ? 'none' : DEFAULT_ADJUST)
-// 实际传给后端的复权标识：分时周期传空串（走各数据源默认行为），日K类周期传 activeAdjust；币安合约/美股永续恒为 none
+// OKX 合约/现货识别：ok: 前缀（如 ok:BTC-USDT-SWAP，后端 ResolveOKXInstId 归一）；
+// 同属加密独立行情体系，无 A 股复权/涨跌停概念（上游 2872d65）
+const isOKXCode = computed(() => String(props.code || '').toUpperCase().startsWith('OK:'))
+// 复权类型：qfq=前复权（默认）、hfq=后复权、none=不复权；仅日K及更长周期有效；场内 ETF/港股/中证指数/海外指数/币安合约/美股永续/OKX 默认 none
+const activeAdjust = ref((isEtfCode.value || isHkCode.value || isCsiIndexCode.value || isGlobalIndexCode.value || isBinanceCode.value || isBitgetCode.value || isOKXCode.value) ? 'none' : DEFAULT_ADJUST)
+// 实际传给后端的复权标识：分时周期传空串（走各数据源默认行为），日K类周期传 activeAdjust；币安合约/美股永续/OKX 恒为 none
 const adjustFlagForRequest = computed(() => {
-  if (isBinanceCode.value || isBitgetCode.value) return 'none'
+  if (isBinanceCode.value || isBitgetCode.value || isOKXCode.value) return 'none'
   return DAILY_LIKE_KLT.has(activeKlt.value) ? activeAdjust.value : ''
 })
 
@@ -3897,7 +3901,9 @@ async function loadData() {
           ? (src === 'bitget-futures-invalid-symbol'
               ? '美股永续合约代码无效（示例：bt:AAPLUSDT）'
               : '美股永续合约数据不可达：请在「设置 → 合约代理」中配置代理后重试')
-          : '暂无 K 线数据（如 600519.SH、000001.SZ、00700.HK、AAPL.US）'
+          : isOKXCode.value
+            ? 'OKX 行情数据不可达：请在「设置 → 币安合约代理」中配置代理后重试（OKX 与币安共用该代理）'
+            : '暂无 K 线数据（如 600519.SH、000001.SZ、00700.HK、AAPL.US）'
       candleSeries?.setData([])
       volSeries?.setData([])
       syncIndicators()
@@ -4539,7 +4545,7 @@ watch(showLongPosition, (newVal) => {
             {{ it.label }}
           </NButton>
           <span style="width: 12px" />
-          <NDropdown v-if="DAILY_LIKE_KLT.has(activeKlt) && !isEtfCode && !isHkCode && !isCsiIndexCode && !isGlobalIndexCode && !isBinanceCode && !isBitgetCode" :options="ADJUST_OPTIONS.map(o => ({ label: o.label, key: o.value }))" @select="(k) => { activeAdjust = k; loadData() }">
+          <NDropdown v-if="DAILY_LIKE_KLT.has(activeKlt) && !isEtfCode && !isHkCode && !isCsiIndexCode && !isGlobalIndexCode && !isBinanceCode && !isBitgetCode && !isOKXCode" :options="ADJUST_OPTIONS.map(o => ({ label: o.label, key: o.value }))" @select="(k) => { activeAdjust = k; loadData() }">
             <NButton size="tiny" secondary>{{ ADJUST_OPTIONS.find(o => o.value === activeAdjust)?.label || '复权' }}</NButton>
           </NDropdown>
           <NDropdown v-if="props.code" :options="followGroupOptions" @select="handleFollowSelect">
