@@ -34,7 +34,7 @@ import {
   NotifySignal,
   SaveSignalRecords,
 } from '../../../wailsjs/go/main/App'
-import { buySellPointsValues, temaTurnPointsValues } from './calc'
+import { buySellPointsValues, temaTurnPointsValues, hullTurnPointsValues, BUY_SELL_MAX_SCORE } from './calc'
 import { extractOHLCV } from './bars'
 import { BUY_SELL_SCORE_OPTIONS, CN_TZ, DAILY_LIKE_KLT, DEFAULT_ADJUST, INTERVALS } from './constants'
 import { chartTimeToUtcMs } from './time'
@@ -56,15 +56,16 @@ export const SIGNAL_PAGE_SIZE_OPTIONS = [20, 50, 100]
 const TONE_GAP_MS = 800
 /** 开启语音播报时的连播间隔：多留出念股票名称的时间，否则下一只票的短音会打断上一句 */
 const TONE_GAP_MS_SPEECH = 1800
-/** 扫描节拍间隔（秒）：由 Go cron 驱动真实节奏（5~600s，面板「扫描间隔」可热更），
+/** 扫描节拍间隔（秒）：由 Go cron 驱动真实节奏（1~600s，面板「扫描间隔」可热更），
  * 前端兜底定时器与「Go 节拍失联」判定阈值都跟随该值 */
 let scanIntervalSec = 60
 /** 兜底定时器判定阈值：超过该时长没收到 Go 节拍，才由前端自行触发（间隔 + 90s 余量，防网络/休眠误判） */
 const goTickStaleMs = () => scanIntervalSec * 1000 + 90000
 
 /** 扫描节拍间隔可选值（秒）：每套监控可单独设置；Go tick 按三套的最小值唤醒，各实例再按自己的周期节流。
- *  5/10 秒高频档位面向加密 7x24 行情；一轮扫描可能跑不满一个高频周期，running 锁与按周期节流会自动跳过多余 tick */
+ *  1/5/10 秒高频档位面向加密 7x24 行情；一轮扫描可能跑不满一个高频周期，running 锁与按周期节流会自动跳过多余 tick */
 export const SCAN_INTERVAL_OPTIONS = [
+  { label: '1 秒', value: 1 },
   { label: '5 秒', value: 5 },
   { label: '10 秒', value: 10 },
   { label: '30 秒', value: 30 },
@@ -80,8 +81,9 @@ const TICK_EVENT = 'signalMonitorTick'
 
 /** 监控的信号族 */
 export const SIGNAL_FAMILY_OPTIONS = [
-  { value: 'buysell', label: '买卖点（9 路共振）' },
+  { value: 'buysell', label: '买卖点（14 路共振）' },
   { value: 'tema', label: 'TEMA 转折（T确）' },
+  { value: 'hull', label: 'Hull 转折（H确）' },
 ]
 
 /** 提醒渠道（app=系统通知+应用内横幅） */
@@ -169,7 +171,7 @@ function migrateCryptoPoolFromStock() {
     const { enabled, klt, minScore, families, channels, sound, voice } = d
     localStorage.setItem(STOCK_PERSIST_KEY, JSON.stringify({ enabled, pool: d.pool, klt, minScore, families, channels, sound, voice }))
     localStorage.setItem(OKX_PERSIST_KEY, JSON.stringify({
-      enabled: false, pool: crypto, klt: '101', minScore: 4, families: ['buysell'], channels: ['app'], sound: true, voice: true,
+      enabled: false, pool: crypto, klt: '101', minScore: 6, families: ['buysell'], channels: ['app'], sound: true, voice: true,
     }))
   } catch { /* 脏数据忽略，不做迁移 */ }
 }
@@ -251,7 +253,7 @@ export function formatSignalTime(t) {
 /** 后端记录 → 面板条目；id 与运行期拼法一致，供 v-for key 使用 */
 function toSignalItem(r) {
   return {
-    id: `${r.code}|${r.klt}|${r.family === 'tema' ? 'tema' : 'bs'}|${r.kind}|${r.time}`,
+    id: `${r.code}|${r.klt}|${r.family === 'tema' || r.family === 'hull' ? r.family : 'bs'}|${r.kind}|${r.time}`,
     code: r.code,
     name: r.name || r.code,
     klt: r.klt,
@@ -388,7 +390,7 @@ export function createSignalMonitor(opts: MonitorOptions) {
     /** 默认监控周期 klt：票未单独配周期时用这个 */
     klt: opts.defaultKlt || '101',
     /** 买卖点灵敏度（与图表同一套档位定义） */
-    minScore: 4,
+    minScore: 6,
     /** 启用的信号族 */
     families: ['buysell'],
     /** 提醒渠道 */
@@ -397,7 +399,7 @@ export function createSignalMonitor(opts: MonitorOptions) {
     sound: true,
     /** 语音报名称：短音之后再念一句「股票名称 + 方向」，多只票同时命中时也能分辨（依赖系统中文语音包） */
     voice: true,
-    /** 本套监控的扫描周期（秒）：Go tick 按三套的最小值唤醒，本实例按该周期节流（5~300） */
+    /** 本套监控的扫描周期（秒）：Go tick 按三套的最小值唤醒，本实例按该周期节流（1~300） */
     scanIntervalSec: 60,
     /** 信号流水当前页（最新在前） */
     signals: [],
@@ -750,14 +752,15 @@ export function createSignalMonitor(opts: MonitorOptions) {
     const intraday = !DAILY_LIKE_KLT.has(klt)
     const opt = BUY_SELL_SCORE_OPTIONS.find((o) => o.value === minScore) || BUY_SELL_SCORE_OPTIONS[1]
     // 与图表 checkBuySellAlert 的 ctx 拼法一致（不含复权），后台与图表抢占同一提示音键
-    const bsCtx = `${entry.code}|${klt}|${minScore}`
+    const bsCtx = `${entry.code}|${klt}`
     const temaCtx = `${entry.code}|${klt}`
+    const hullCtx = `${entry.code}|${klt}`
     const key = `${entry.code}|${klt}`
     const ctx = `${minScore}|${intraday ? 'i' : 'd'}`
 
     let st = baselines.get(key)
     if (!st || st.ctx !== ctx) {
-      st = { ctx, buy: null, sell: null, temaBuy: null, temaSell: null }
+      st = { ctx, buy: null, sell: null, temaBuy: null, temaSell: null, hullBuy: null, hullSell: null }
       baselines.set(key, st)
     }
     const fresh = !st.ready
@@ -775,7 +778,7 @@ export function createSignalMonitor(opts: MonitorOptions) {
       const buyTime = latestTime(times, buys)
       const sellTime = latestTime(times, sells)
       // 同根 K 线方向冲突裁决：买卖点同根同时触发时只保留分数高的一方，同分视为无方向（都不发）。
-      // 实测震荡行情下 9 路指标会同时给出买/卖共振（如 CCI/RSI 报买、KDJ/ADX 报卖），
+      // 实测震荡行情下多路指标会同时给出买/卖共振（如 CCI/RSI 报买、KDJ/ADX 报卖），
       // 不裁决会同一分钟 buy/sell 双发，自动交易端直接形成一对对敲磨损单。
       let effBuyTime = buyTime
       let effSellTime = sellTime
@@ -855,6 +858,37 @@ export function createSignalMonitor(opts: MonitorOptions) {
           score: null,
           detail: 'TEMA 速度温和穿越零轴',
           claim: `${temaCtx}|tema|${kind}|${time}`,
+        })
+      }
+      pushIfNew(buyItem, 'buy')
+      pushIfNew(sellItem, 'sell')
+    }
+
+    if (state.families.includes('hull')) {
+      // Hull 转折与 TEMA 同为单指标转折族：HMA 斜率换向即确认点（函数内已做 minGap
+      // 聚类与日K MA20 顺势门控），只产出 kind==='conf'，无需再过滤
+      const { buys, sells } = hullTurnPointsValues(highs, lows, closes, { intraday })
+      const buyItem = latestItem(times, buys)
+      const sellItem = latestItem(times, sells)
+      const pushIfNew = (item, kind) => {
+        const time = item ? times[item.i] : null
+        const baseField = kind === 'buy' ? 'hullBuy' : 'hullSell'
+        const prev = st[baseField]
+        st[baseField] = time
+        if (fresh || time == null || prev == null || time <= prev) return
+        out.push({
+          id: `${entry.code}|${klt}|hull|${kind}|${time}`,
+          code: entry.code,
+          name: entry.name || entry.code,
+          klt,
+          family: 'hull',
+          kind,
+          time,
+          // Hull 信号同样只产出第几根 K 线，取该根收盘价，与 TEMA 行信息量一致
+          price: typeof closes[item.i] === 'number' ? closes[item.i] : null,
+          score: null,
+          detail: 'HMA 斜率换向确认',
+          claim: `${hullCtx}|hull|${kind}|${time}`,
         })
       }
       pushIfNew(buyItem, 'buy')
@@ -962,12 +996,13 @@ export function createSignalMonitor(opts: MonitorOptions) {
   function buildMessage(signals) {
     const labelOf = (s) => {
       if (s.family === 'tema') return s.kind === 'buy' ? 'T确买点' : 'T确卖点'
+      if (s.family === 'hull') return s.kind === 'buy' ? 'H确买点' : 'H确卖点'
       return s.kind === 'buy' ? '买点' : '卖点'
     }
     const kltLabel = (SIGNAL_INTERVAL_OPTIONS.find((it) => it.klt === state.klt) || {}).label || '日K'
     if (signals.length === 1) {
       const s = signals[0]
-      const scoreText = s.score != null ? `\n- **共振强度**: ${Math.round((s.score / 9) * 100)}%（${s.score}/9 路）` : ''
+      const scoreText = s.score != null ? `\n- **共振强度**: ${Math.round((s.score / BUY_SELL_MAX_SCORE) * 100)}%（${s.score}/${BUY_SELL_MAX_SCORE} 路）` : ''
       const detailText = s.detail ? `\n- **命中信号**: ${s.detail}` : ''
       const priceText = s.price != null ? `\n- **信号价格**: ${s.price.toFixed(2)}` : ''
       const title = `【${labelOf(s)}】${s.name}`
@@ -1021,9 +1056,13 @@ export function createSignalMonitor(opts: MonitorOptions) {
     for (const s of hit) {
       names.set(s.code, speakName(s))
       if (!state.sound || !claimAlertToneOnce(s.claim)) continue
-      if (s.family === 'tema') {
-        // 不念「T确」：语音会把拉丁字母逐字读出来，不如「转折买点」清楚
-        tones.push({ tone: s.kind === 'buy' ? 'tema-buy' : 'tema-sell', say: `${names.get(s.code)} 转折${s.kind === 'buy' ? '买点' : '卖点'}` })
+      if (s.family === 'tema' || s.family === 'hull') {
+        // 不念「T确」：语音会把拉丁字母逐字读出来，不如「转折买点」清楚；
+        // Hull 音译「赫尔」可念，前缀区分同票同时触发的 TEMA / Hull 转折
+        tones.push({
+          tone: s.kind === 'buy' ? 'tema-buy' : 'tema-sell',
+          say: `${names.get(s.code)} ${s.family === 'hull' ? '赫尔' : ''}转折${s.kind === 'buy' ? '买点' : '卖点'}`,
+        })
       } else {
         bsHits.add(`${s.code}|${s.kind}`)
       }
