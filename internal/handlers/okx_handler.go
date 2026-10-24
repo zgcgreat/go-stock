@@ -311,12 +311,13 @@ func GetSignalScanIntervalHandler(c *gin.Context) {
 }
 
 // SetSignalScanIntervalHandler PUT /signals/scan-interval?sec=
-// 设置扫描间隔（5~600 秒）：落库并热更新服务端 SSE 节拍，通知前端重排兜底定时器。
-// 下限 5 秒：面板扫描周期提供 5/10 秒档位，加密 7x24 行情下高频档位由此放行。
+// 设置扫描间隔（1~600 秒）：落库并热更新服务端 SSE 节拍，通知前端重排兜底定时器。
+// 下限 1 秒：面板扫描周期提供 1/5/10 秒档位，加密 7x24 行情下高频档位由此放行；
+// 1 秒档仅作为唤醒节拍，实际节奏由前端 running 锁与按周期节流保证（一轮扫描跑不满周期时自动跳过多余 tick）。
 func SetSignalScanIntervalHandler(c *gin.Context) {
 	sec, _ := strconv.Atoi(c.Query("sec"))
-	if sec < 5 || sec > 600 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "扫描间隔仅支持 5~600 秒"})
+	if sec < 1 || sec > 600 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "扫描间隔仅支持 1~600 秒"})
 		return
 	}
 	if err := data.SetSignalScanIntervalSec(sec); err != nil {

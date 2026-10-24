@@ -13,9 +13,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"go-stock/backend/data"
 	"go-stock/backend/db"
+	"go-stock/backend/logger"
 	"go-stock/internal/handlers"
 	"go-stock/internal/webserver"
 )
@@ -71,6 +73,10 @@ func main() {
 		<-quit
 		log.Println("Shutting down server...")
 		scheduler.Stop()
+		// os.Exit(0) 会跳过 defer：退出前先合并 WAL 并关闭数据库（对齐上游 cdf4a07 桌面端修复），
+		// 否则强杀后遗留的巨型 WAL 会让下次启动在 db.Init 全量恢复时长时间无响应
+		db.Close(20 * time.Second)
+		_ = logger.SugaredLogger.Sync()
 		os.Exit(0)
 	}()
 
