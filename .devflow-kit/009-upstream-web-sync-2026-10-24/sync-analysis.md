@@ -93,3 +93,34 @@ syncBuySellPrimitive、getBuySellBars 数据管线全缺）。
 - go test backend/agent backend/agent/tools + backend/data 定向（TestOKXSignalMinTp* 新用例）
 - vite build（临时 outDir，绕开批量删除保护）
 - A 类 11 文件 HEAD vs origin/dev hash 逐一致核对
+
+## 执行后补记（2026-10-24 晚）
+
+### 实际提交链
+
+| 提交 | 内容 |
+|------|------|
+| 84f2ff9 | B1：后端 5 文件（okx_signal_trade + min_tp_test + db.go Close + settings_api 手工含 UpdateConfigByUserID + signal_record 注释） |
+| 50efafb | B2：Web 接线（okx_handler 扫描下限 1s + web/main.go 优雅关停 WAL checkpoint） |
+| adb8416 | B3：前端直接同步 8 文件（14 路共振 calc/监控/面板，0 偏移） |
+| 026f53f | B4：settings.vue 手工合并（min/max 止盈表单 + 14 路口径文案） |
+| 1cc2b04 | docs：本文档 |
+| bd81bc5 | chore：26 个废弃 AI 元数据删除（用户确认，独立提交） |
+
+### 验证基线（全部通过）
+
+- A 类 hash 一致核对：11/11（HEAD vs origin/dev）
+- go build / go vet ./web ./internal ./backend ./ai-assistant-web 全绿
+- go test backend/agent（78s）+ backend/agent/tools 全绿
+- backend/data 定向：TestOkxSignalTpYieldPctFixed/Vol/OutOfRange 3 新用例 + TestOKXCalcSizeByAmount/TestOkxAlignPx/TestOKXSignalBarTimeWindows 全过
+- vite build 5m15s 通过（仅 chunk 体积警告，与上游同步无关）
+
+### 计划外发现：Go 模块缓存批量损坏（与同步无关的环境事故）
+
+- 今天 12:13 前后模块缓存被外部清理破坏（与 26 个元数据文件被删同时段）：
+  `go mod verify` 报 9 个模块 "dir has been modified"，另有 mimetype v1.4.3 漏网
+  （提取目录只剩 testdata/，verify 因时机未报）。
+- 症状：`undefined: translation` / `no required module provides package` 等编译错误。
+- **修复口诀**：删损坏模块目录 → `go mod download <mods>` → **必须再 `go clean -cache`**
+  （构建缓存会重放加载期失败，模块修好后不清构建缓存错误依旧）。
+- 同时段 26 个 git 跟踪的元数据文件被删，属同一次外部清理，已按用户指示单独提交为 bd81bc5。
