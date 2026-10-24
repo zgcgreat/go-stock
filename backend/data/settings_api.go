@@ -13,23 +13,25 @@ import (
 	"gorm.io/gorm"
 )
 
-// DefaultPromptPlazaApiBase 广场服务地址固定值（定制版不允许修改）。
-const DefaultPromptPlazaApiBase = "https://go-stock.sparkmemory.top/api"
+// DefaultPromptPlazaApiBase 广场服务默认接口域名（定制版不允许修改）。
+// 提示词/技能广场、分析报告分享等所有客户端↔服务端交互统一走此地址。
+const DefaultPromptPlazaApiBase = "https://proxy.sparkmemory.top/api"
 
-// PromptPlazaApiBaseFallback 广场服务备用地址：主地址网络层不可用（超时/连接失败）时自动回退到此地址。
-const PromptPlazaApiBaseFallback = "https://stock.sparkmemory.top/api"
+// PromptPlazaApiFallbacks 广场服务回退地址：默认地址网络层不可用（超时/连接失败）时按顺序回退。
+var PromptPlazaApiFallbacks = []string{
+	"https://go-stock.sparkmemory.top/api",
+	"https://stock.sparkmemory.top/api",
+}
 
-// PromptPlazaApiBases 返回广场请求的候选地址列表：主地址优先，备用地址兜底。
-// 地址为空时按默认主地址处理；与备用地址重复时去重，避免重复请求。
+// PromptPlazaApiBases 返回广场请求的候选地址列表：默认地址优先，其余按顺序兜底。
+// primary 为配置值（定制版固定等于默认地址），为空时忽略；重复地址去重，避免重复请求。
 func PromptPlazaApiBases(primary string) []string {
-	primary = strings.TrimSpace(primary)
-	if primary == "" {
-		primary = DefaultPromptPlazaApiBase
+	bases := []string{DefaultPromptPlazaApiBase}
+	if primary = strings.TrimSpace(primary); primary != "" {
+		bases = append(bases, primary)
 	}
-	if primary == PromptPlazaApiBaseFallback {
-		return []string{primary}
-	}
-	return []string{primary, PromptPlazaApiBaseFallback}
+	bases = append(bases, PromptPlazaApiFallbacks...)
+	return lo.Uniq(bases)
 }
 
 type Settings struct {
@@ -152,6 +154,15 @@ type Settings struct {
 	// OKXSignalTradeKlts 允许交易的 K 线周期（逗号分隔，如 15,60,101）；留空=全部周期。
 	// 周期含义与信号监控面板一致：1/5/15/30/60 分钟，101=日K，102=周K，103=月K。
 	OKXSignalTradeKlts string `json:"okxSignalTradeKlts" gorm:"column:okx_signal_trade_klts;size:64"`
+	// OKXSignalTradeDirMode 开仓方向：both=多空都做（默认）/ long=只做多（卖出信号仅平多）/ short=只做空。
+	// 5m/15m 实测「只做多」在下跌季度回撤更小；配合 OKXSignalTradeRegime 可按大势自动切换方向。
+	OKXSignalTradeDirMode string `json:"okxSignalTradeDirMode" gorm:"column:okx_signal_trade_dir_mode;size:8"`
+	// OKXSignalTradeRegime 顺大势门控：开启后按 BTC 1H（EMA50/EMA200 + 收盘位置）判断趋势态，
+	// 多头趋势只开多、空头趋势只开空、过渡区不限制。回测：15m ≥6 路信号年化 -59%→-28%，是全部组合最优。
+	OKXSignalTradeRegime bool `json:"okxSignalTradeRegime" gorm:"column:okx_signal_trade_regime;default:false"`
+	// OKXSignalTradeMaxPerDay 单合约单日最大开仓笔数（东八区自然日，按成功开仓流水统计）；
+	// 留空或 0 = 不限制。5m 裸信号实测日均 4.5 笔/品种，手续费是主要亏损来源，限笔数最直接有效。
+	OKXSignalTradeMaxPerDay string `json:"okxSignalTradeMaxPerDay" gorm:"column:okx_signal_trade_max_per_day;size:8"`
 	// OKXSignalStockEnable 股票信号（美股/港股永续等合成股票合约代码）单独开关：
 	// 与加密信号交易完全独立（独立开关+独立金额），默认关闭——OKX 模拟盘未上架股票永续，
 	// 仅实盘 xStocks 类股票永续上线后才有实际成交。
@@ -184,6 +195,9 @@ type Settings struct {
 	QgqpBId               string `json:"qgqpBId" gorm:"column:qgqp_b_id"`
 	IwencaiApiKey         string `json:"iwencaiApiKey" gorm:"column:iwencai_api_key"`
 	EmApiKey              string `json:"emApiKey" gorm:"column:em_api_key"`
+	// DeepSeekSearchApiKey DeepSeek 联网搜索/网页抓取 API Key（api.deepseek.com），
+	// 为 Agent 的 WebSearch/WebFetch 工具提供鉴权，按次计费。
+	DeepSeekSearchApiKey string `json:"deepSeekSearchApiKey" gorm:"column:deepseek_search_api_key"`
 	WindowWidth           int    `json:"windowWidth"`
 	WindowHeight          int    `json:"windowHeight"`
 	PromptPlazaApiBase    string `json:"promptPlazaApiBase" gorm:"column:prompt_plaza_api_base"`
@@ -194,14 +208,15 @@ func (receiver Settings) TableName() string {
 }
 
 // GetSignalScanIntervalSec 读取信号扫描节拍间隔（秒）；未配置或非法（<=0 / 超界）时回退默认值。
+// 下限 5 秒：面板扫描周期提供 5/10 秒档位，加密 7x24 行情下高频档位由此放行。
 func GetSignalScanIntervalSec() int {
 	sec := 60
 	var v int
 	if err := db.Dao.Model(&Settings{}).Select("signal_scan_interval_sec").Limit(1).Scan(&v).Error; err == nil && v > 0 {
 		sec = v
 	}
-	if sec < 30 {
-		sec = 30
+	if sec < 5 {
+		sec = 5
 	}
 	if sec > 600 {
 		sec = 600
@@ -354,6 +369,9 @@ func UpdateConfig(s *SettingConfig) string {
 			"okx_signal_trade_inst_type":    s.OKXSignalTradeInstType,
 			"okx_signal_trade_lever":        s.OKXSignalTradeLever,
 			"okx_signal_trade_klts":         s.OKXSignalTradeKlts,
+			"okx_signal_trade_dir_mode":     s.OKXSignalTradeDirMode,
+			"okx_signal_trade_regime":       s.OKXSignalTradeRegime,
+			"okx_signal_trade_max_per_day":  s.OKXSignalTradeMaxPerDay,
 			"okx_signal_stock_enable":       s.OKXSignalStockEnable,
 			"okx_signal_stock_usdt":         s.OKXSignalStockUSDT,
 			"okx_tpsl_enable":               s.OKXTPSLEnable,
@@ -368,6 +386,7 @@ func UpdateConfig(s *SettingConfig) string {
 			"qgqp_b_id":                  s.QgqpBId,
 			"iwencai_api_key":            s.IwencaiApiKey,
 			"em_api_key":                 s.EmApiKey,
+			"deepseek_search_api_key":    s.DeepSeekSearchApiKey,
 			"window_width":               s.WindowWidth,
 			"window_height":              s.WindowHeight,
 			"prompt_plaza_api_base":      s.PromptPlazaApiBase,
@@ -718,6 +737,9 @@ func UpdateConfigByUserID(userID uint, s *SettingConfig) error {
 			"okx_signal_trade_inst_type":     s.OKXSignalTradeInstType,
 			"okx_signal_trade_lever":         s.OKXSignalTradeLever,
 			"okx_signal_trade_klts":          s.OKXSignalTradeKlts,
+			"okx_signal_trade_dir_mode":      s.OKXSignalTradeDirMode,
+			"okx_signal_trade_regime":        s.OKXSignalTradeRegime,
+			"okx_signal_trade_max_per_day":   s.OKXSignalTradeMaxPerDay,
 			"okx_signal_stock_enable":        s.OKXSignalStockEnable,
 			"okx_signal_stock_usdt":          s.OKXSignalStockUSDT,
 			"okx_tpsl_enable":                s.OKXTPSLEnable,
@@ -732,6 +754,7 @@ func UpdateConfigByUserID(userID uint, s *SettingConfig) error {
 			"qgqp_b_id":                      s.QgqpBId,
 			"iwencai_api_key":                s.IwencaiApiKey,
 			"em_api_key":                     s.EmApiKey,
+			"deepseek_search_api_key":        s.DeepSeekSearchApiKey,
 			"window_width":                   s.WindowWidth,
 			"window_height":                  s.WindowHeight,
 			"prompt_plaza_api_base":          s.PromptPlazaApiBase,

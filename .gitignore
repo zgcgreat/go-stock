@@ -108,7 +108,10 @@ ai-doc
 .trae
 .qoder
 .idea/
-data/
+# 根锚定：只忽略仓库根目录的运行时 data/，不再误伤 backend/data/ 等 Go 包目录（007 事故教训）
+/data/
+/go-stock
+/data/settings_backup_*.json
 logs/
 /data/*.db*
 dist/
@@ -126,6 +129,9 @@ deploy/
 
 
 */__pycache__/*
+
+.workbuddy
+frontend/tmp-tune
 
 # vite 临时构建验证目录（本机 safe-delete 拦截自动删除，手动清理即可）
 frontend/dist-buildtest/
