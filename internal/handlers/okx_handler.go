@@ -98,6 +98,18 @@ func GetOKXTickersHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": data.GetOKXTickers(c.Query("instType"))})
 }
 
+// GetOkxInstrumentsHandler GET /okx/instruments
+// 公共品种表（SPOT+SWAP，免签公共接口 + 6h 缓存），前端按需过滤。
+// 供 K 线分析页搜索联想使用：不请求私有账户接口、不拉 24h 行情，轻量快速；
+// OKX 不可达时返回空表（前端独立降级，不影响币安/Bitget 联想）。
+func GetOkxInstrumentsHandler(c *gin.Context) {
+	insts := data.GetOKXInstruments("")
+	if insts == nil {
+		insts = []data.OKXInstrument{}
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": insts})
+}
+
 // GetOKXTickerHandler GET /okx/ticker?instId=
 func GetOKXTickerHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": data.GetOKXTicker(c.Query("instId"))})
@@ -134,6 +146,17 @@ func GetOKXPositionListHandler(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": list})
+}
+
+// GetOKXPositionTPSLHandler GET /okx/positions/tpsl?simulated=
+// 当前持仓的止盈止损线视图（与持仓监控同款口径；未开启止盈止损时返回空数组）。
+func GetOKXPositionTPSLHandler(c *gin.Context) {
+	simulated := defaultTrue(c.Query("simulated"))
+	views := data.GetOKXPositionTPSLForEnv(simulated)
+	if views == nil {
+		views = []data.OKXPositionTPSLView{}
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": views})
 }
 
 // GetOKXOpenOrdersHandler GET /okx/orders/open?simulated= 当前挂单（按环境）。
@@ -288,11 +311,12 @@ func GetSignalScanIntervalHandler(c *gin.Context) {
 }
 
 // SetSignalScanIntervalHandler PUT /signals/scan-interval?sec=
-// 设置扫描间隔（30~600 秒）：落库并热更新服务端 SSE 节拍，通知前端重排兜底定时器。
+// 设置扫描间隔（5~600 秒）：落库并热更新服务端 SSE 节拍，通知前端重排兜底定时器。
+// 下限 5 秒：面板扫描周期提供 5/10 秒档位，加密 7x24 行情下高频档位由此放行。
 func SetSignalScanIntervalHandler(c *gin.Context) {
 	sec, _ := strconv.Atoi(c.Query("sec"))
-	if sec < 30 || sec > 600 {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "扫描间隔仅支持 30~600 秒"})
+	if sec < 5 || sec > 600 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "扫描间隔仅支持 5~600 秒"})
 		return
 	}
 	if err := data.SetSignalScanIntervalSec(sec); err != nil {

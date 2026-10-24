@@ -3912,6 +3912,15 @@ export function GetOKXInstTickers(instType) {
   }).then(extractApiData).catch(() => []);
 }
 
+// GetOkxInstruments 公共品种表（SPOT+SWAP，免签公共接口 + 6h 缓存），K 线分析页搜索联想用；
+// OKX 不可达时返回空表（前端独立降级，不影响币安/Bitget 联想）。
+export function GetOkxInstruments() {
+  if (isWailsMode()) return window.go.main.App.GetOkxInstruments();
+  return apiService.client.get('/okx/instruments', {
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
 // GetOKXInstTicker 单合约行情。
 export function GetOKXInstTicker(instId) {
   if (isWailsMode()) return window.go.main.App.GetOKXInstTicker(instId);
@@ -3962,6 +3971,15 @@ export function GetOKXPositionListEnv(simulated, instId) {
   if (isWailsMode()) return window.go.main.App.GetOKXPositionListEnv(simulated, instId);
   return apiService.client.get('/okx/positions', {
     params: { simulated: okxBoolParam(simulated), instId: instId || '' },
+    headers: getAuthHeaders(),
+  }).then(extractApiData).catch(() => []);
+}
+
+// GetOKXPositionTPSLEnv 按环境查持仓止盈止损线视图（与持仓监控同款口径；未开启时返回空数组）。
+export function GetOKXPositionTPSLEnv(simulated) {
+  if (isWailsMode()) return window.go.main.App.GetOKXPositionTPSLEnv(simulated);
+  return apiService.client.get('/okx/positions/tpsl', {
+    params: { simulated: okxBoolParam(simulated) },
     headers: getAuthHeaders(),
   }).then(extractApiData).catch(() => []);
 }
