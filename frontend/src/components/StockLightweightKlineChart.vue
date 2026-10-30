@@ -420,6 +420,7 @@ const ind = {
   ma10: null,
   ma20: null,
   ma60: null,
+  ma250: null,
   bollU: null,
   bollM: null,
   bollL: null,
@@ -1644,6 +1645,7 @@ function syncIndicators() {
     ind.ma10 = removeSeriesSafe(ind.ma10)
     ind.ma20 = removeSeriesSafe(ind.ma20)
     ind.ma60 = removeSeriesSafe(ind.ma60)
+    ind.ma250 = removeSeriesSafe(ind.ma250)
     ind.bollU = removeSeriesSafe(ind.bollU)
     ind.bollM = removeSeriesSafe(ind.bollM)
     ind.bollL = removeSeriesSafe(ind.bollL)
@@ -1714,6 +1716,7 @@ function syncIndicators() {
     const m10 = smaValues(closes, 10)
     const m20 = smaValues(closes, 20)
     const m60 = smaValues(closes, 60)
+    const m250 = smaValues(closes, 250)
     if (!ind.ma5) {
       ind.ma5 = chart.addSeries(
         LineSeries,
@@ -1742,15 +1745,24 @@ function syncIndicators() {
         0,
       )
     }
+    if (!ind.ma250) {
+      ind.ma250 = chart.addSeries(
+        LineSeries,
+        { ...lineCommon, color: '#db2777', title: 'MA250' },
+        0,
+      )
+    }
     ind.ma5.setData(toLineData(times, m5))
     ind.ma10.setData(toLineData(times, m10))
     ind.ma20.setData(toLineData(times, m20))
     ind.ma60.setData(toLineData(times, m60))
+    ind.ma250.setData(toLineData(times, m250))
   } else {
     ind.ma5 = removeSeriesSafe(ind.ma5)
     ind.ma10 = removeSeriesSafe(ind.ma10)
     ind.ma20 = removeSeriesSafe(ind.ma20)
     ind.ma60 = removeSeriesSafe(ind.ma60)
+    ind.ma250 = removeSeriesSafe(ind.ma250)
   }
 
   if (showBOLL.value) {
@@ -2414,6 +2426,22 @@ function formatPanelTitleDay(r) {
   if (t == null) return String(r.day || '').trim() || '--'
   return formatCrosshairTime(t)
 }
+
+/** 标题行最新价/涨跌幅：始终取数据中最新一根 K 线（不随十字线漂移），实时刷新后自动更新；
+ *  涨跌幅沿用 K 线自带口径（日线=当日相对昨收，周/月K=相对上一周期） */
+const titleQuote = computed(() => {
+  const r = defaultLatestRawRow.value
+  if (!r) return null
+  const close = parseNumStr(r.close)
+  const pct = parseNumStr(r.changePercent)
+  const neu = props.darkTheme ? '#94a3b8' : '#64748b'
+  const color = pct > 0 ? CLR_RISE : pct < 0 ? CLR_FALL : neu
+  return {
+    price: Number.isFinite(close) ? close.toFixed(2) : '--',
+    pct: Number.isFinite(pct) ? `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%` : '--',
+    color,
+  }
+})
 
 const crosshairPanel = computed(() => {
   const r = hoverRawRow.value ?? defaultLatestRawRow.value
@@ -3575,7 +3603,7 @@ function disposeChart() {
   // VPVR 与 POC 标签随图表一起销毁，避免 chart=null 后 primitive 仍持有旧 series
   volumeProfilePrimitive = null
   clearPocPriceLine()
-  ind.ma5 = ind.ma10 = ind.ma20 = ind.ma60 = null
+  ind.ma5 = ind.ma10 = ind.ma20 = ind.ma60 = ind.ma250 = null
   ind.bollU = ind.bollM = ind.bollL = null
   ind.obv = null
   ind.macdHist = ind.macdDif = ind.macdDea = null
@@ -3632,16 +3660,29 @@ function scheduleLoadOlderDebounced() {
   }, 280)
 }
 
-/** 根据当前可见逻辑区间判断是否需要加载更早 K 线（与 subscribe 共用 + 轮询兜底） */
-function tryScheduleLoadOlderFromVisibleRange(range) {
+/** 左侧还差多少根才到数据起点。
+ *  barsInLogicalRange 在「可见区间完全不与数据相交」时返回 null（拖到最左且整屏都越过首根时就会这样），
+ *  此时用逻辑索引兜底：序列数据恒从逻辑索引 0 开始，range.from 即左侧缺失的柱数。 */
+function barsBeforeVisibleRange(lr) {
+  if (!candleSeries || !lr) return null
+  const info = candleSeries.barsInLogicalRange(lr)
+  if (info && typeof info.barsBefore === 'number') return info.barsBefore
+  return Math.floor(lr.from)
+}
+
+/** 根据当前可见逻辑区间判断是否需要加载更早 K 线（与 subscribe 共用 + 轮询兜底）。
+ *  immediate=true 时跳过防抖直接加载：轮询调用必须立即执行，
+ *  否则拖动惯性期间 subscribe 每帧回调会不断重置 280ms 防抖，导致加载永远不触发。 */
+function tryScheduleLoadOlderFromVisibleRange(range, immediate = false) {
   if (!chart || !candleSeries) return
   if (programmaticRangeDepth > 0 || loadingHistory.value || !hasMoreOlder.value) return
-  const lr = range ?? chart?.timeScale().getVisibleLogicalRange()
+  const lr = range ?? chart.timeScale().getVisibleLogicalRange()
   if (!lr) return
-  const info = candleSeries.barsInLogicalRange(lr)
-  if (!info || typeof info.barsBefore !== 'number') return
-  if (info.barsBefore < BARS_BEFORE_LOAD_MORE) {
-    scheduleLoadOlderDebounced()
+  const barsBefore = barsBeforeVisibleRange(lr)
+  if (!Number.isFinite(barsBefore)) return
+  if (barsBefore < BARS_BEFORE_LOAD_MORE) {
+    if (immediate) loadOlderHistory()
+    else scheduleLoadOlderDebounced()
   }
 }
 
@@ -3660,7 +3701,7 @@ function onVisibleTimeRangeChanged() {
 function startHistoryVisiblePoll() {
   stopHistoryVisiblePoll()
   historyVisiblePollTimer = setInterval(() => {
-    tryScheduleLoadOlderFromVisibleRange(null)
+    tryScheduleLoadOlderFromVisibleRange(null, true)
   }, 400)
 }
 
@@ -3736,7 +3777,8 @@ async function loadOlderHistory() {
         })
       }
     })
-  } catch {
+  } catch (e) {
+    console.warn('[loadOlder] 请求异常', e, { code: codeSnap, klt: kltSnap, end })
     /* 网络/桥接异常：保留 hasMoreOlder，用户可继续拖动重试 */
   } finally {
     loadingHistory.value = false
@@ -4533,6 +4575,10 @@ watch(showLongPosition, (newVal) => {
       </div>
       <div class="lw-kline-main">
         <NFlex :size="6" wrap style="row-gap: 4px; align-items: center">
+          <div v-if="code || stockName" class="lw-kline-title">
+            <span :style="'font-weight:700;font-size:13px;' + (props.darkTheme ? 'color:#e4e4e7;' : 'color:#18181b;')">{{ stockName || code }}</span>
+            <span v-if="stockName && code" style="font-size:11px;color:#64748b;">{{ code }}</span>
+          </div>
           <NText depth="3" style="font-size: 12px; margin-right: 2px">周期</NText>
           <NButton
             v-for="it in INTERVALS"
@@ -4639,6 +4685,10 @@ watch(showLongPosition, (newVal) => {
           <template v-if="crosshairPanel">
             <div class="lw-kline-crosshair-strip__head">
               <span class="lw-kline-crosshair-strip__date">{{ crosshairPanel.title }}</span>
+              <template v-if="titleQuote">
+                <span class="lw-kline-crosshair-strip__quote" :style="{ color: titleQuote.color }">{{ titleQuote.price }}</span>
+                <span class="lw-kline-crosshair-strip__quote-pct" :style="{ color: titleQuote.color }">{{ titleQuote.pct }}</span>
+              </template>
             </div>
             <div class="lw-kline-crosshair-strip__grid">
               <span class="lw-kline-kv">
@@ -4992,8 +5042,28 @@ watch(showLongPosition, (newVal) => {
   border-color: #3f3f46;
   background: #18181b;
 }
+.lw-kline-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-right: 4px;
+}
 .lw-kline-crosshair-strip__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
   margin-bottom: 4px;
+}
+.lw-kline-crosshair-strip__quote {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.lw-kline-crosshair-strip__quote-pct {
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
 }
 .lw-kline-crosshair-strip__date {
   font-weight: 700;
