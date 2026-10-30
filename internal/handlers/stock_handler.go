@@ -309,3 +309,69 @@ func GetStockPriceInfo(c *gin.Context) {
 		"changePercent": changePercent,
 	})
 }
+
+// StockRealtimeQuote 轻量实时行情：只带列表展示所需的最新价、昨收与当日涨跌幅。
+// 桌面等价：app.go GetStocksRealtimeQuotes（010 批次同步）。
+type StockRealtimeQuote struct {
+	Code          string  `json:"code"`
+	Price         float64 `json:"price"`
+	PreClose      float64 `json:"preClose"`
+	ChangePercent float64 `json:"changePercent"`
+}
+
+// GetStocksRealtimeQuotesHandler GET /stocks/realtime-quotes?codes=sh600519,sz000001
+// 批量取标的最新行情（自动去重；查不到的代码不出现在结果里）。
+// 供「信号流水/涨停梯队/买卖点信号」等前端列表展示最新价与当日涨跌幅使用。
+func GetStocksRealtimeQuotesHandler(c *gin.Context) {
+	quotes := make([]StockRealtimeQuote, 0)
+	raw := strings.TrimSpace(c.Query("codes"))
+	if raw == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": quotes})
+		return
+	}
+	// 去重保序，避免同一代码在列表里重复请求
+	seen := make(map[string]bool)
+	codes := make([]string, 0, 16)
+	for _, s := range strings.Split(raw, ",") {
+		code := strings.TrimSpace(s)
+		if code == "" || seen[code] {
+			continue
+		}
+		seen[code] = true
+		codes = append(codes, code)
+	}
+	if len(codes) == 0 {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": quotes})
+		return
+	}
+	infos, err := data.NewStockDataApi().GetStockCodeRealTimeData(codes...)
+	if err != nil || infos == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": quotes})
+		return
+	}
+	for _, info := range *infos {
+		price, _ := convertor.ToFloat(info.Price)
+		// 停牌/无成交时回退卖一/买一报价
+		if price == 0 {
+			price, _ = convertor.ToFloat(info.A1P)
+		}
+		if price == 0 {
+			price, _ = convertor.ToFloat(info.B1P)
+		}
+		if price <= 0 {
+			continue
+		}
+		preClose, _ := convertor.ToFloat(info.PreClose)
+		changePercent := 0.0
+		if preClose > 0 {
+			changePercent = (price - preClose) / preClose * 100
+		}
+		quotes = append(quotes, StockRealtimeQuote{
+			Code:          info.Code,
+			Price:         price,
+			PreClose:      preClose,
+			ChangePercent: changePercent,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": quotes})
+}

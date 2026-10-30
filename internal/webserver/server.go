@@ -181,6 +181,12 @@ func (ws *WebServer) initRouter() {
 			protected.GET("/signals/scan-interval", handlers.GetSignalScanIntervalHandler)
 			protected.PUT("/signals/scan-interval", handlers.SetSignalScanIntervalHandler)
 
+			// 010 同步：全市场信号扫描（进度/命中经 SSE 推送）+ 批量实时行情
+			protected.POST("/signals/market-scan/start", handlers.StartMarketSignalScanHandler)
+			protected.POST("/signals/market-scan/stop", handlers.StopMarketSignalScanHandler)
+			protected.GET("/signals/market-scan/status", handlers.GetMarketSignalScanStatusHandler)
+			protected.GET("/stocks/realtime-quotes", handlers.GetStocksRealtimeQuotesHandler)
+
 			// 004 批3：SSE 事件总线（signalMonitorTick 节拍的 Web 载体）
 			protected.GET("/events/stream", handlers.EventsStreamHandler)
 

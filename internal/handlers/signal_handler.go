@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -50,7 +51,7 @@ func GetSignalRecordPageHandler(c *gin.Context) {
 		StartTime: parseQueryInt64(c, "startTime"),
 		EndTime:   parseQueryInt64(c, "endTime"),
 		Page:      int(parseQueryInt64(c, "page")),
-		PageSize:   int(parseQueryInt64(c, "pageSize")),
+		PageSize:  int(parseQueryInt64(c, "pageSize")),
 		Source:    c.Query("source"),
 	}
 	page, err := data.NewSignalRecordService().GetSignalRecordPage(query, getUserID(c))
@@ -137,4 +138,48 @@ func NotifySignalHandler(c *gin.Context) {
 		go data.NewDingDingAPI().SendToDingDing(req.Title, req.Content)
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": "ok"})
+}
+
+// broadcastScanEvent 全市场扫描事件 → SSE 广播（桌面等价：app.go 回调里 runtime.EventsEmit）。
+func broadcastScanEvent(eventName string, payload any) {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	BroadcastEvent("event: " + eventName + "\ndata: " + string(b) + "\n\n")
+}
+
+// StartMarketSignalScanHandler POST /signals/market-scan/start
+// body: {markets:[SH/SZ/BJ], klt, minScore, recentDays}。扫描进度/命中经 SSE 事件
+// marketSignalScanProgress / marketSignalScanHit 推送（前端 EventsOn 同名监听）。
+func StartMarketSignalScanHandler(c *gin.Context) {
+	var req data.MarketSignalScanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "message": "请求格式错误: " + err.Error()})
+		return
+	}
+	err := data.StartMarketSignalScan(req, data.MarketSignalScanCallbacks{
+		OnProgress: func(p data.MarketSignalScanProgress) {
+			broadcastScanEvent("marketSignalScanProgress", p)
+		},
+		OnHit: func(h data.MarketSignalHit) {
+			broadcastScanEvent("marketSignalScanHit", h)
+		},
+	})
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"code": -1, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": ""})
+}
+
+// StopMarketSignalScanHandler POST /signals/market-scan/stop
+func StopMarketSignalScanHandler(c *gin.Context) {
+	data.StopMarketSignalScan()
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": ""})
+}
+
+// GetMarketSignalScanStatusHandler GET /signals/market-scan/status
+func GetMarketSignalScanStatusHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": data.GetMarketSignalScanStatus()})
 }

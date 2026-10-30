@@ -3498,6 +3498,41 @@ export function ClearSignalTradeRecords(env) {
     .then(() => '');
 }
 
+// [010] StartMarketSignalScan 启动全市场信号扫描；进度/命中经 SSE 事件推送（marketSignalScanProgress/Hit）。
+export function StartMarketSignalScan(req) {
+  if (isWailsMode()) return window.go.main.App.StartMarketSignalScan(req);
+  return apiService.client.post('/signals/market-scan/start', req || {}, { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then(() => '')
+    .catch(err => { throw new Error(err.response?.data?.message || err.message || '启动扫描失败'); });
+}
+
+// [010] StopMarketSignalScan 停止全市场信号扫描（异步生效）。
+export function StopMarketSignalScan() {
+  if (isWailsMode()) return window.go.main.App.StopMarketSignalScan();
+  return apiService.client.post('/signals/market-scan/stop', {}, { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .then(() => '');
+}
+
+// [010] GetMarketSignalScanStatus 查询全市场扫描进度快照。
+export function GetMarketSignalScanStatus() {
+  if (isWailsMode()) return window.go.main.App.GetMarketSignalScanStatus();
+  return apiService.client.get('/signals/market-scan/status', { headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => ({ running: false }));
+}
+
+// [010] GetStocksRealtimeQuotes 批量取标的最新价/昨收/涨跌幅（查不到的代码不出现在结果里）。
+export function GetStocksRealtimeQuotes(stockCodes) {
+  if (isWailsMode()) return window.go.main.App.GetStocksRealtimeQuotes(stockCodes);
+  const codes = (stockCodes || []).join(',');
+  if (!codes) return Promise.resolve([]);
+  return apiService.client.get('/stocks/realtime-quotes', { params: { codes }, headers: getAuthHeaders() })
+    .then(extractApiData)
+    .catch(() => []);
+}
+
 // [007] RenameAiAssistantSession 设置会话自定义标题；空标题回退正文派生标题。
 export function RenameAiAssistantSession(sessionId, title) {
   if (isWailsMode()) return window.go.main.App.RenameAiAssistantSession(sessionId, title);
