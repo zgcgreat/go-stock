@@ -90,7 +90,9 @@ func GetOKXCandleListHandler(c *gin.Context) {
 	if limit <= 0 {
 		limit = 500
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": data.GetOKXCandles(instId, bar, limit)})
+	// afterMs 分页游标：空=取最新一段；非 0=取该毫秒时间戳之后的更早历史（图表向左拖动）
+	afterMs, _ := strconv.ParseInt(c.Query("afterMs"), 10, 64)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": data.GetOKXCandles(instId, bar, limit, afterMs)})
 }
 
 // GetOKXTickersHandler GET /okx/tickers?instType=
