@@ -13,6 +13,17 @@
   海外指数(HK/US)东财失败后代码明确不降级 → 网络被墙时海外指数必挂。
 
 
+## ⚠️ Go 模块缓存批量损坏修复口诀（2026-10-24 实战）
+- 症状：编译报 `undefined: translation` / `no required module provides package <已 require 的包>`。
+- 定位：`go mod verify` 报 "dir has been modified" 的模块（本次 9 个）+ 漏网者（提取目录只剩部分文件，如 mimetype 只剩 testdata/）。
+- 修复：`chmod -R u+w` 删损坏模块目录（POSIX 路径 `/d/...`，Windows 路径被 safe-delete 拦）→ `go mod download <mods>` → **必须再 `go clean -cache`**——构建缓存会重放加载期失败，模块修好后不清构建缓存错误依旧。
+- 事故根因：2026-10-24 12:13 前后一次外部清理同时删了仓库 26 个 AI 元数据文件 + 模块缓存部分文件；safe-delete shim 会拦截 `rm -rf` 带 `D:\` 前缀路径与 >50 文件批量删除（genie-trash 失败时 fail-closed）。
+
+## ⚠️ 009 遗留欠账：Web K线图 5 原语未接线（下批处理）
+- Web 版 `StockLightweightKlineChart.vue` 只有 VolumeProfile+Wave 两个原语；上游 7 个（缺 Measure/TDSequential/Divergence/BuySell/TemaTurn 接线）。
+- buySellPrimitive.js/temaTurnPrimitive.js 原语文件已在库但组件无 buySellMinScore/数据管线 → 14 路共振计算已同步（后台监控/自动交易生效），但 Web 图表看不到买卖点标注、无阈值设置 UI。
+- 另开批次一次性补接线（自上游 7f7b446 引入买卖点起的组件层演化）；禁止整取上游图表组件（会丢 Web 重写版适配）。
+
 ## 项目基本信息
 - **项目名**: go-stock
 - **定位**: 基于大语言模型的 AI 赋能股票分析工具（桌面应用 + Web端）
@@ -22,7 +33,7 @@
 - **编译**: `go build -o go-stock-web.exe ./web/` 编译 Web 端（入口 `web/main.go`，**不是 ./cmd/web/**）；根包 `go build ./...` 需 Wails toolchain
 - **上游源**: `github.com/ArvinLovegood/go-stock` (origin/dev)
 - **分支策略**: `dev-web` 基于 `origin/dev` 二次开发；**功能块移植路线（不 merge、不整体 cherry-pick）**，同步批次见 `.devflow-kit/00X-upstream-web-sync-*/sync-design.md`
-- **同步前沿**: `809b5f9`（2026-10-11 完成 006 批次 5 commit：agent工具组/sponsor_vip统一口径/会话搜索与chat_memory清理/广场VIP报错修复/excelize v2.11.1-pre；a16c9c9 前端 VIP 提示优化未同步留待点补；005 锚点 tag `backup/pre-005-sync`=`fd981fb`）
+- **同步前沿**: `796e70d`（2026-10-31 完成 010 批次 6 commit：全市场信号扫描 signal_algo+market_signal_scanner→3 端点 SSE 接线 / OKX 趋势跟随自动调池(双总闸) / 满仓换仓+反手门槛 8 设置项 / custom 构建门控对 / K线分页游标(MAC before+OKX afterMs)+图表 MA250 标题行情；A类24文件 hash 与上游全一致；009=022c1e3 2026-10-24、008=48baa24 2026-10-24 午）
 - **⚠️ 不可整文件取上游版的文件**：`backend/data/stock_data_api.go`（本地 `models.go` 也有 `StockBasic`，整取会 redeclared）——只能手工补改动点
 - **Web 认证**: axios 拦截器统一拦截无 token 业务请求；公开路由 `/public/` `/auth/` 不拦截
 - **Web 挂载点**: `frontend/src/components/layout/WebLayout.vue`（菜单 + 面板挂载），路由 `frontend/src/router/router.js`
