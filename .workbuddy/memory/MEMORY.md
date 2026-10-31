@@ -33,7 +33,7 @@
 - **编译**: `go build -o go-stock-web.exe ./web/` 编译 Web 端（入口 `web/main.go`，**不是 ./cmd/web/**）；根包 `go build ./...` 需 Wails toolchain
 - **上游源**: `github.com/ArvinLovegood/go-stock` (origin/dev)
 - **分支策略**: `dev-web` 基于 `origin/dev` 二次开发；**功能块移植路线（不 merge、不整体 cherry-pick）**，同步批次见 `.devflow-kit/00X-upstream-web-sync-*/sync-design.md`
-- **同步前沿**: `796e70d`（2026-10-31 完成 010 批次 6 commit：全市场信号扫描 signal_algo+market_signal_scanner→3 端点 SSE 接线 / OKX 趋势跟随自动调池(双总闸) / 满仓换仓+反手门槛 8 设置项 / custom 构建门控对 / K线分页游标(MAC before+OKX afterMs)+图表 MA250 标题行情；A类24文件 hash 与上游全一致；009=022c1e3 2026-10-24、008=48baa24 2026-10-24 午）
+- **同步前沿**: `d18a0eb`（2026-10-31 完成 011 批次：Mass Index 反转闸门 okx_mass_gate(分位自适应 24~31)+主图琥珀竖带 primitive+settings MassGate 开关；图表只接 script 功能部分、侧边栏按钮重排跳过；010=5ac36f5 同日、全市场扫描+趋势调池+满仓换仓；009=022c1e3 2026-10-24）
 - **⚠️ 不可整文件取上游版的文件**：`backend/data/stock_data_api.go`（本地 `models.go` 也有 `StockBasic`，整取会 redeclared）——只能手工补改动点
 - **Web 认证**: axios 拦截器统一拦截无 token 业务请求；公开路由 `/public/` `/auth/` 不拦截
 - **Web 挂载点**: `frontend/src/components/layout/WebLayout.vue`（菜单 + 面板挂载），路由 `frontend/src/router/router.js`
