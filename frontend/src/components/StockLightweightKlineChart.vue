@@ -25,6 +25,7 @@ import { makeToggle } from './kline/indicators/toggle'
 import { parseNumStr, formatPrice2, formatVolumeCn, formatAmountCn, formatPctField, formatSigned2 } from './kline/format'
 import { createVolumeProfilePrimitive, POC_COLOR } from './kline/volumeProfilePrimitive'
 import { createWavePrimitive } from './kline/wavePrimitive'
+import { createMassZonePrimitive, massAdaptiveThresholds } from './kline/massZonePrimitive'
 import { createDrawingHost, DRAWING_TOOLS } from './kline/drawingManagerHost'
 import {
   eastMoneyDayToUnixSeconds, eastMoneyKlineFieldToUnixSeconds, chartTimeToUtcMs,
@@ -377,6 +378,10 @@ let mergedRawRows = []
 const mergedRawRowsVersion = ref(0)
 /** 成交量分布 VPVR primitive 实例（叠加在主图 pane 上） */
 let volumeProfilePrimitive = null
+/** 「Mass Index 反转窗口」primitive 实例（主图半透明竖带） */
+let massZonePrimitive = null
+/** Mass 反转窗口数据缓存（按 mergedRawRowsVersion 失效） */
+const massZoneCache = { version: -1, data: null }
 /** VPVR 用的 OHLCV 缓存（按 mergedRawRowsVersion 失效，避免每帧重排序） */
 const volumeProfileBarsCache = { version: -1, data: null }
 /** POC 数值标签（挂在价格刻度上；横向虚线仍由 primitive 画，这里只取轴上的 tag） */
@@ -1375,6 +1380,8 @@ function syncSubPaneIndicators(times, closes, highs, lows, vols) {
       const atr14 = atrValues(highs, lows, closes, 14)
       const chop14 = chopValues(highs, lows, closes, 14)
       const miVal = massIndexValues(highs, lows)
+      // Mass 反转阈值按本标的 MI 自身分布自适应，与主图竖带、后端 OKX 闸门同口径
+      const miTh = massAdaptiveThresholds(miVal)
       const uiVal = ulcerIndexValues(closes)
       const { squeeze: ttmSq, momentum: ttmMo } = ttmSqueezeValues(highs, lows, closes)
       const { bullPower: erBull, bearPower: erBear } = elderRayValues(highs, lows, closes, 13)
@@ -1499,7 +1506,7 @@ function syncSubPaneIndicators(times, closes, highs, lows, vols) {
         { const cv2=v(chop14,i);if(cv2!=null){cnt++;if(cv2>61.8)osci++;else neut++;} }
         // MassIndex
         { const mv2=v(miVal,i),mp=vPrev(miVal,i)
-          if(mv2!=null&&mp!=null){cnt++;if(mp>27&&mv2<27)bull++;else neut++;} }
+          if(mv2!=null&&mp!=null){cnt++;if(mp>=miTh.enter&&mv2<miTh.exit)bull++;else neut++;} }
         // UlcerIndex
         { const uv=v(uiVal,i);if(uv!=null){cnt++;if(uv<5)bull++;else if(uv>15)bear++;else neut++;} }
         // TTM
@@ -1633,11 +1640,43 @@ function syncVolumeProfilePrimitive() {
   }
 }
 
+// ===== Mass Index 反转窗口（主图叠加 primitive）=====
+
+/** Mass 反转窗口数据 getter：带版本缓存（times + Mass 序列） */
+function getMassZoneData() {
+  if (massZoneCache.version !== mergedRawRowsVersion.value) {
+    const { times, highs, lows } = extractOHLCV(mergedRawRows)
+    massZoneCache.data = { times, mass: massIndexValues(highs, lows) }
+    massZoneCache.version = mergedRawRowsVersion.value
+  }
+  return massZoneCache.data
+}
+
+function ensureMassZonePrimitive() {
+  if (massZonePrimitive || !candleSeries) return
+  massZonePrimitive = createMassZonePrimitive(candleSeries, getMassZoneData)
+}
+
+/** Mass 开启时在主图标注「凸起→回落」的反转窗口；关闭时卸载 */
+function syncMassZonePrimitive() {
+  if (showMassIndex.value) {
+    ensureMassZonePrimitive()
+    massZonePrimitive?.requestRedraw()
+  } else if (massZonePrimitive) {
+    if (candleSeries) {
+      try { candleSeries.detachPrimitive(massZonePrimitive) } catch { /* ignore */ }
+    }
+    massZonePrimitive = null
+  }
+}
+
 function syncIndicators() {
   if (!chart || !candleSeries) return
 
   // VPVR 走独立 primitive（attach/detach），不随本函数的主图指标增删而重画
   syncVolumeProfilePrimitive()
+  // Mass Index 反转窗口为 primitive（主图竖带），随 Mass 开关同步
+  syncMassZonePrimitive()
 
   const { times, opens, closes, highs, lows, vols } = extractOHLCV(mergedRawRows)
   if (!times.length) {
@@ -2997,11 +3036,13 @@ function evaluateIndicatorSignals(endIdx) {
   }
 
   // MassIndex
-  {
+    {
     const mi = massIndexValues(highs, lows)
+    const th = massAdaptiveThresholds(mi)
     const v = last(mi), pv = prev(mi)
     if (v != null && pv != null) {
-      if (pv > 27 && v < 27) signals.push({ name: 'MassIndex', signal: 'bullish' })
+      // 自适应阈值：越过进入线后跌破离开线才算反转确认（与主图竖带同口径）
+      if (pv >= th.enter && v < th.exit) signals.push({ name: 'MassIndex', signal: 'bullish' })
       else signals.push({ name: 'MassIndex', signal: 'neutral' })
     }
   }
@@ -3602,6 +3643,10 @@ function disposeChart() {
   }
   // VPVR 与 POC 标签随图表一起销毁，避免 chart=null 后 primitive 仍持有旧 series
   volumeProfilePrimitive = null
+  if (massZonePrimitive && candleSeries) {
+    try { candleSeries.detachPrimitive(massZonePrimitive) } catch { /* ignore */ }
+  }
+  massZonePrimitive = null
   clearPocPriceLine()
   ind.ma5 = ind.ma10 = ind.ma20 = ind.ma60 = ind.ma250 = null
   ind.bollU = ind.bollM = ind.bollL = null
